@@ -99,7 +99,10 @@ export default function Empresa() {
   };
   useEffect(() => { cargar(); }, []);
 
-  const set = (campo, valor) => setForm((f) => ({ ...f, [campo]: valor }));
+  const set = (campo, valor) => setForm((f) => ({
+    ...f,
+    [campo]: ['razonSocial', 'nombreComercial', 'direccion'].includes(campo) ? valor.toUpperCase() : valor,
+  }));
 
   const elegirCertificado = async (file) => {
     if (!file) { setCertificadoB64(undefined); setCertNombre(''); return; }

@@ -33,7 +33,10 @@ export default function Proveedores() {
   };
   useEffect(() => { cargar(''); }, []);
 
-  const set = (campo, valor) => setForm((f) => ({ ...f, [campo]: valor }));
+  const set = (campo, valor) => setForm((f) => ({
+    ...f,
+    [campo]: ['nombre', 'direccion'].includes(campo) ? valor.toUpperCase() : valor,
+  }));
   const limpiar = () => { setEditId(null); setForm(VACIO); };
   const abrirNuevo = () => { limpiar(); setModalAbierto(true); };
   const cerrarModal = () => { setModalAbierto(false); limpiar(); };

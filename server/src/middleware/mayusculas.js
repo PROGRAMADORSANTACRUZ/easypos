@@ -1,7 +1,7 @@
 const camposTexto = new Set([
-  'nombre', 'nombreComercial', 'descripcion', 'observaciones', 'notas',
-  'direccion', 'barrio', 'razonSocial', 'primerNombre', 'segundoNombre',
-  'primerApellido', 'segundoApellido', 'concepto', 'motivo',
+  'nombre', 'nombres', 'apellidos', 'nombreComercial', 'descripcion', 'observaciones', 'notas',
+  'direccion', 'barrio', 'ciudad', 'razonSocial', 'primerNombre', 'segundoNombre',
+  'primerApellido', 'segundoApellido', 'concepto', 'motivo', 'cliente',
 ]);
 
 export function normalizarTexto(valor) {

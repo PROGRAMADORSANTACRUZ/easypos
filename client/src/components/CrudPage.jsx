@@ -5,7 +5,7 @@ import { useAuth, useToast } from '../App.jsx';
 import { PageHeader, EmptyState, TableSkeleton, Modal, Button } from './ui/index.jsx';
 
 const puede = (user, codigo) => user?.__dev === true || (user?.permisos || []).includes(codigo);
-const camposMayusculas = new Set(['nombre', 'descripcion', 'observaciones', 'direccion', 'razonSocial']);
+const camposMayusculas = new Set(['nombre', 'descripcion', 'observaciones', 'direccion', 'razonSocial', 'ciudad']);
 
 // Valor inicial vacío de un campo según su tipo.
 const vacioCampo = (c) => (c.type === 'checkbox' ? (c.default ?? true) : (c.default ?? ''));

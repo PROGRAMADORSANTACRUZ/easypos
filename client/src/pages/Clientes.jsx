@@ -293,15 +293,15 @@ export default function Clientes() {
               </div>
               <div className="field">
                 <label>Razón social</label>
-                <input value={form.razonSocial} onChange={(e) => setForm({ ...form, razonSocial: e.target.value })} placeholder="Razón social (empresas)" />
+                <input value={form.razonSocial} onChange={(e) => setForm({ ...form, razonSocial: e.target.value.toUpperCase() })} placeholder="Razón social (empresas)" />
               </div>
               <div className="field">
                 <label>Nombres</label>
-                <input value={form.nombres} onChange={(e) => setForm({ ...form, nombres: e.target.value })} placeholder="Nombres" />
+                <input value={form.nombres} onChange={(e) => setForm({ ...form, nombres: e.target.value.toUpperCase() })} placeholder="Nombres" />
               </div>
               <div className="field">
                 <label>Apellidos</label>
-                <input value={form.apellidos} onChange={(e) => setForm({ ...form, apellidos: e.target.value })} placeholder="Apellidos" />
+                <input value={form.apellidos} onChange={(e) => setForm({ ...form, apellidos: e.target.value.toUpperCase() })} placeholder="Apellidos" />
               </div>
               <div className="field">
                 <label>Teléfono</label>
@@ -332,11 +332,11 @@ export default function Clientes() {
               </div>
               <div className="field">
                 <label>Barrio</label>
-                <input value={form.barrio} onChange={(e) => setForm({ ...form, barrio: e.target.value })} placeholder="Barrio" />
+                <input value={form.barrio} onChange={(e) => setForm({ ...form, barrio: e.target.value.toUpperCase() })} placeholder="Barrio" />
               </div>
               <div className="field">
                 <label>Dirección</label>
-                <input value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value })} placeholder="Dirección" />
+                <input value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value.toUpperCase() })} placeholder="Dirección" />
               </div>
               <div className="field">
                 <label>Código de municipio</label>

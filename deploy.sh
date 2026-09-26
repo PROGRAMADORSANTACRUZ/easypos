@@ -4,13 +4,24 @@
 # Dominio: easypos.grupo-santacruz.com (ajústalo si el dominio real es otro).
 #
 # Uso:
-#   ./deploy.sh [SERVICE_NAME]
-# Si no se pasa SERVICE_NAME, usa el nombre que asignó Dokploy al crear
-# la aplicación (ver el id real en el panel de Dokploy y reemplázalo abajo).
+#   ./deploy.sh SERVICE_NAME
+# Obtén el nombre real con: docker service ls --format '{{.Name}}'
 
 set -euo pipefail
 
-SERVICE_NAME="posgruposantacruz-5wzjke"
+SERVICE_NAME="${1:-}"
+if [ -z "$SERVICE_NAME" ]; then
+  echo "Uso: ./deploy.sh NOMBRE_REAL_DEL_SERVICIO" >&2
+  echo "Lista de servicios disponibles:" >&2
+  docker service ls --format '{{.Name}}' >&2
+  exit 1
+fi
+
+if ! docker service inspect "$SERVICE_NAME" >/dev/null 2>&1; then
+  echo "No existe el servicio: $SERVICE_NAME" >&2
+  docker service ls --format '{{.Name}}' >&2
+  exit 1
+fi
 
 docker service update \
   --label-add 'traefik.enable=true' \
@@ -29,3 +40,4 @@ docker service update \
   "$SERVICE_NAME"
 
 echo "Labels aplicados correctamente a $SERVICE_NAME"
+docker service ps "$SERVICE_NAME"

@@ -180,7 +180,11 @@ export default function Pedidos() {
 
   const quitarItem = (item) => setCarrito((prev) => prev.filter((c) => c.producto.id !== item.id));
 
-  const setCampo = (campo) => (e) => setCliente((c) => ({ ...c, [campo]: e.target.value }));
+  const setCampo = (campo) => (e) => setCliente((c) => ({
+    ...c,
+    [campo]: ['primerNombre', 'segundoNombre', 'primerApellido', 'segundoApellido', 'direccion', 'barrio'].includes(campo)
+      ? e.target.value.toUpperCase() : e.target.value,
+  }));
 
   // Rellena el formulario con los datos de un cliente ya registrado
   const elegirCliente = (c) => {
