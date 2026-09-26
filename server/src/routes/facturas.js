@@ -144,7 +144,7 @@ router.post('/:id/reenviar-dian', wrap(async (req, res) => {
 // Facturar un pedido: el inventario ya se descontó al crear el pedido (cocina); aquí solo se cierra y cobra.
 // body: { pedidoId, metodoPago?, clienteId?, credito?, creditoDias?, propina? }
 router.post('/', wrap(async (req, res) => {
-  const { pedidoId, metodoPago, clienteId, credito, creditoDias, propina } = req.body;
+  const { pedidoId, metodoPago, clienteId, credito, creditoDias, propina, electronica } = req.body;
   const id = Number(pedidoId);
 
   const pedido = await prisma.pedido.findUnique({
@@ -163,9 +163,10 @@ router.post('/', wrap(async (req, res) => {
   const apertura = await aperturaActiva(req.headers['x-usuario-id']);
   if (!apertura) return res.status(409).json({ error: 'Debes abrir la caja antes de facturar. Registra la base con la que inicias.' });
 
-  const subtotal = redondear(pedido.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0));
-  const impuesto = redondear(pedido.items.reduce((s, it) => s + (it.precioUnit * it.cantidad) * ((it.producto.iva || 0) / 100), 0));
-  const total = redondear(subtotal + impuesto);
+  const precioProductos = redondear(pedido.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0));
+  const impuesto = redondear(pedido.items.reduce((s, it) => s + impuestoSobrePrecio(it.precioUnit * it.cantidad, it.producto.iva || 0, electronica === false), 0));
+  const subtotal = electronica === false ? redondear(precioProductos - impuesto) : precioProductos;
+  const total = electronica === false ? precioProductos : redondear(subtotal + impuesto);
   const ivaPctPromedio = subtotal > 0 ? redondear((impuesto / subtotal) * 100) : 0;
 
   const cli = await resolverCliente(clienteId);
@@ -176,21 +177,21 @@ router.post('/', wrap(async (req, res) => {
     if (pedido.mesaId) {
       await tx.mesa.update({ where: { id: pedido.mesaId }, data: { estado: 'LIBRE' } });
     }
-    // Numeracion DIAN segun resolucion vigente
-    const num = await asignarNumeracion(tx);
+    const num = await asignarNumeracion(tx, electronica !== false);
     // Crear factura
     return tx.factura.create({
       data: {
         pedidoId: id,
         prefijo: num.prefijo,
         numeroFactura: num.numeroFactura,
+        ...(electronica === false && { estadoDIAN: 'NO_APLICA' }),
         clienteId: cli.clienteId,
         usuarioId: req.headers['x-usuario-id'] ? String(req.headers['x-usuario-id']) : null,
         subtotal,
         impuestoPct: ivaPctPromedio,
         impuesto,
         total,
-        propina: Math.max(0, Number(propina) || 0),
+        propina: electronica === false ? 0 : Math.max(0, Number(propina) || 0),
         metodoPago: metodoPago || 'EFECTIVO',
         credito: !!credito,
         creditoDias: credito ? (Number(creditoDias) || null) : null,
@@ -199,13 +200,13 @@ router.post('/', wrap(async (req, res) => {
         detalle: {
           create: pedido.items.map((it) => {
             const lineaSub = it.precioUnit * it.cantidad;
-            const lineaIva = redondear(lineaSub * ((it.producto.iva || 0) / 100));
+            const lineaIva = impuestoSobrePrecio(lineaSub, it.producto.iva || 0, electronica === false);
             return {
               productoId: it.productoId,
               cantidad: it.cantidad,
               precioUnitario: it.precioUnit,
               iva: lineaIva,
-              total: redondear(lineaSub + lineaIva),
+              total: electronica === false ? redondear(lineaSub) : redondear(lineaSub + lineaIva),
             };
           }),
         },
@@ -221,7 +222,7 @@ router.post('/', wrap(async (req, res) => {
   });
 
   await auditar({ req, accion: 'FACTURAR', entidad: 'factura', entidadId: factura.id, detalle: `Pedido ${id} • total ${factura.total}` });
-  const facturaFinal = await emitirEnFactus(factura);
+  const facturaFinal = electronica === false ? factura : await emitirEnFactus(factura);
   res.status(201).json(facturaFinal);
 }));
 

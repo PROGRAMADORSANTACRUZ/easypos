@@ -102,7 +102,7 @@ export function permisoModuloFacturacion(modulo) {
 export async function permisoSegunFactura(req, res, next) {
   try {
     let modulo = 'facturas';
-    if (req.query.electronica === 'false' || (req.path === '/directa' && req.body?.electronica === false)) {
+    if (req.query.electronica === 'false' || ((req.path === '/directa' || req.path === '/') && req.body?.electronica === false)) {
       modulo = 'factura_venta';
     } else if (req.method === 'GET' && /^\/[0-9a-f-]{36}$/.test(req.path)) {
       const factura = await prisma.factura.findUnique({ where: { id: req.path.slice(1) }, select: { estadoDIAN: true } });

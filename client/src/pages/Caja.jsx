@@ -91,7 +91,7 @@ export default function Caja() {
               <span className="mini" style={{ marginLeft: 8 }}>desde {fmt(turnoAbierto.fechaApertura)}</span>
             </div>
             <div className="row" style={{ gap: 8 }}>
-              {puede(user, 'facturas.ver') && <Button variant="primary" size="sm" onClick={() => navigate('/facturas')}>Ir a facturar <Icon name="forward" size={14} /></Button>}
+              {(puede(user, 'facturas.ver') || puede(user, 'factura_venta.ver')) && <Button variant="primary" size="sm" onClick={() => navigate(puede(user, 'facturas.ver') ? '/facturas' : '/cotizaciones')}>Ir a facturar <Icon name="forward" size={14} /></Button>}
               {puedeCerrar && <Button variant="secondary" size="sm" icon="lock" onClick={() => cerrar(turnoAbierto)}>Cerrar caja</Button>}
             </div>
           </div>

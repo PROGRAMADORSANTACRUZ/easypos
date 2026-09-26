@@ -27,7 +27,6 @@ import { CRUD_ENTIDADES } from './crudConfig.js';
 import Productos from './pages/Productos.jsx';
 import Kits from './pages/Kits.jsx';
 import Facturas from './pages/Facturas.jsx';
-import Cotizaciones from './pages/Cotizaciones.jsx';
 import Cortesias from './pages/Cortesias.jsx';
 import Cuentas from './pages/Cuentas.jsx';
 import Usuarios from './pages/Usuarios.jsx';
@@ -411,7 +410,7 @@ export default function App() {
               {puede(user, 'compras.ver') && <Route path="/compras" element={<Compras />} />}
               {puede(user, 'proveedores.ver') && <Route path="/proveedores" element={<Proveedores />} />}
               {puede(user, 'facturas.ver') && <Route path="/facturas" element={<Facturas />} />}
-              {puede(user, 'factura_venta.ver') && <Route path="/cotizaciones" element={<Cotizaciones />} />}
+              {puede(user, 'factura_venta.ver') && <Route path="/cotizaciones" element={<Facturas electronica={false} />} />}
               {puede(user, 'cortesias.ver') && <Route path="/cortesias" element={<Cortesias />} />}
               {puede(user, 'cuentas.ver') && <Route path="/cuentas" element={<Cuentas />} />}
               {puede(user, 'clientes.ver') && <Route path="/clientes" element={<Clientes />} />}

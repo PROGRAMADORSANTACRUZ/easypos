@@ -564,7 +564,10 @@ function ClientePicker({ clientes, value, onChange, onCreated }) {
   );
 }
 
-export default function Facturas() {
+export default function Facturas({ electronica = true }) {
+  const claseDocumento = electronica ? 'FACTURA ELECTRONICA DE VENTA' : 'FACTURA DE VENTA (NO ELECTRONICA)';
+  const formatoRecibo = electronica ? 'formatoFactura' : 'formatoFacturaVenta';
+  const claveCongeladas = electronica ? 'easypos_congeladas' : 'easypos_congeladas_venta';
   const [facturas, setFacturas] = useState([]);
   const [pendientes, setPendientes] = useState([]);
   const [pagos, setPagos] = useState({}); // metodo de pago por pedidoId
@@ -591,7 +594,7 @@ export default function Facturas() {
   const [propinaDirecta, setPropinaDirecta] = useState(''); // propina en venta directa ('' = sugerir 10%)
   const [facturandoDirecta, setFacturandoDirecta] = useState(false);
   const [congeladas, setCongeladas] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('easypos_congeladas') || '[]'); } catch { return []; }
+    try { return JSON.parse(localStorage.getItem(claveCongeladas) || '[]'); } catch { return []; }
   });
   const [apertura, setApertura] = useState(null); // caja abierta actual (null = cerrada)
   const [tipoFactura, setTipoFactura] = useState(null);
@@ -608,10 +611,10 @@ export default function Facturas() {
   const cargar = async () => {
     try {
       const [abiertos, facs, prods, clis, empresa, ap] = await Promise.all([
-        api.get('/pedidos?estado=ABIERTO'),
-        api.get('/facturas'),
+        electronica ? api.get('/pedidos?estado=ABIERTO') : api.get('/pedidos?estado=ABIERTO').catch(() => []),
+        api.get(electronica ? '/facturas' : '/facturas?electronica=false'),
         api.get('/productos'),
-        api.get('/clientes'),
+        electronica ? api.get('/clientes') : api.get('/clientes').catch(() => []),
         api.get('/empresa').catch(() => null),
         api.get('/aperturas/activa').catch(() => null),
       ]);
@@ -619,7 +622,7 @@ export default function Facturas() {
       try {
         const tipos = await api.get('/tipos-documento');
         tipoFacturaRecibo = tipoDocumentoListo(tipos || [], 'FACTURA ELECTRONICA DE VENTA') || null;
-        setTipoFactura(tipoFacturaRecibo);
+        setTipoFactura(tipoDocumentoListo(tipos || [], claseDocumento) || null);
       } catch { tipoFacturaRecibo = null; setTipoFactura(null); }
       setPendientes(abiertos);
       setFacturas(facs);
@@ -687,8 +690,18 @@ export default function Facturas() {
   const fecha = (d) => new Date(d).toLocaleString('es-CO');
   const totalPedido = (p) => p.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0);
 
+  const imprimirGenerada = async (factura, efectivo, ventana) => {
+    try {
+      await imprimirRecibo(factura, efectivo, formatoRecibo, ventana);
+      if (!ventana) notify('Factura creada. Permite ventanas emergentes o imprime desde el historial.', 'err');
+    } catch (error) {
+      ventana?.close();
+      notify(`Factura creada, pero no se pudo imprimir: ${error.message}`, 'err');
+    }
+  };
+
   const facturar = async (pedido) => {
-    if (!tipoFactura) return notify('Configura el tipo de documento FACTURA ELECTRONICA DE VENTA.', 'err');
+    if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     const total = totalPedido(pedido);
     const cliId = (clientesSel[pedido.id] ?? idDefault) || null;
@@ -699,10 +712,12 @@ export default function Facturas() {
       if (cli.creditoCupo != null && total > cli.creditoCupo) {
         return notify(`El total (${money(total)}) supera el cupo de crédito de ${cli.nombre} (${money(cli.creditoCupo)})`, 'err');
       }
+      const ventana = abrirVentanaVacia();
       setProcesando(pedido.id);
       try {
         const factura = await api.post('/facturas', {
           pedidoId: pedido.id,
+          electronica,
           metodoPago: etiquetaCredito(cli),
           clienteId: cliId,
           credito: true,
@@ -711,9 +726,10 @@ export default function Facturas() {
         notify(`Factura #${factura.id} a crédito: ${money(factura.total)}`);
         setSel({ ...factura, _recibido: null });
         setCobrando(null);
-        imprimirRecibo(factura, null);
+        await imprimirGenerada(factura, null, ventana);
         await cargar();
       } catch (e) {
+        ventana?.close();
         notify(e.message, 'err');
       } finally {
         setProcesando(null);
@@ -726,7 +742,7 @@ export default function Facturas() {
     const recibidoVal = recibido[pedido.id] ?? '';
     const metodo2 = pago2[pedido.id] || 'TARJETA';
     const monto2 = pago2Monto[pedido.id] ?? '';
-    const cobrarPropina = propinaOn[pedido.id] !== false;
+    const cobrarPropina = electronica && propinaOn[pedido.id] !== false;
     const prop = !cobrarPropina
       ? 0
       : (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(total));
@@ -738,10 +754,12 @@ export default function Facturas() {
       if (recibidoVal === '') return notify(metodo === 'EFECTIVO' ? 'Digita cuánto recibe en efectivo' : 'Digita el valor recibido', 'err');
       if (Number(recibidoVal) < totalPagar) return notify(metodo === 'EFECTIVO' ? 'El efectivo recibido no puede ser menor al total a pagar' : 'El valor no puede ser menor al total a pagar', 'err');
     }
+    const ventana = abrirVentanaVacia();
     setProcesando(pedido.id);
     try {
       const factura = await api.post('/facturas', {
         pedidoId: pedido.id,
+        electronica,
         metodoPago: labelPago(esMixto, metodo, metodo2, monto2, total),
         clienteId: cliId,
         propina: prop,
@@ -750,9 +768,10 @@ export default function Facturas() {
       const recFinal = !esMixto && metodo === 'EFECTIVO' ? recibidoVal : null;
       setSel({ ...factura, _recibido: recFinal });
       setCobrando(null);
-      imprimirRecibo(factura, recFinal != null ? { recibido: recFinal } : null);
+      await imprimirGenerada(factura, recFinal != null ? { recibido: recFinal } : null, ventana);
       await cargar();
     } catch (e) {
+      ventana?.close();
       notify(e.message, 'err');
     } finally {
       setProcesando(null);
@@ -761,7 +780,7 @@ export default function Facturas() {
 
   // Abre el modal POS de cobro para un pedido, precargando el método de pago del domicilio.
   const abrirCobro = (pedido) => {
-    if (!tipoFactura) return notify('Configura el tipo de documento FACTURA ELECTRONICA DE VENTA.', 'err');
+    if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     if (pedido.tipo === 'DOMICILIO' && pedido.metodoPago && pagos[pedido.id] === undefined) {
       const m = pedido.metodoPago.toUpperCase();
@@ -777,7 +796,7 @@ export default function Facturas() {
 
   // --- Factura directa (venta en caja para llevar) ---
   const abrirDirecta = () => {
-    if (!tipoFactura) return notify('Configura el tipo de documento FACTURA ELECTRONICA DE VENTA.', 'err');
+    if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     setCarrito([]);
     setCliente(idDefault);
@@ -830,7 +849,7 @@ export default function Facturas() {
   });
 
   // Propina de la venta directa: sugerida al 10% mientras no se digite otra.
-  const propDirecta = propinaDirecta !== '' ? Math.max(0, Number(propinaDirecta) || 0) : sugPropina(subtotalDirecta);
+  const propDirecta = !electronica ? 0 : propinaDirecta !== '' ? Math.max(0, Number(propinaDirecta) || 0) : sugPropina(subtotalDirecta);
   const totalPagarDirecta = subtotalDirecta + propDirecta;
 
   // Condición del cliente seleccionado en la venta directa (crédito/contado según Clientes)
@@ -841,7 +860,7 @@ export default function Facturas() {
   // --- Ventas congeladas (se guardan sin facturar para atender a otro cliente) ---
   const guardarCongeladas = (lista) => {
     setCongeladas(lista);
-    try { localStorage.setItem('easypos_congeladas', JSON.stringify(lista)); } catch { /* ignorar */ }
+    try { localStorage.setItem(claveCongeladas, JSON.stringify(lista)); } catch { /* ignorar */ }
   };
 
   const congelarDirecta = () => {
@@ -872,7 +891,7 @@ export default function Facturas() {
   };
 
   const facturarDirecta = async () => {
-    if (!tipoFactura) return notify('Configura el tipo de documento FACTURA ELECTRONICA DE VENTA.', 'err');
+    if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     if (carrito.length === 0) return notify('Agrega al menos un producto', 'err');
     const cli = clienteDe(cliente);
@@ -882,10 +901,12 @@ export default function Facturas() {
       if (cli.creditoCupo != null && subtotalDirecta > cli.creditoCupo) {
         return notify(`El total (${money(subtotalDirecta)}) supera el cupo de crédito de ${cli.nombre} (${money(cli.creditoCupo)})`, 'err');
       }
+      const ventana = abrirVentanaVacia();
       setFacturandoDirecta(true);
       try {
         const factura = await api.post('/facturas/directa', {
           items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad })),
+          electronica,
           metodoPago: etiquetaCredito(cli),
           clienteId: cliente || null,
           credito: true,
@@ -894,9 +915,10 @@ export default function Facturas() {
         notify(`Factura #${factura.id} a crédito: ${money(factura.total)}`);
         setSel({ ...factura, _recibido: null });
         setDirectaAbierta(false);
-        imprimirRecibo(factura, null);
+        await imprimirGenerada(factura, null, ventana);
         await cargar();
       } catch (e) {
+        ventana?.close();
         notify(e.message, 'err');
       } finally {
         setFacturandoDirecta(false);
@@ -914,10 +936,12 @@ export default function Facturas() {
       if (pagoRecibidoDirecta === '') return notify('Digita el valor recibido', 'err');
       if (Number(pagoRecibidoDirecta) < totalPagarDirecta) return notify('El valor no puede ser menor al total a pagar', 'err');
     }
+    const ventana = abrirVentanaVacia();
     setFacturandoDirecta(true);
     try {
       const factura = await api.post('/facturas/directa', {
         items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad })),
+        electronica,
         metodoPago: labelPago(mixtoDirecta, pagoDirecta, pago2Directa, pago2MontoDirecta, subtotalDirecta),
         clienteId: (cliente ?? idDefault) || null,
         propina: propDirecta,
@@ -926,9 +950,10 @@ export default function Facturas() {
       const recDirecta = !mixtoDirecta && pagoDirecta === 'EFECTIVO' ? pagoRecibidoDirecta : null;
       setSel({ ...factura, _recibido: recDirecta });
       setDirectaAbierta(false);
-      imprimirRecibo(factura, recDirecta != null ? { recibido: recDirecta } : null);
+      await imprimirGenerada(factura, recDirecta != null ? { recibido: recDirecta } : null, ventana);
       await cargar();
     } catch (e) {
+      ventana?.close();
       notify(e.message, 'err');
     } finally {
       setFacturandoDirecta(false);
@@ -939,12 +964,12 @@ export default function Facturas() {
     <div>
       <div className="row between" style={{ flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h1>Facturación</h1>
+          <h1>{electronica ? 'Facturación' : 'Factura de venta'}</h1>
           <p className="subtitle">Cobra los pedidos abiertos y consulta el historial de ventas.</p>
         </div>
-        <button className="btn btn-primary" disabled={!tipoFactura} title={tipoFactura ? 'Factura directa' : 'Configura el tipo de documento de Facturas'} onClick={abrirDirecta}><Icon name="cart" size={16} /> Factura directa</button>
+        <button className="btn btn-primary" disabled={!tipoFactura} title={tipoFactura ? 'Factura directa' : `Configura el tipo de documento ${claseDocumento}`} onClick={abrirDirecta}><Icon name="cart" size={16} /> Factura directa</button>
       </div>
-      {!tipoFactura && <p className="mini" role="alert">Configura el tipo de documento FACTURA ELECTRONICA DE VENTA y su rango antes de facturar.</p>}
+      {!tipoFactura && <p className="mini" role="alert">Configura el tipo de documento {claseDocumento} y su rango antes de facturar.</p>}
 
       {/* Caja: para facturar debe haber una apertura con base (para dar vueltos) */}
       {apertura ? (
@@ -1117,7 +1142,7 @@ export default function Facturas() {
         const cliCred = clienteDe(clientesSel[p.id] ?? idDefault);
         const credito = cliCred?.condicionPago === 'CREDITO';
         const cupoExcedido = credito && cliCred.creditoCupo != null && totalP > cliCred.creditoCupo;
-        const cobrarPropina = propinaOn[p.id] !== false;
+        const cobrarPropina = electronica && propinaOn[p.id] !== false;
         const propP = !cobrarPropina
           ? 0
           : (propinas[p.id] !== undefined ? Math.max(0, Number(propinas[p.id]) || 0) : sugPropina(totalP));
@@ -1253,14 +1278,14 @@ export default function Facturas() {
                           </div>
                         </>
                       )}
-                      <label className="pago-mixto-check">
+                      {electronica && <label className="pago-mixto-check">
                         <input
                           type="checkbox"
                           checked={cobrarPropina}
                           onChange={(e) => setPropinaOn({ ...propinaOn, [p.id]: e.target.checked })}
                         />
                         Cobrar propina (10% sugerido)
-                      </label>
+                      </label>}
                       {cobrarPropina && (
                         <div className="field">
                           <label>Propina</label>
@@ -1325,7 +1350,7 @@ export default function Facturas() {
           </div>
           <table>
             <thead>
-              <tr><th>N°</th><th>Mesa</th><th>Mesera</th><th>Total</th><th>DIAN</th><th>Fecha</th></tr>
+              <tr><th>N°</th><th>Mesa</th><th>Mesera</th><th>Total</th>{electronica && <th>DIAN</th>}<th>Fecha</th></tr>
             </thead>
             <tbody>
               {facturasFiltradas.map((f) => (
@@ -1339,7 +1364,7 @@ export default function Facturas() {
                   <td>{f.pedido?.mesa?.numero ?? <span className="badge orange">Directa</span>}</td>
                   <td>{f.pedido?.mesera?.nombre ?? (f.pedido?.cliente || '—')}</td>
                   <td style={{ fontWeight: 700 }}>{money(f.total)}</td>
-                  <td>
+                  {electronica && <td>
                     {f.estadoDIAN === 'ACEPTADA' && <span className="badge" style={{ background: 'var(--green-soft)', color: 'var(--green)' }}>Aceptada</span>}
                     {f.estadoDIAN === 'ERROR' && (
                       <button
@@ -1353,11 +1378,11 @@ export default function Facturas() {
                       </button>
                     )}
                     {!f.estadoDIAN && <span className="mini" style={{ color: 'var(--muted)' }}>—</span>}
-                  </td>
+                  </td>}
                   <td className="mini">{fecha(f.createdAt)}</td>
                 </tr>
               ))}
-              {facturasFiltradas.length === 0 && <tr><td colSpan={6} className="empty">No hay facturas en el rango seleccionado.</td></tr>}
+              {facturasFiltradas.length === 0 && <tr><td colSpan={electronica ? 6 : 5} className="empty">No hay facturas en el rango seleccionado.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1369,7 +1394,9 @@ export default function Facturas() {
           ) : (
             <div>
               <div style={{ textAlign: 'center', marginBottom: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}><Logo height={38} /></div>
+                {electronica
+                  ? <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}><Logo height={38} /></div>
+                  : <div style={{ fontWeight: 700, marginBottom: 6 }}>CRISTIAN FABIAN SERRANO MILLAN · NIT 1045679622</div>}
                 <div className="mini">Factura {numeroDian(sel)} · {fecha(sel.createdAt)}</div>
                 <div className="mini">
                   {sel.pedido?.mesa?.numero != null
@@ -1379,7 +1406,7 @@ export default function Facturas() {
                 <div className="mini">Cliente: {sel.pedido?.cliente || 'Consumidor Final'}</div>
                 {sel.cliente?.email && <div className="mini">Correo: {sel.cliente.email}</div>}
               </div>
-              <div style={{ marginBottom: 12, textAlign: 'center' }}>
+              {electronica && <div style={{ marginBottom: 12, textAlign: 'center' }}>
                 {sel.estadoDIAN === 'ACEPTADA' && (
                   <>
                     <span className="badge" style={{ background: 'var(--green-soft)', color: 'var(--green)' }}>Aceptada por la DIAN</span>
@@ -1402,7 +1429,7 @@ export default function Facturas() {
                     </div>
                   </>
                 )}
-              </div>
+              </div>}
               <table>
                 <tbody>
                   {sel.pedido?.items?.map((it) => (
@@ -1468,7 +1495,7 @@ export default function Facturas() {
                   )}</span>
                 </div>
               )}
-              <button className="btn btn-primary" style={{ width: '100%', marginTop: 16 }} onClick={() => imprimirRecibo(sel, sel._recibido != null && sel._recibido !== '' ? { recibido: sel._recibido } : null)}>
+              <button className="btn btn-primary" style={{ width: '100%', marginTop: 16 }} onClick={() => imprimirRecibo(sel, sel._recibido != null && sel._recibido !== '' ? { recibido: sel._recibido } : null, formatoRecibo)}>
                 🖨️ Imprimir
               </button>
             </div>
@@ -1643,7 +1670,7 @@ export default function Facturas() {
                   </>
                 )}
 
-                {!creditoDirecta && (
+                {!creditoDirecta && electronica && (
                   <>
                     <div className="field" style={{ marginTop: 12 }}>
                       <label>Propina (10% sugerido)</label>
