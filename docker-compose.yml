@@ -15,11 +15,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      # Conexión "por defecto" (requests sin header x-tenant-id, scripts, seed).
-      # Cualquier base válida del mismo servidor sirve (no se usa en operación normal).
+      # Conexión "por defecto" (requests sin header x-tenant-id, scripts, seed)
+      # y también la base de PLATAFORMA (directorio de restaurantes) — se
+      # unifican en UNA sola base (sin colisión de nombres de tabla entre los
+      # 2 esquemas de Prisma), así solo hay que configurar DATABASE_URL.
       DATABASE_URL: ${DATABASE_URL}
-      # Base de PLATAFORMA: directorio de restaurantes/tenants (ver server/prisma/platform).
-      PLATFORM_DATABASE_URL: ${PLATFORM_DATABASE_URL}
+      PLATFORM_DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
       IVA_PCT: ${IVA_PCT:-19}

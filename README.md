@@ -108,7 +108,8 @@ EXTERNA: crea primero un servidor Postgres aparte en Dokploy (app tipo
 1. En Dokploy: nueva app tipo "Docker Compose" apuntando a este repo, rama y
    `docker-compose.yml` (el de la raíz, no `docker-compose.dev.yml`).
 2. Configura las variables de entorno del panel de Dokploy — ver `.env.example`
-   (`DATABASE_URL`, `PLATFORM_DATABASE_URL`, `JWT_SECRET`, etc.).
+   (`DATABASE_URL`, `JWT_SECRET`, etc. — `PLATFORM_DATABASE_URL` se rellena
+   solo con el mismo valor de `DATABASE_URL`, una sola base para todo).
 3. Configura el dominio en Dokploy (ajusta `easypos.grupo-santacruz.com` en
    `docker-compose.yml`/`deploy.sh` si el dominio real es otro).
 4. Primer despliegue: pon `RUN_DB_INIT=true` (aplica el esquema de la base de
