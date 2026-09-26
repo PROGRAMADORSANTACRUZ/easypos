@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
 import { LOGO_RECIBO } from '../logoRecibo.js';
@@ -161,6 +162,7 @@ async function imprimirCotizacionAsync(c, empresa) {
 export default function Cotizaciones() {
   const { user } = useAuth();
   const notify = useToast();
+  const navigate = useNavigate();
   const puedeCrear = puede(user, 'facturas.crear') || puede(user, 'facturas.ver');
 
   const [cotizaciones, setCotizaciones] = useState([]);
@@ -268,6 +270,7 @@ export default function Cotizaciones() {
     } else if (!pagoOk(false, recibido, pago2Monto, subtotal)) {
       return notify(metodoPago === 'EFECTIVO' ? 'Digita cuánto recibe en efectivo' : 'Digita el valor recibido', 'err');
     }
+    const ventana = abrirVentanaVacia();
     setProcesando(true);
     try {
       const factura = await api.post('/facturas/directa', {
@@ -281,8 +284,15 @@ export default function Cotizaciones() {
       const rec = !mixto && metodoPago === 'EFECTIVO' ? recibido : null;
       limpiar();
       await cargar();
-      imprimirRecibo(factura, rec !== null ? { recibido: rec } : null, 'formatoFacturaVenta');
+      try {
+        await imprimirRecibo(factura, rec !== null ? { recibido: rec } : null, 'formatoFacturaVenta', ventana);
+        if (!ventana) notify('Factura creada. Permite ventanas emergentes o imprímela desde el historial.', 'err');
+      } catch (error) {
+        ventana?.close();
+        notify(`Factura creada, pero no se pudo imprimir: ${error.message}`, 'err');
+      }
     } catch (e) {
+      ventana?.close();
       notify(e.message, 'err');
     } finally {
       setProcesando(false);
@@ -457,6 +467,14 @@ export default function Cotizaciones() {
                   </>
                 )}
 
+                {!apertura && (
+                  <div className="row" role="alert" style={{ marginTop: 12, gap: 8 }}>
+                    <span className="mini" style={{ color: 'var(--red)', flex: 1 }}>
+                      {puede(user, 'caja.ver') && puede(user, 'caja.abrir') ? 'Abre la caja para facturar esta venta.' : 'Solicita la apertura de caja a un usuario autorizado.'}
+                    </span>
+                    {puede(user, 'caja.ver') && puede(user, 'caja.abrir') && <Button size="sm" onClick={() => { cerrarModal(); navigate('/caja'); }}>Ir a Caja</Button>}
+                  </div>
+                )}
                 <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
                   <Button variant="secondary" onClick={cerrarModal}>Cancelar</Button>
                   <Button

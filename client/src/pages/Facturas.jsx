@@ -33,9 +33,8 @@ export function configurarRecibo(empresa, tipoDoc) {
 
 // Imprime el recibo como ticket con la misma estructura, más estética. `campoFormato` permite
 // que otra pantalla (ej. Cotizaciones/Factura de venta) use su propio formato configurado.
-export async function imprimirRecibo(f, efectivo, campoFormato = 'formatoFactura') {
+export async function imprimirRecibo(f, efectivo, campoFormato = 'formatoFactura', ventana = abrirVentanaVacia()) {
   if (!f) return;
-  const ventana = abrirVentanaVacia(); // debe abrirse ya (sincrono) para que el navegador no bloquee el popup
   const dt = new Date(f.createdAt);
   const fechaDia = dt.toLocaleDateString('es-CO');
   const horaDia = dt.toLocaleTimeString('es-CO');
