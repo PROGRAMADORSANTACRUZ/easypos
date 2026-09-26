@@ -1,0 +1,332 @@
+[
+  {
+    "id": "420d5ef8-7733-4bbf-94a8-38d0425419b0",
+    "nombre": "CHICHARRON AL BARRIL",
+    "precio": 100
+  },
+  {
+    "id": "1416daa5-fd83-455d-90f8-8495dcdbe5bb",
+    "nombre": "BONDIOLA AL BARRIL",
+    "precio": 100
+  },
+  {
+    "id": "44da014f-d013-491d-bbf4-ed9e8b8a8291",
+    "nombre": "MORCILLA ASADA",
+    "precio": 100
+  },
+  {
+    "id": "9258989f-4d91-4c37-ada4-f12be187c1bd",
+    "nombre": "COMBO HAMBURGUESA CON JUGO",
+    "precio": 100
+  },
+  {
+    "id": "d9e7c9d5-1311-4bca-88cb-7da90d5964d9",
+    "nombre": "PASTEL DE CERDO",
+    "precio": 100
+  },
+  {
+    "id": "672eb61e-53bf-4df0-88c8-a92a6f7bbf8c",
+    "nombre": "PERRO CALIENTE CSC",
+    "precio": 100
+  },
+  {
+    "id": "684b1eef-df94-41fc-a4f9-09cfd310dc5b",
+    "nombre": "COSTILLA AL BARRIL",
+    "precio": 100
+  },
+  {
+    "id": "d7510018-a61e-4953-93b0-3eff902a39a4",
+    "nombre": "HAMBURGUESA / RESTAURANTE",
+    "precio": 100
+  },
+  {
+    "id": "935028a9-86dd-44de-ad1f-59b02ef3844e",
+    "nombre": "MADURO RELLENO",
+    "precio": 100
+  },
+  {
+    "id": "3d875bfd-1aa3-4a41-8a79-6a5ee5f6ae52",
+    "nombre": "PICADA SANTACRUZ/RESTAURANTE",
+    "precio": 100
+  },
+  {
+    "id": "99d335c7-f757-4bba-96ac-73329c9c861d",
+    "nombre": "PICADA PARA DOS SANTACRUZ",
+    "precio": 100
+  },
+  {
+    "id": "a1f14603-e534-4b61-b4d1-7256eb181c5e",
+    "nombre": "HAMBURGUESA DOBLE",
+    "precio": 100
+  },
+  {
+    "id": "b9676138-1a75-4b2b-b6eb-03c44d1553eb",
+    "nombre": "PLATO DE LECHONA / RESTAURANTE",
+    "precio": 100
+  },
+  {
+    "id": "284831f1-d451-43e7-ae6f-8b20a4c98688",
+    "nombre": "CHORIZO ARTESANAL / ASADO",
+    "precio": 100
+  },
+  {
+    "id": "11a96e2c-5b70-472e-b122-805e663559cc",
+    "nombre": "HAMBURGUESA DE LA CASA",
+    "precio": 100
+  },
+  {
+    "id": "7b7c547c-5a86-4567-862b-688203f6fd67",
+    "nombre": "JUGO DE MARACUYA",
+    "precio": 100
+  },
+  {
+    "id": "8371af17-6651-4c96-8547-afa94ea9669c",
+    "nombre": "JUGO DE LULO PQ",
+    "precio": 100
+  },
+  {
+    "id": "196a9fca-ebf0-4e1c-b0d2-086d25540e3d",
+    "nombre": "BEBIDA ACHOCOLATADA",
+    "precio": 100
+  },
+  {
+    "id": "fd139487-f561-4183-bcf3-61a8b1e3000e",
+    "nombre": "TAMAL ESPECIAL",
+    "precio": 100
+  },
+  {
+    "id": "43cca7c2-8a3d-4e8c-b372-71f904b0b163",
+    "nombre": "LECHONA X 200 GR",
+    "precio": 100
+  },
+  {
+    "id": "7cbf969b-41ff-4b7b-a8f3-aa8854918a48",
+    "nombre": "NUGETS(INCLUYE JUGO DE CAJITA)",
+    "precio": 100
+  },
+  {
+    "id": "3caabbef-ce89-4fcd-85b1-c6c6ea2f2de4",
+    "nombre": "PAPA FRANCESAS  200 GMS",
+    "precio": 100
+  },
+  {
+    "id": "6b066ed5-27e0-4144-991d-d4d3a12be816",
+    "nombre": "PECHUGA ASADA 300 GMS (PAPA FRANCESAS)",
+    "precio": 100
+  },
+  {
+    "id": "8b3a9276-6fc8-4806-a54e-6de6f45117ea",
+    "nombre": "PICADA CURRAMBERA X 2",
+    "precio": 100
+  },
+  {
+    "id": "f03a2a31-84a5-466b-b336-57c337dc4ea0",
+    "nombre": "PICADA CURRAMBERA X 4",
+    "precio": 100
+  },
+  {
+    "id": "ae59a305-65cd-4cc6-995d-1dd76b81dc6a",
+    "nombre": "PICADA CURRAMBERA X 6",
+    "precio": 100
+  },
+  {
+    "id": "2ea09912-16e5-4f6c-9e0e-31fcae2446cc",
+    "nombre": "PICADA LA CRIOLLA X 2",
+    "precio": 100
+  },
+  {
+    "id": "d16f7340-6d53-4021-bff7-3f376fc1581f",
+    "nombre": "PICADA LA CRIOLLA X 6",
+    "precio": 100
+  },
+  {
+    "id": "ee40ca97-a67f-4ef0-983a-4a3fd96fe06c",
+    "nombre": "PICADA LA SABANA X 2",
+    "precio": 100
+  },
+  {
+    "id": "c5ec95dc-d111-4445-82a4-7c5ac6477143",
+    "nombre": "PICADA SANTACRUZ X 2",
+    "precio": 100
+  },
+  {
+    "id": "84c96cdd-bc89-43b0-8449-e608adec72d2",
+    "nombre": "PICADA SANTACRUZ X 4",
+    "precio": 100
+  },
+  {
+    "id": "a62f9f78-82fc-485c-95ea-8dfe9e382ebb",
+    "nombre": "PICADA SANTACRUZ X 6",
+    "precio": 100
+  },
+  {
+    "id": "37285dde-ea35-4493-8907-6464e387873a",
+    "nombre": "PICADA YUMBO X 2",
+    "precio": 100
+  },
+  {
+    "id": "772f57e4-d538-49f6-8b40-69aaa957f2b7",
+    "nombre": "LECHONA X 300 GR",
+    "precio": 100
+  },
+  {
+    "id": "b7f1a6d5-d2af-432e-8f92-2f79249f70c6",
+    "nombre": "LECHONA X 250 GR",
+    "precio": 100
+  },
+  {
+    "id": "2d0f9ab4-e1e0-45f4-869e-5e90bcb1a353",
+    "nombre": "1/2 POLLO SANTACRUZ / RESTAURANTE",
+    "precio": 100
+  },
+  {
+    "id": "f7b4a8bc-6d12-4b3d-b868-9a2e141f62d2",
+    "nombre": "COSTICHIK AL BARRIL",
+    "precio": 100
+  },
+  {
+    "id": "8cb31f31-0b5e-4c07-82ca-14da311cb4fa",
+    "nombre": "BONDIOLA AL BARRIL * KL",
+    "precio": 100
+  },
+  {
+    "id": "cd6b435d-3231-437a-874a-ab81be14667b",
+    "nombre": "JUGO DE MORA PQ",
+    "precio": 100
+  },
+  {
+    "id": "3b3f4a9e-6aba-4564-b39c-128e7e484208",
+    "nombre": "CHORIZO ARTESANAL DE RES/RESTAURANTE",
+    "precio": 100
+  },
+  {
+    "id": "33c1c493-e170-4f18-9aa6-12e0ae347ab1",
+    "nombre": "CARNE OREADA DE CERDO350G Y ACOMPANANTES",
+    "precio": 100
+  },
+  {
+    "id": "69a2b0ca-3585-4ccb-83fb-445c0f2f2567",
+    "nombre": "LOMO DE CERDO EN SABANA 300g Y ACOMPANAN",
+    "precio": 100
+  },
+  {
+    "id": "496e78c2-de2e-4821-a800-cd491a719d18",
+    "nombre": "MAZORCA CON QUESO",
+    "precio": 100
+  },
+  {
+    "id": "125eb5e2-5f93-426b-bcee-0f8e1ca8a617",
+    "nombre": "PICADA LA SABANA X 4",
+    "precio": 100
+  },
+  {
+    "id": "93c91aa7-b979-423f-9a27-76a774882a5b",
+    "nombre": "PICADA LA SABANA X 6",
+    "precio": 100
+  },
+  {
+    "id": "eb3449f7-ca66-4f56-8559-84b5e182005c",
+    "nombre": "SANCOCHO DE MONDONGO GRANDE",
+    "precio": 100
+  },
+  {
+    "id": "80236a59-73c6-4b05-a0ca-44eb389474d8",
+    "nombre": "CEVICHE DE CHICHARRON",
+    "precio": 100
+  },
+  {
+    "id": "579397e8-0658-486c-94dc-78bf4fc95c22",
+    "nombre": "CANASTICAS RELLENAS",
+    "precio": 100
+  },
+  {
+    "id": "f410a092-e62d-4544-9e0e-f75944cf9a9d",
+    "nombre": "ADICIONAL DE ENSALADA",
+    "precio": 100
+  },
+  {
+    "id": "fe43f52e-7219-483a-a1c6-969db5daf6c9",
+    "nombre": "ADICIONAL DE PAPA CRIOLLA",
+    "precio": 100
+  },
+  {
+    "id": "973635b7-ef55-4ca1-8ecc-fdfbc27b0f9b",
+    "nombre": "ADICIONAL DE YUCA",
+    "precio": 100
+  },
+  {
+    "id": "e0f37bb5-b3d6-4f35-b89c-bdcd3574df75",
+    "nombre": "JUGO DE GUANABANA",
+    "precio": 100
+  },
+  {
+    "id": "e42f0dbe-2050-4439-982e-ce817f45769c",
+    "nombre": "TAMAL X 300 GRAMOS",
+    "precio": 100
+  },
+  {
+    "id": "e7ee1f07-da2e-4955-80e8-0e6510f49f1c",
+    "nombre": "PICADA YUMBO X 4",
+    "precio": 100
+  },
+  {
+    "id": "b7f0c2c8-bbd9-4510-9d87-184cd27963f0",
+    "nombre": "PICADA YUMBO X 6",
+    "precio": 100
+  },
+  {
+    "id": "30a70721-6e3a-431a-88ee-cb90a0430625",
+    "nombre": "SOBREBARRIGA 300g Y ACOMPANANTES",
+    "precio": 100
+  },
+  {
+    "id": "b5103900-5325-4e37-ab0d-3fc3eb70cb3e",
+    "nombre": "TAMAL",
+    "precio": 100
+  },
+  {
+    "id": "c1a51906-ea52-41c5-9bfb-3eaa592a884d",
+    "nombre": "BACHE DE AJI",
+    "precio": 100
+  },
+  {
+    "id": "ad5ae409-fcb3-48f4-970f-24f9064c6b3c",
+    "nombre": "GUACAMOLE",
+    "precio": 100
+  },
+  {
+    "id": "0a0ee0b3-3851-4028-9db4-53e0142f63dc",
+    "nombre": "ADOBO CARNE OREDA DE CERDO",
+    "precio": 100
+  },
+  {
+    "id": "5f6b9097-2fa6-43cc-857d-3b858bc4142f",
+    "nombre": "CARNE ASADA",
+    "precio": 100
+  },
+  {
+    "id": "db77a6ab-0129-42da-b72a-5fb2cd7d2ccf",
+    "nombre": "CHURRASCO",
+    "precio": 100
+  },
+  {
+    "id": "201902ef-1688-41a3-b761-c77bd36e3c12",
+    "nombre": "PUNTA GORDA DE CERDO",
+    "precio": 100
+  },
+  {
+    "id": "bee07884-df9a-4b52-b2d9-273ff86ed16d",
+    "nombre": "NUGGETS",
+    "precio": 100
+  },
+  {
+    "id": "a711baa2-880e-49c7-8faf-eaeb69e479b7",
+    "nombre": "SANCOCHO DE MONDONGO",
+    "precio": 100
+  },
+  {
+    "id": "490fffed-f4e0-487e-82e7-3f395a9494d6",
+    "nombre": "SANCOCHO DE COSTILLA",
+    "precio": 100
+  }
+]

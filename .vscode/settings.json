@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^Set-Location 'C:\\\\Users\\\\users\\\\Desktop\\\\EASYPOS\\\\client'; npm\\.cmd install lucide-react 2>&1 \\| Out-String$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

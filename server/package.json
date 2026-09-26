@@ -1,0 +1,32 @@
+{
+  "name": "easypos-server",
+  "version": "1.0.0",
+  "description": "API de EASYPOS: pedidos por mesa/mesera, facturacion, inventario y kits",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "prisma:push": "prisma db push",
+    "seed": "node prisma/seed.js",
+    "platform:generate": "prisma generate --schema=prisma/platform/schema.prisma",
+    "platform:push": "prisma db push --schema=prisma/platform/schema.prisma"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "prisma": "^6.2.1"
+  }
+}

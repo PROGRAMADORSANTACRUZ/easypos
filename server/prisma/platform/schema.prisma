@@ -1,0 +1,30 @@
+// EASYPOS - Esquema de la base de PLATAFORMA (registro central de restaurantes/tenants)
+// Cada restaurante tiene su propia base de datos (misma estructura que schema.prisma);
+// aqui solo se guarda el directorio de restaurantes y como conectarse a cada uno.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/platform-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PLATFORM_DATABASE_URL")
+}
+
+model Restaurante {
+  id              String   @id @default(uuid())
+  slug            String   @unique // identificador corto, usado en la URL de la base (ej. "asados-santa-cruz")
+  nombre          String   // nombre visible del restaurante en la plataforma
+  nit             String?
+  nombreComercial String?
+  direccion       String?
+  telefono        String?
+  correo          String?
+  dbNombre        String   // nombre de la base de datos del restaurante
+  dbUrl           String   // cadena de conexion completa a la base del restaurante
+  estado          String   @default("ACTIVO") // ACTIVO | SUSPENDIDO
+  plan            String?  @default("basico")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

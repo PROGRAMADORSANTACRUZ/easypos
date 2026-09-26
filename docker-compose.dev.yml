@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: easypos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: easypos
+      POSTGRES_PASSWORD: easypos
+      POSTGRES_DB: easypos
+    ports:
+      - "5432:5432"
+    volumes:
+      - easypos_pgdata:/var/lib/postgresql/data
+
+volumes:
+  easypos_pgdata:

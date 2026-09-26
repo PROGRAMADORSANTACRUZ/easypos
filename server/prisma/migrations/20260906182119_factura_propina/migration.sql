@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Factura" ADD COLUMN     "Propina" DOUBLE PRECISION NOT NULL DEFAULT 0;

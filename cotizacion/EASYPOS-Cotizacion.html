@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cotización EASYPOS</title>
+<style>
+  :root { --primary:#f97316; --dark:#0f172a; --muted:#64748b; --line:#e5e7eb; }
+  * { box-sizing: border-box; }
+  body { font-family:'Segoe UI', Arial, sans-serif; color:#111827; margin:0; background:#f1f5f9; }
+
+  /* Barra de acciones (no se imprime) */
+  .toolbar { position:sticky; top:0; display:flex; gap:10px; justify-content:center; padding:14px; background:#0f172a; }
+  .toolbar button { border:none; border-radius:8px; padding:10px 18px; font-size:14px; font-weight:700; cursor:pointer; }
+  .btn-print { background:var(--primary); color:#fff; }
+  .btn-print:hover { background:#ea580c; }
+
+  .page { width:210mm; min-height:297mm; margin:18px auto; background:#fff; padding:18mm 16mm; box-shadow:0 6px 24px rgba(0,0,0,.15); }
+
+  /* Encabezado */
+  .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid var(--primary); padding-bottom:14px; }
+  .marca { font-size:34px; font-weight:900; color:var(--primary); letter-spacing:1px; }
+  .marca small { display:block; font-size:12px; font-weight:600; color:var(--muted); letter-spacing:2px; }
+  .doc-meta { text-align:right; font-size:12px; color:var(--muted); }
+  .doc-meta .titulo { font-size:20px; font-weight:800; color:var(--dark); letter-spacing:1px; }
+
+  /* Datos */
+  .datos { display:flex; justify-content:space-between; gap:20px; margin:20px 0; font-size:13px; }
+  .datos .box { flex:1; background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .datos .box h4 { margin:0 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--primary); }
+  .datos .box p { margin:2px 0; }
+
+  h2 { font-size:15px; color:var(--dark); border-left:4px solid var(--primary); padding-left:10px; margin:22px 0 10px; }
+  p.desc { font-size:13px; line-height:1.5; color:#374151; }
+
+  /* Features */
+  .features { columns:2; column-gap:22px; font-size:12.5px; }
+  .features div { break-inside:avoid; margin:0 0 6px; padding-left:18px; position:relative; line-height:1.4; }
+  .features div::before { content:'✔'; position:absolute; left:0; color:var(--primary); font-weight:800; }
+
+  /* Tabla precios */
+  table { width:100%; border-collapse:collapse; margin-top:8px; font-size:13px; }
+  th { background:var(--primary); color:#fff; text-align:left; padding:9px 12px; font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  th.r, td.r { text-align:right; }
+  td { padding:9px 12px; border-bottom:1px solid var(--line); }
+  tr:nth-child(even) td { background:#fff7ed; }
+  .total-row td { font-weight:800; font-size:15px; border-top:2px solid var(--primary); background:#fff; }
+  .badge { display:inline-block; background:#dcfce7; color:#166534; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; margin-left:6px; }
+
+  .nota { font-size:11px; color:var(--muted); margin-top:6px; }
+
+  /* Planes */
+  .planes { display:flex; gap:14px; margin-top:8px; }
+  .plan { flex:1; border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .plan.destacado { border:2px solid var(--primary); box-shadow:0 4px 14px rgba(249,115,22,.15); }
+  .plan h3 { margin:0 0 4px; font-size:14px; }
+  .plan .precio { font-size:22px; font-weight:900; color:var(--primary); }
+  .plan .precio small { font-size:12px; color:var(--muted); font-weight:600; }
+  .plan ul { margin:8px 0 0; padding-left:16px; font-size:11.5px; color:#374151; line-height:1.5; }
+
+  .terminos { font-size:11.5px; color:#374151; line-height:1.6; }
+  .firma { margin-top:40px; display:flex; justify-content:space-between; gap:30px; }
+  .firma div { flex:1; text-align:center; border-top:1px solid #9ca3af; padding-top:6px; font-size:12px; color:var(--muted); }
+
+  .pie { margin-top:24px; text-align:center; font-size:11px; color:var(--muted); border-top:1px solid var(--line); padding-top:10px; }
+
+  @media print {
+    body { background:#fff; }
+    .toolbar { display:none; }
+    .page { margin:0; box-shadow:none; width:auto; min-height:auto; padding:14mm; }
+    @page { size:A4; margin:0; }
+  }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
+  </div>
+
+  <div class="page">
+    <!-- Encabezado -->
+    <div class="head">
+      <div class="marca">EASYPOS<small>SISTEMA POS PARA RESTAURANTES</small></div>
+      <div class="doc-meta">
+        <div class="titulo">COTIZACIÓN</div>
+        <div>N.º: <b>COT-0001</b></div>
+        <div>Fecha: <b id="fecha"></b></div>
+        <div>Validez: <b>15 días</b></div>
+      </div>
+    </div>
+
+    <!-- Datos -->
+    <div class="datos">
+      <div class="box">
+        <h4>Ofrecido por</h4>
+        <p><b>[Tu nombre / empresa]</b></p>
+        <p>Tel: [tu teléfono]</p>
+        <p>Correo: [tu correo]</p>
+        <p>Ciudad: [tu ciudad]</p>
+      </div>
+      <div class="box">
+        <h4>Cliente</h4>
+        <p><b>[Nombre del restaurante]</b></p>
+        <p>Contacto: [nombre]</p>
+        <p>Tel: [teléfono]</p>
+        <p>Ciudad: [ciudad]</p>
+      </div>
+    </div>
+
+    <!-- Descripción -->
+    <h2>Descripción de la solución</h2>
+    <p class="desc">
+      <b>EASYPOS</b> es un sistema de punto de venta diseñado para restaurantes, bares y negocios de comida.
+      Permite gestionar mesas, tomar pedidos, controlar inventario y facturar de forma rápida y ordenada,
+      con reportes de ventas en tiempo real y control de usuarios por rol. Incluye impresión de comandas
+      para cocina y tickets para el cliente.
+    </p>
+
+    <!-- Funcionalidades -->
+    <h2>Funcionalidades incluidas</h2>
+    <div class="features">
+      <div>Gestión de mesas y estado en tiempo real</div>
+      <div>Toma de pedidos por mesa y mesera</div>
+      <div>Cambio de mesa con registro del movimiento</div>
+      <div>Facturación por mesa y venta directa (caja)</div>
+      <div>Pagos en efectivo, tarjeta, transferencia y mixtos</div>
+      <div>Cálculo de vuelto y control de pago recibido</div>
+      <div>Ventas congeladas (dejar en espera)</div>
+      <div>Gestión de clientes (Consumidor Final por defecto)</div>
+      <div>Inventario con control de existencias</div>
+      <div>Productos y kits (combos con componentes)</div>
+      <div>Reportes: por día, semana, mes, producto, categoría, mesera y mesa</div>
+      <div>Exportación de reportes a Excel y PDF</div>
+      <div>Usuarios con roles (Admin, Cajero, Mesero)</div>
+      <div>Impresión de comandas y tickets 80mm</div>
+      <div>Modo día / noche</div>
+    </div>
+
+    <!-- Inversión -->
+    <h2>Inversión — Modelo recomendado (híbrido)</h2>
+    <table>
+      <thead>
+        <tr><th>Concepto</th><th>Detalle</th><th class="r">Valor (COP)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Implementación inicial</b></td>
+          <td>Instalación, configuración, carga de menú y capacitación</td>
+          <td class="r">$ 800.000</td>
+        </tr>
+        <tr>
+          <td><b>Personalización</b></td>
+          <td>Logo, impuestos e impresora térmica</td>
+          <td class="r">$ 300.000</td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="2">Total pago único inicial</td>
+          <td class="r">$ 1.100.000</td>
+        </tr>
+        <tr>
+          <td><b>Soporte y hosting</b> <span class="badge">MENSUAL</span></td>
+          <td>Mantenimiento, respaldos, actualizaciones y soporte por local</td>
+          <td class="r">$ 60.000 / mes</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="nota">* Valores en pesos colombianos (COP). No incluyen hardware (impresora, tablet o PC). Precios sujetos a la validez de esta cotización.</p>
+
+    <!-- Planes alternativos -->
+    <h2>Otras modalidades</h2>
+    <div class="planes">
+      <div class="plan">
+        <h3>Licencia única</h3>
+        <div class="precio">$ 2.500.000 <small>pago único</small></div>
+        <ul>
+          <li>Instalación local</li>
+          <li>Capacitación incluida</li>
+          <li>Soporte 1 mes gratis</li>
+          <li>Sin mensualidad</li>
+        </ul>
+      </div>
+      <div class="plan destacado">
+        <h3>Híbrido (recomendado)</h3>
+        <div class="precio">$ 60.000 <small>/ mes + setup</small></div>
+        <ul>
+          <li>Instalación + capacitación</li>
+          <li>Hosting y respaldos</li>
+          <li>Actualizaciones incluidas</li>
+          <li>Soporte prioritario</li>
+        </ul>
+      </div>
+      <div class="plan">
+        <h3>Suscripción</h3>
+        <div class="precio">$ 120.000 <small>/ mes</small></div>
+        <ul>
+          <li>Sin pago inicial alto</li>
+          <li>Todo incluido</li>
+          <li>Soporte y actualizaciones</li>
+          <li>Ideal para empezar</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Términos -->
+    <h2>Términos y condiciones</h2>
+    <div class="terminos">
+      • Esta cotización tiene una validez de 15 días a partir de la fecha de emisión.<br>
+      • Forma de pago: 50% al iniciar y 50% contra entrega (modalidad de licencia o híbrido).<br>
+      • El tiempo de implementación se acuerda según el tamaño del menú y necesidades del cliente.<br>
+      • El hardware (impresora térmica, tablet/PC, red WiFi) corre por cuenta del cliente salvo acuerdo distinto.<br>
+      • El soporte mensual incluye correcciones, respaldos y actualizaciones menores.
+    </div>
+
+    <!-- Firmas -->
+    <div class="firma">
+      <div>Firma proveedor</div>
+      <div>Firma cliente</div>
+    </div>
+
+    <div class="pie">EASYPOS · Sistema POS para restaurantes · Gracias por su confianza</div>
+  </div>
+
+  <script>
+    document.getElementById('fecha').textContent = new Date().toLocaleDateString('es-CO', { year:'numeric', month:'long', day:'numeric' });
+  </script>
+</body>
+</html>

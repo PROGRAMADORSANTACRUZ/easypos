@@ -1,0 +1,13 @@
+{
+  "name": "easypos-desktop",
+  "version": "1.0.0",
+  "description": "App de escritorio de EASYPOS (Electron)",
+  "main": "main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.2.1"
+  }
+}

@@ -1,0 +1,894 @@
+// EASYPOS - Esquema de base de datos
+// Documentacion: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Meseras / personal que toma pedidos
+model Mesera {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  codigo    String   @unique // numero o codigo de la mesera
+  activa    Boolean  @default(true)
+  pedidos   Pedido[]
+  pedidosMesa PedidoMesa[]
+  createdAt DateTime @default(now())
+}
+
+// Cocineros / personal de cocina que confirma la preparacion de los platos
+model Cocinero {
+  id            Int                 @id @default(autoincrement())
+  nombre        String
+  codigo        String              @unique
+  activo        Boolean             @default(true)
+  preparaciones PreparacionCocina[]
+  createdAt     DateTime            @default(now())
+}
+
+// Usuarios del sistema (para iniciar sesion)
+model Usuario {
+  id            String       @id @default(uuid()) @db.Uuid @map("Id")
+  usuario       String       @unique @db.VarChar(50) @map("Usuario")
+  nombre        String       @db.VarChar(200) @map("Nombre")
+  correo        String?      @db.VarChar(150) @map("Correo")
+  passwordHash  String       @map("PasswordHash")
+  activo        Boolean      @default(true) @map("Activo")
+  fechaCreacion DateTime     @default(now()) @map("FechaCreacion")
+  roles         UsuarioRol[]
+  auditorias    Auditoria[]
+  aperturasCaja AperturaCaja[]
+  facturas      Factura[]
+  comisiones    ComisionVendedor[]
+
+  @@map("Usuarios")
+}
+
+// Roles del sistema (RBAC)
+model Rol {
+  id          Int          @id @default(autoincrement())
+  nombre      String       @unique // ADMIN | CAJERO | MESERO | ...
+  descripcion String?
+  activo      Boolean      @default(true)
+  permisos    RolPermiso[]
+  usuarios    UsuarioRol[]
+  createdAt   DateTime     @default(now())
+}
+
+// Permisos granulares (ej. productos.crear, facturas.anular)
+model Permiso {
+  id          Int          @id @default(autoincrement())
+  codigo      String       @unique // clave del permiso (ej. "ventas.crear")
+  nombre      String
+  descripcion String?
+  modulo      String?      // agrupacion (ej. "ventas", "inventario")
+  roles       RolPermiso[]
+  createdAt   DateTime     @default(now())
+}
+
+// Relacion N:M entre Rol y Permiso
+model RolPermiso {
+  id        Int      @id @default(autoincrement())
+  rolId     Int
+  rol       Rol      @relation(fields: [rolId], references: [id], onDelete: Cascade)
+  permisoId Int
+  permiso   Permiso  @relation(fields: [permisoId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([rolId, permisoId])
+}
+
+// Relacion N:M entre Usuario y Rol
+model UsuarioRol {
+  id        Int      @id @default(autoincrement())
+  usuarioId String   @db.Uuid
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  rolId     Int
+  rol       Rol      @relation(fields: [rolId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([usuarioId, rolId])
+}
+
+// Registro de auditoria (quien hizo que y cuando)
+model Auditoria {
+  id        Int      @id @default(autoincrement())
+  usuarioId String?  @db.Uuid
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+  accion    String   // CREAR | EDITAR | ELIMINAR | LOGIN | ...
+  entidad   String?  // tabla o modulo afectado (ej. "Producto")
+  entidadId String?  // id del registro afectado
+  detalle   String?  // descripcion / diff / payload
+  ip        String?
+  createdAt DateTime @default(now())
+}
+
+// Clientes del negocio (para ventas, fidelizacion y facturacion)
+model Cliente {
+  id              String   @id @default(uuid()) @db.Uuid @map("Id")
+  tipoCliente     String   @default("NATURAL") @db.VarChar(20) @map("TipoCliente") // NATURAL | JURIDICA
+  tipoDocumento   String?  @db.VarChar(10) @map("TipoDocumento")
+  numeroDocumento String?  @db.VarChar(20) @map("NumeroDocumento")
+  razonSocial     String?  @db.VarChar(200) @map("RazonSocial")
+  documento String?  @unique // NIT o cedula (compatibilidad con captura rapida)
+  nombre    String   // nombres y apellidos (valor combinado para recibos/facturas)
+  nombres   String?
+  apellidos String?
+  telefono  String?  @db.VarChar(50) @map("Telefono")
+  direccion String?  @map("Direccion")
+  barrio    String?
+  ciudad    String?
+  email     String?  @db.VarChar(150) @map("Email")
+  municipioCodigo String? @db.VarChar(10) @map("MunicipioCodigo")
+  responsableIVA  Boolean @default(false) @map("ResponsableIVA")
+  porcentajeEmpleado Float? @map("PorcentajeEmpleado")
+  porcentajeCliente  Float? @map("PorcentajeCliente")
+  condicionPago String @default("CONTADO") // CONTADO | CREDITO
+  creditoDias   Int?    // plazo en dias cuando es a credito
+  creditoCupo   Float?  // cupo maximo cuando es a credito
+  activo    Boolean  @default(true)
+  pedidos   Pedido[]
+  facturas  Factura[]
+  cotizaciones Cotizacion[]
+  remisiones Remision[]
+  cortesias Cortesia[]
+  createdAt DateTime @default(now()) @map("FechaCreacion")
+}
+
+// Mesas del local
+model Mesa {
+  id        Int      @id @default(autoincrement())
+  numero    Int      @unique
+  capacidad Int      @default(4)
+  estado    String   @default("LIBRE") // LIBRE | OCUPADA
+  pedidos   Pedido[]
+  pedidosMesa PedidoMesa[]
+  preparaciones PreparacionCocina[]
+  createdAt DateTime @default(now())
+}
+
+// Categorias del menu (ej. Hamburguesas, Bebidas)
+model Categoria {
+  id            String     @id @default(uuid()) @db.Uuid @map("Id")
+  codigo        String?    @unique @db.VarChar(10) @map("Codigo") // consecutivo visible (01, 02...), fijo desde su creacion
+  nombre        String     @unique @db.VarChar(100) @map("Nombre")
+  impresoraIp   String?    @db.VarChar(100) @map("ImpresoraIp") // IP de la impresora ESC/POS de esta estacion (ej. cocina, bar)
+  impresoraPuerto Int?     @default(9100) @map("ImpresoraPuerto")
+  createdAt     DateTime   @default(now()) @map("FechaCreacion")
+  productos     Producto[]
+}
+
+
+// Bodegas / almacenes donde se guarda el inventario
+model Bodega {
+  id          String       @id @default(uuid()) @db.Uuid @map("Id")
+  nombre      String       @db.VarChar(100) @map("Nombre")
+  sucursalId  String?      @db.Uuid @map("SucursalId")
+  sucursal    Sucursal?    @relation(fields: [sucursalId], references: [id], onDelete: SetNull)
+  existencias Inventario[]
+  movimientos MovimientoInventario[]
+}
+
+// Cajas registradoras / puntos de cobro
+model Caja {
+  id     String @id @default(uuid()) @db.Uuid @map("Id")
+  nombre String @db.VarChar(100) @map("Nombre")
+  aperturas AperturaCaja[]
+
+  @@map("Cajas")
+}
+
+// Asignacion de caja por equipo: relaciona la MAC de un PC con el numero de caja que le corresponde.
+model AsignacionCaja {
+  id         String   @id @default(uuid()) @db.Uuid @map("Id")
+  mac        String   @unique @db.VarChar(60) @map("Mac")
+  equipo     String?  @db.VarChar(120) @map("Equipo")
+  numeroCaja String   @db.VarChar(30) @map("NumeroCaja")
+  activo     Boolean  @default(true) @map("Activo")
+  createdAt  DateTime @default(now()) @map("FechaCreacion")
+
+  @@map("AsignacionesCaja")
+}
+
+// Tipos de documentos (parametrizacion DIAN): clases de documento con su rango de consecutivos, resolucion y prefijo.
+model TipoDocumento {
+  id                  String    @id @default(uuid()) @db.Uuid @map("Id")
+  clase               String    @db.VarChar(120) @map("Clase")          // ej. "01F - FACTURA ELECTRONICA DE VENTA"
+  esElectronico       Boolean   @default(true)   @map("EsElectronico")  // false = documento interno, no se reporta a la DIAN/Factus
+  codigo              String    @db.VarChar(20)  @map("Codigo")         // C.O (001, 401, 402, ...)
+  automatico          Boolean   @default(false)  @map("Automatico")
+  consInicial         Int?      @map("ConsInicial")
+  consFinal           Int?      @map("ConsFinal")
+  consProximo         Int?      @map("ConsProximo")
+  nroResolucion       String?   @db.VarChar(50)  @map("NroResolucion")
+  fechaResolucion     DateTime? @db.Date         @map("FechaResolucion")
+  nroMaxItems         Int?      @default(0)       @map("NroMaxItems")
+  prefijo             String?   @db.VarChar(20)  @map("Prefijo")
+  consFormato         String?   @db.VarChar(50)  @map("ConsFormato")
+  fechaResolucionVcto DateTime? @db.Date         @map("FechaResolucionVcto")
+  diasAvisoVcto       Int?      @default(0)       @map("DiasAvisoVcto")
+  tipoIdentificacion  String?   @db.VarChar(50)  @map("TipoIdentificacion")
+  activo              Boolean   @default(true)   @map("Activo")
+  createdAt           DateTime  @default(now())  @map("FechaCreacion")
+
+  @@map("TiposDocumento")
+}
+
+// Medios/Formas de pago (maestro): efectivo, transferencia, QR, tarjetas, bancos, datafono, etc.
+model FormaPago {
+  id               String   @id @default(uuid()) @db.Uuid @map("Id")
+  formaPago        String   @db.VarChar(120) @map("FormaPago")           // nombre del medio de pago
+  manejaDocumento  Boolean  @default(false)  @map("ManejaDocumento")     // S/N: exige numero de documento/comprobante
+  cuenta           String?  @db.VarChar(30)  @map("Cuenta")              // cuenta contable
+  exportado        Boolean  @default(false)  @map("Exportado")
+  consignarEn      String?  @db.VarChar(60)  @map("ConsignarEn")         // banco/caja destino
+  tipoDatafono     String?  @db.VarChar(40)  @map("TipoDatafono")        // Ninguno / Redeban / Credibanco...
+  idBodega         Int?     @default(0)      @map("IdBodega")
+  formaPagoDian    String?  @db.VarChar(40)  @map("FormaPagoDian")       // codigo DIAN: 10-Efectivo, 47-Transferencia...
+  activo           Boolean  @default(true)   @map("Activo")
+  createdAt        DateTime @default(now())  @map("FechaCreacion")
+
+  @@map("FormasPago")
+}
+
+
+// Resoluciones de facturacion DIAN (rangos de numeracion autorizados)
+model ResolucionFacturacion {
+  id               String    @id @default(uuid()) @db.Uuid @map("Id")
+  prefijo          String?   @db.VarChar(20) @map("Prefijo")
+  numeroResolucion String?   @db.VarChar(50) @map("NumeroResolucion")
+  rangoInicial     BigInt?   @map("RangoInicial")
+  rangoFinal       BigInt?   @map("RangoFinal")
+  siguienteNumero  BigInt?   @map("SiguienteNumero")
+  fechaInicio      DateTime? @db.Date @map("FechaInicio")
+  fechaFin         DateTime? @db.Date @map("FechaFin")
+
+  @@map("ResolucionesFacturacion")
+}
+
+// Aperturas y cierres de caja (turnos de caja)
+model AperturaCaja {
+  id            String    @id @default(uuid()) @db.Uuid @map("Id")
+  cajaId        String?   @db.Uuid @map("CajaId")
+  caja          Caja?     @relation(fields: [cajaId], references: [id])
+  usuarioId     String?   @db.Uuid @map("UsuarioId")
+  usuario       Usuario?  @relation(fields: [usuarioId], references: [id])
+  valorInicial  Float     @default(0) @map("ValorInicial")
+  fechaApertura DateTime  @default(now()) @map("FechaApertura")
+  fechaCierre   DateTime? @map("FechaCierre")
+  estado        String?   @db.VarChar(20) @map("Estado")
+  totalVentas       Float?  @map("TotalVentas")
+  totalEfectivo     Float?  @map("TotalEfectivo")
+  valorEsperado     Float?  @map("ValorEsperado")
+  valorContado      Float?  @map("ValorContado")
+  diferencia        Float?  @map("Diferencia")
+  observacionCierre String? @map("ObservacionCierre")
+  facturas      Factura[]
+
+  @@map("AperturasCaja")
+}
+
+// Existencias: cantidad de un producto en una bodega
+model Inventario {
+  id         String    @id @default(uuid()) @db.Uuid @map("Id")
+  productoId String?   @db.Uuid @map("ProductoId")
+  producto   Producto? @relation(fields: [productoId], references: [id])
+  bodegaId   String?   @db.Uuid @map("BodegaId")
+  bodega     Bodega?   @relation(fields: [bodegaId], references: [id])
+  cantidad   Float     @default(0) @map("Cantidad")
+}
+
+// Movimientos de inventario: entradas, salidas y ajustes de existencias
+model MovimientoInventario {
+  id                  String    @id @default(uuid()) @db.Uuid @map("Id")
+  productoId          String?   @db.Uuid @map("ProductoId")
+  producto            Producto? @relation(fields: [productoId], references: [id])
+  bodegaId            String?   @db.Uuid @map("BodegaId")
+  bodega              Bodega?   @relation(fields: [bodegaId], references: [id])
+  itemId              Int?            @map("ItemId")
+  item                InventarioItem? @relation(fields: [itemId], references: [id])
+  tipoMovimiento      String?   @db.VarChar(20) @map("TipoMovimiento")
+  cantidad            Float     @default(0) @map("Cantidad")
+  costoUnitario       Float     @default(0) @map("CostoUnitario")
+  documentoReferencia String?   @db.VarChar(50) @map("DocumentoReferencia")
+  fecha               DateTime  @default(now()) @map("Fecha")
+}
+
+// Insumos de inventario (ej. bollo, carne, queso, gaseosa)
+model InventarioItem {
+  id         Int             @id @default(autoincrement())
+  codigo     String?         @unique // Referencia del insumo
+  nombre     String          @unique
+  unidad     String          @default("unidad") // unidad, gramo, ml, etc.
+  stock      Float           @default(0)
+  stockMinimo Float          @default(0)
+  costo      Float           @default(0)
+  cuentaContableId String?    @db.Uuid // cuenta del plan contable a la que se imputa el insumo
+  cuentaContable   CuentaContable? @relation(fields: [cuentaContableId], references: [id])
+  componentes KitComponente[]
+  comprasDetalle CompraDetalle[]
+  movimientos MovimientoInventario[]
+  createdAt  DateTime        @default(now())
+}
+
+// Unidades de medida (Kilogramo, Unidad, Mililitro...). factorConversion indica cuantas
+// unidades base (gramo/mililitro/unidad) equivalen a 1 de esta unidad, para conversiones.
+model UnidadMedida {
+  id               String     @id @default(uuid()) @db.Uuid @map("Id")
+  nombre           String     @unique @db.VarChar(50) @map("Nombre")
+  abreviatura      String     @db.VarChar(10) @map("Abreviatura")
+  factorConversion Float      @default(1) @map("FactorConversion")
+  activo           Boolean    @default(true) @map("Activo")
+  createdAt        DateTime   @default(now()) @map("FechaCreacion")
+  productos        Producto[]
+
+  @@map("UnidadesMedida")
+}
+
+// Productos vendibles del menu. Si tiene componentes es un "kit" (receta).
+model Producto {
+  id          String          @id @default(uuid()) @db.Uuid @map("Id")
+  codigo      String?         @unique @db.VarChar(50) @map("Codigo")
+  codigoBarras String?        @db.VarChar(50) @map("CodigoBarras")
+  nombre      String          @db.VarChar(250) @map("Nombre")
+  descripcion String?         @map("Descripcion")
+  precio      Float           @map("PrecioVenta")
+  costo       Float           @default(0) @map("Costo")
+  iva         Float           @default(0) @map("IVA") // % efectivo (se sincroniza con impuesto.porcentaje si hay impuestoId)
+  impuestoId  String?         @db.Uuid @map("ImpuestoId")
+  impuesto    Impuesto?       @relation(fields: [impuestoId], references: [id])
+  unidadId    String?         @db.Uuid @map("UnidadId")
+  unidad      UnidadMedida?   @relation(fields: [unidadId], references: [id])
+  stockMinimo Float           @default(0) @map("StockMinimo")
+  categoriaId String?         @db.Uuid
+  categoria   Categoria?      @relation(fields: [categoriaId], references: [id])
+  esKit       Boolean         @default(false)
+  activo      Boolean         @default(true) @map("Activo")
+  foto        String?         // data URL o URL de imagen
+  componentes KitComponente[]
+  pedidoItems PedidoItem[]
+  pedidosMesa PedidoMesa[]
+  existencias Inventario[]
+  movimientos MovimientoInventario[]
+  facturaDetalles FacturaDetalle[]
+  listaPrecios ProductoListaPrecio[]
+  cortesiaDetalles CortesiaDetalle[]
+  cotizacionDetalles CotizacionDetalle[]
+  createdAt   DateTime        @default(now())
+}
+
+// Receta del kit: que insumos consume un producto y en que cantidad
+model KitComponente {
+  id         Int            @id @default(autoincrement())
+  productoId String         @db.Uuid
+  producto   Producto       @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  itemId     Int
+  item       InventarioItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  cantidad   Float          @default(1)
+
+  @@unique([productoId, itemId])
+}
+
+// Pedido tomado por mesa/mesera
+model Pedido {
+  id        Int          @id @default(autoincrement())
+  mesaId    Int?
+  mesa      Mesa?        @relation(fields: [mesaId], references: [id])
+  meseraId  Int?
+  mesera    Mesera?      @relation(fields: [meseraId], references: [id])
+  cliente   String?      // nombre para el recibo (por defecto "Consumidor Final")
+  clienteId String?      @db.Uuid
+  clienteRel Cliente?    @relation(fields: [clienteId], references: [id])
+  tipo      String       @default("MESA") // MESA | DOMICILIO (pedido en linea del cliente)
+  metodoPago String?     // forma de pago elegida por el cliente en pedidos en linea
+  estado    String       @default("ABIERTO") // ABIERTO | FACTURADO | CANCELADO
+  editado   Boolean      @default(false)
+  cambios   String?      // log de ediciones (una linea por reenvio)
+  observaciones String?  // nota general del pedido (ej. "sin cebolla", "para llevar") visible en cocina y prefactura
+  // Seguimiento de entrega a domicilio (geolocalizacion en tiempo real)
+  estadoEntrega        String    @default("RECIBIDO") // RECIBIDO | EN_PREPARACION | EN_CAMINO | ENTREGADO | CANCELADO
+  latDestino           Float?    // ubicacion de entrega del cliente
+  lngDestino           Float?
+  latRepartidor        Float?    // ultima posicion GPS del repartidor
+  lngRepartidor        Float?
+  repartidor           String?   // nombre del repartidor asignado
+  ubicacionActualizada DateTime? // momento del ultimo reporte de ubicacion
+  seguimientoToken     String?   // token para que el cliente consulte su pedido
+  items     PedidoItem[]
+  factura   Factura?
+  pedidosMesa PedidoMesa[]
+  preparacion PreparacionCocina?
+  createdAt DateTime     @default(now())
+}
+
+model PedidoItem {
+  id         Int      @id @default(autoincrement())
+  pedidoId   Int
+  pedido     Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  productoId String   @db.Uuid
+  producto   Producto @relation(fields: [productoId], references: [id])
+  cantidad   Int      @default(1)
+  precioUnit Float
+  notas      String?
+}
+
+// Consecutivo/bitacora de cada linea de pedido tomada por el mesero (una fila por producto).
+// Se alimenta automaticamente al crear/editar un Pedido; no se edita a mano.
+model PedidoMesa {
+  consecutivo   Int      @id @default(autoincrement())
+  fecha         DateTime @default(now())
+  pedidoId      Int
+  pedido        Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  mesaId        Int?
+  mesa          Mesa?    @relation(fields: [mesaId], references: [id])
+  meseraId      Int?
+  mesera        Mesera?  @relation(fields: [meseraId], references: [id])
+  productoId    String   @db.Uuid
+  producto      Producto @relation(fields: [productoId], references: [id])
+  cantidad      Int      @default(1)
+  editado       Boolean  @default(false)
+  cambios       String?  // que cambio (texto libre, copiado del log del pedido)
+  observaciones String?
+
+  @@map("PedidosMesa")
+}
+
+// Confirmacion de cocina: un registro por pedido que se marca "listo" cuando el
+// cocinero termina de preparar todos los platos de esa mesa.
+model PreparacionCocina {
+  consecutivo Int       @id @default(autoincrement())
+  pedidoId    Int       @unique
+  pedido      Pedido    @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  mesaId      Int?
+  mesa        Mesa?     @relation(fields: [mesaId], references: [id])
+  productos   String    // resumen legible: "2x Hamburguesa, 1x Jugo de mora"
+  cocineroId  Int?
+  cocinero    Cocinero? @relation(fields: [cocineroId], references: [id])
+  listo       Boolean   @default(false)
+  fechaListo  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("PreparacionCocina")
+}
+
+// Factura / recibo generado al cerrar el pedido (estructura DIAN)
+model Factura {
+  id            String    @id @default(uuid()) @db.Uuid @map("Id")
+  numeroFactura String?   @db.VarChar(50) @map("NumeroFactura")
+  prefijo       String?   @db.VarChar(20) @map("Prefijo")
+  pedidoId      Int       @unique
+  pedido        Pedido    @relation(fields: [pedidoId], references: [id])
+  clienteId     String?   @db.Uuid @map("ClienteId")
+  cliente       Cliente?  @relation(fields: [clienteId], references: [id])
+  subtotal      Float     @map("Subtotal")
+  impuestoPct   Float
+  impuesto      Float     @map("IVA")
+  total         Float     @map("Total")
+  propina       Float     @default(0) @map("Propina") // propina voluntaria (no fiscal), sugerida 10%
+  metodoPago    String    @default("EFECTIVO")
+  credito       Boolean   @default(false) // venta a credito (cuenta por cobrar)
+  creditoDias   Int?      // plazo pactado
+  vence         DateTime? // fecha de vencimiento del credito
+  cufe          String?   @db.VarChar(200) @map("CUFE")
+  numeroFactus  String?   @db.VarChar(50) @map("NumeroFactus") // numero/prefijo oficial asignado por Factus (ej. SETP990020614)
+  xmlPath       String?   @map("XmlPath")
+  pdfPath       String?   @map("PdfPath")
+  estadoDIAN    String?   @db.VarChar(50) @map("EstadoDIAN")
+  usuarioId     String?   @db.Uuid @map("UsuarioId")
+  usuario       Usuario?  @relation(fields: [usuarioId], references: [id])
+  aperturaId    String?   @db.Uuid @map("AperturaId")
+  apertura      AperturaCaja? @relation(fields: [aperturaId], references: [id])
+  abonos        Abono[]
+  detalle       FacturaDetalle[]
+  notasCredito  NotaCredito[]
+  notasDebito   NotaDebito[]
+  retenciones   RetencionFactura[]
+  pagos         Pago[]
+  comisiones    ComisionVendedor[]
+  eventosDIAN   EventoDIAN[]
+  createdAt     DateTime  @default(now()) @map("Fecha")
+}
+
+// Cortesia: entrega de productos sin cobro. Mueve inventario y tiene su propio consecutivo (no es factura DIAN).
+model Cortesia {
+  id            String            @id @default(uuid()) @db.Uuid @map("Id")
+  consecutivo   Int               @unique @map("Consecutivo") // secuencia interna
+  numero        String            @unique @db.VarChar(30) @map("Numero") // ej "CORT-000001"
+  clienteId     String?           @db.Uuid @map("ClienteId")
+  cliente       Cliente?          @relation(fields: [clienteId], references: [id])
+  motivo        String?           @db.VarChar(200) @map("Motivo")
+  observaciones String?           @map("Observaciones")
+  subtotal      Float             @default(0) @map("Subtotal") // valor comercial de referencia (no se cobra)
+  usuarioId     String?           @db.Uuid @map("UsuarioId")
+  detalle       CortesiaDetalle[]
+  createdAt     DateTime          @default(now()) @map("Fecha")
+
+  @@map("Cortesias")
+}
+
+model CortesiaDetalle {
+  id             String   @id @default(uuid()) @db.Uuid @map("Id")
+  cortesiaId     String   @db.Uuid @map("CortesiaId")
+  cortesia       Cortesia @relation(fields: [cortesiaId], references: [id], onDelete: Cascade)
+  productoId     String   @db.Uuid @map("ProductoId")
+  producto       Producto @relation(fields: [productoId], references: [id])
+  cantidad       Float    @default(1) @map("Cantidad")
+  precioUnitario Float    @default(0) @map("PrecioUnitario")
+  total          Float    @default(0) @map("Total")
+
+  @@map("CortesiasDetalle")
+}
+
+// Nota credito DIAN asociada a una factura
+model NotaCredito {
+  id         String    @id @default(uuid()) @db.Uuid @map("Id")
+  facturaId  String?   @db.Uuid @map("FacturaId")
+  factura    Factura?  @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  numeroNota String?   @db.VarChar(50) @map("NumeroNota")
+  motivo     String?   @map("Motivo")
+  total      Float?    @map("Total")
+  cufe          String? @db.VarChar(200) @map("CUFE")
+  numeroFactus  String? @db.VarChar(50) @map("NumeroFactus")
+  pdfPath       String? @map("PdfPath")
+  estadoDIAN String?   @db.VarChar(50) @map("EstadoDIAN")
+  fecha      DateTime  @default(now()) @map("Fecha")
+
+  @@map("NotasCredito")
+}
+
+// Nota debito DIAN asociada a una factura (aumenta el valor a cobrar)
+model NotaDebito {
+  id         String    @id @default(uuid()) @db.Uuid @map("Id")
+  facturaId  String?   @db.Uuid @map("FacturaId")
+  factura    Factura?  @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  numeroNota String?   @db.VarChar(50) @map("NumeroNota")
+  motivo     String?   @map("Motivo")
+  total      Float?    @map("Total")
+  estadoDIAN String?   @db.VarChar(50) @map("EstadoDIAN")
+  fecha      DateTime  @default(now()) @map("Fecha")
+
+  @@map("NotasDebito")
+}
+
+// Retencion practicada sobre una factura (ReteFuente / ReteIVA / ReteICA)
+model RetencionFactura {
+  id         String    @id @default(uuid()) @db.Uuid @map("Id")
+  facturaId  String?   @db.Uuid @map("FacturaId")
+  factura    Factura?  @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  tipo       String?   @db.VarChar(20) @map("Tipo")
+  base       Float?    @map("Base")
+  porcentaje Float?    @map("Porcentaje")
+  valor      Float?    @map("Valor")
+  fecha      DateTime  @default(now()) @map("Fecha")
+
+  @@map("RetencionesFactura")
+}
+
+// Proveedores para las compras
+model Proveedor {
+  id        String    @id @default(uuid()) @db.Uuid @map("Id")
+  nombre    String    @db.VarChar(200) @map("Nombre")
+  nit       String?   @db.VarChar(30) @map("Nit")
+  telefono  String?   @db.VarChar(50) @map("Telefono")
+  email     String?   @db.VarChar(150) @map("Email")
+  direccion String?   @map("Direccion")
+  activo    Boolean   @default(true) @map("Activo")
+  compras   Compra[]
+  createdAt DateTime  @default(now()) @map("FechaCreacion")
+
+  @@map("Proveedores")
+}
+
+// Datos del emisor para facturacion electronica DIAN
+model Empresa {
+  id                  String   @id @default(uuid()) @db.Uuid @map("Id")
+  nit                 String?  @db.VarChar(20) @map("Nit")
+  razonSocial         String?  @db.VarChar(250) @map("RazonSocial")
+  nombreComercial     String?  @db.VarChar(250) @map("NombreComercial")
+  direccion           String?  @map("Direccion")
+  telefono            String?  @db.VarChar(50) @map("Telefono")
+  correo              String?  @db.VarChar(150) @map("Correo")
+  certificadoDigital  Bytes?   @map("CertificadoDigital")
+  passwordCertificado String?  @db.VarChar(200) @map("PasswordCertificado")
+  softwareId          String?  @db.VarChar(100) @map("SoftwareId")
+  softwarePin         String?  @db.VarChar(100) @map("SoftwarePin")
+  ambienteDIAN        String?  @db.VarChar(20) @map("AmbienteDIAN")
+  // Formato de impresion por tipo de documento: TICKET_80 | TICKET_58 | A5
+  formatoFactura      String   @default("TICKET_80") @db.VarChar(20) @map("FormatoFactura")
+  formatoFacturaVenta String   @default("TICKET_80") @db.VarChar(20) @map("FormatoFacturaVenta")
+  formatoComanda      String   @default("TICKET_80") @db.VarChar(20) @map("FormatoComanda")
+  formatoCortesia     String   @default("TICKET_80") @db.VarChar(20) @map("FormatoCortesia")
+  formatoPrefactura   String   @default("TICKET_80") @db.VarChar(20) @map("FormatoPrefactura")
+  createdAt           DateTime @default(now()) @map("FechaCreacion")
+
+  @@map("Empresa")
+}
+
+// Compras a proveedores (encabezado de la factura de compra)
+model Compra {
+  id          String          @id @default(uuid()) @db.Uuid @map("Id")
+  proveedorId String?         @db.Uuid @map("ProveedorId")
+  proveedor   Proveedor?      @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  fecha       DateTime        @default(now()) @map("Fecha")
+  subtotal    Float?          @map("Subtotal")
+  iva         Float?          @map("IVA")
+  total       Float?          @map("Total")
+  detalle     CompraDetalle[]
+
+  @@map("Compras")
+}
+
+// Lineas de una compra: cada insumo comprado suma stock al inventario
+model CompraDetalle {
+  id            String          @id @default(uuid()) @db.Uuid @map("Id")
+  compraId      String          @db.Uuid @map("CompraId")
+  compra        Compra          @relation(fields: [compraId], references: [id], onDelete: Cascade)
+  itemId        Int?            @map("ItemId")
+  item          InventarioItem? @relation(fields: [itemId], references: [id])
+  cantidad      Float           @default(0) @map("Cantidad")
+  costoUnitario Float           @default(0) @map("CostoUnitario")
+
+  @@map("ComprasDetalle")
+}
+
+// Detalle / lineas de una factura (estructura DIAN)
+model FacturaDetalle {
+  id             String    @id @default(uuid()) @db.Uuid @map("Id")
+  facturaId      String?   @db.Uuid @map("FacturaId")
+  factura        Factura?  @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  productoId     String?   @db.Uuid @map("ProductoId")
+  producto       Producto? @relation(fields: [productoId], references: [id])
+  cantidad       Float     @default(0) @map("Cantidad")
+  precioUnitario Float     @default(0) @map("PrecioUnitario")
+  iva            Float     @default(0) @map("IVA")
+  total          Float     @default(0) @map("Total")
+}
+
+// Abono / pago parcial de una factura a credito
+model Abono {
+  id         Int      @id @default(autoincrement())
+  facturaId  String   @db.Uuid
+  factura    Factura  @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  monto      Float
+  metodoPago String   @default("EFECTIVO")
+  nota       String?
+  createdAt  DateTime @default(now())
+}
+
+// Sucursales / puntos de venta de la empresa
+model Sucursal {
+  id        String    @id @default(uuid()) @db.Uuid @map("Id")
+  codigo    String?   @db.VarChar(20) @map("Codigo")
+  nombre    String    @db.VarChar(200) @map("Nombre")
+  direccion String?   @map("Direccion")
+  telefono  String?   @db.VarChar(50) @map("Telefono")
+  ciudad    String?   @db.VarChar(100) @map("Ciudad")
+  activo    Boolean   @default(true) @map("Activo")
+  bodegas   Bodega[]
+  createdAt DateTime  @default(now()) @map("FechaCreacion")
+
+  @@map("Sucursales")
+}
+
+// Listas de precios (ej. mayorista, minorista, promocional)
+model ListaPrecio {
+  id        String                @id @default(uuid()) @db.Uuid @map("Id")
+  nombre    String                @db.VarChar(150) @map("Nombre")
+  descripcion String?             @map("Descripcion")
+  activo    Boolean               @default(true) @map("Activo")
+  precios   ProductoListaPrecio[]
+  createdAt DateTime              @default(now()) @map("FechaCreacion")
+
+  @@map("ListaPrecios")
+}
+
+// Precio de un producto dentro de una lista de precios
+model ProductoListaPrecio {
+  id            String       @id @default(uuid()) @db.Uuid @map("Id")
+  listaPrecioId String       @db.Uuid @map("ListaPrecioId")
+  listaPrecio   ListaPrecio  @relation(fields: [listaPrecioId], references: [id], onDelete: Cascade)
+  productoId    String       @db.Uuid @map("ProductoId")
+  producto      Producto     @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  precio        Float        @default(0) @map("Precio")
+
+  @@unique([listaPrecioId, productoId])
+  @@map("ProductoListaPrecio")
+}
+
+// Promociones y descuentos
+model Promocion {
+  id          String    @id @default(uuid()) @db.Uuid @map("Id")
+  nombre      String    @db.VarChar(200) @map("Nombre")
+  tipo        String?   @db.VarChar(30) @map("Tipo") // PORCENTAJE | VALOR | 2X1 ...
+  valor       Float?    @map("Valor")
+  fechaInicio DateTime? @db.Date @map("FechaInicio")
+  fechaFin    DateTime? @db.Date @map("FechaFin")
+  activo      Boolean   @default(true) @map("Activo")
+  createdAt   DateTime  @default(now()) @map("FechaCreacion")
+
+  @@map("Promociones")
+}
+
+// Comisiones de vendedores por venta
+model ComisionVendedor {
+  id         String    @id @default(uuid()) @db.Uuid @map("Id")
+  vendedorId String?   @db.Uuid @map("VendedorId")
+  vendedor   Usuario?  @relation(fields: [vendedorId], references: [id], onDelete: SetNull)
+  facturaId  String?   @db.Uuid @map("FacturaId")
+  factura    Factura?  @relation(fields: [facturaId], references: [id], onDelete: SetNull)
+  base       Float?    @map("Base")
+  porcentaje Float?    @map("Porcentaje")
+  valor      Float?    @map("Valor")
+  pagada     Boolean   @default(false) @map("Pagada")
+  fecha      DateTime  @default(now()) @map("Fecha")
+
+  @@map("ComisionesVendedores")
+}
+
+// Cotizaciones a clientes
+model Cotizacion {
+  id          String    @id @default(uuid()) @db.Uuid @map("Id")
+  numero      String?   @db.VarChar(50) @map("Numero")
+  prefijo     String?   @default("COT") @db.VarChar(20) @map("Prefijo")
+  consecutivo Int?      @map("Consecutivo")
+  clienteId   String?   @db.Uuid @map("ClienteId")
+  cliente     Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  fecha       DateTime  @default(now()) @map("Fecha")
+  validezDias Int?      @map("ValidezDias")
+  subtotal    Float?    @map("Subtotal")
+  iva         Float?    @map("IVA")
+  total       Float?    @map("Total")
+  estado      String    @default("BORRADOR") @db.VarChar(20) @map("Estado") // BORRADOR | ENVIADA | APROBADA | RECHAZADA
+  observaciones String? @map("Observaciones")
+  detalle     CotizacionDetalle[]
+
+  @@map("Cotizaciones")
+}
+
+// Detalle (items) de una cotizacion: producto, cantidad y precio de venta cotizado
+model CotizacionDetalle {
+  id             String      @id @default(uuid()) @db.Uuid @map("Id")
+  cotizacionId   String?     @db.Uuid @map("CotizacionId")
+  cotizacion     Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  productoId     String?     @db.Uuid @map("ProductoId")
+  producto       Producto?   @relation(fields: [productoId], references: [id])
+  cantidad       Float       @default(0) @map("Cantidad")
+  precioUnitario Float       @default(0) @map("PrecioUnitario")
+  total          Float       @default(0) @map("Total")
+
+  @@map("CotizacionDetalle")
+}
+
+// Remisiones / notas de entrega
+model Remision {
+  id          String    @id @default(uuid()) @db.Uuid @map("Id")
+  numero      String?   @db.VarChar(50) @map("Numero")
+  clienteId   String?   @db.Uuid @map("ClienteId")
+  cliente     Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  fecha       DateTime  @default(now()) @map("Fecha")
+  estado      String    @default("PENDIENTE") @db.VarChar(20) @map("Estado") // PENDIENTE | ENTREGADA | FACTURADA
+  observaciones String? @map("Observaciones")
+
+  @@map("Remisiones")
+}
+
+// Metodos de pago (catalogo, con codigo DIAN)
+model MetodoPago {
+  id         String   @id @default(uuid()) @db.Uuid @map("Id")
+  nombre     String   @db.VarChar(100) @map("Nombre")
+  codigoDIAN String?  @db.VarChar(10) @map("CodigoDIAN")
+  activo     Boolean  @default(true) @map("Activo")
+  pagos      Pago[]
+  createdAt  DateTime @default(now()) @map("FechaCreacion")
+
+  @@map("MetodosPago")
+}
+
+// Pagos recibidos (asociados a una factura y a un metodo de pago)
+model Pago {
+  id           String      @id @default(uuid()) @db.Uuid @map("Id")
+  facturaId    String?     @db.Uuid @map("FacturaId")
+  factura      Factura?    @relation(fields: [facturaId], references: [id], onDelete: SetNull)
+  metodoPagoId String?     @db.Uuid @map("MetodoPagoId")
+  metodoPago   MetodoPago? @relation(fields: [metodoPagoId], references: [id], onDelete: SetNull)
+  monto        Float       @default(0) @map("Monto")
+  referencia   String?     @db.VarChar(100) @map("Referencia")
+  fecha        DateTime    @default(now()) @map("Fecha")
+
+  @@map("Pagos")
+}
+
+// Terceros (clientes, proveedores, empleados) para contabilidad/DIAN
+model Tercero {
+  id              String   @id @default(uuid()) @db.Uuid @map("Id")
+  tipoDocumento   String?  @db.VarChar(10) @map("TipoDocumento")
+  numeroDocumento String?  @db.VarChar(30) @map("NumeroDocumento")
+  nombre          String   @db.VarChar(250) @map("Nombre")
+  tipo            String?  @db.VarChar(20) @map("Tipo") // CLIENTE | PROVEEDOR | EMPLEADO | OTRO
+  telefono        String?  @db.VarChar(50) @map("Telefono")
+  email           String?  @db.VarChar(150) @map("Email")
+  direccion       String?  @map("Direccion")
+  activo          Boolean  @default(true) @map("Activo")
+  createdAt       DateTime @default(now()) @map("FechaCreacion")
+
+  @@map("Terceros")
+}
+
+// Centros de costo para contabilidad
+model CentroCosto {
+  id        String   @id @default(uuid()) @db.Uuid @map("Id")
+  codigo    String?  @db.VarChar(20) @map("Codigo")
+  nombre    String   @db.VarChar(150) @map("Nombre")
+  activo    Boolean  @default(true) @map("Activo")
+  createdAt DateTime @default(now()) @map("FechaCreacion")
+
+  @@map("CentrosCosto")
+}
+
+// Plan de cuentas contables (PUC). Los insumos se amarran a una cuenta.
+model CuentaContable {
+  id        String   @id @default(uuid()) @db.Uuid @map("Id")
+  codigo    String   @unique @db.VarChar(20) @map("Codigo") // codigo PUC, ej. 143501
+  nombre    String   @db.VarChar(200) @map("Nombre")
+  tipo      String?  @db.VarChar(20) @map("Tipo") // ACTIVO | PASIVO | PATRIMONIO | INGRESO | GASTO | COSTO
+  activo    Boolean  @default(true) @map("Activo")
+  createdAt DateTime @default(now()) @map("FechaCreacion")
+  insumos   InventarioItem[]
+
+  @@map("CuentasContables")
+}
+
+// Impuestos configurables (IVA, INC, ReteFuente, etc.)
+model Impuesto {
+  id                 String   @id @default(uuid()) @db.Uuid @map("Id")
+  idImpuesto         Int      @unique @default(autoincrement()) @map("IdImpuesto") // llave visible/consecutiva, fija desde su creacion
+  nombre             String   @db.VarChar(100) @map("Nombre")
+  tipo               String?  @db.VarChar(30) @map("Tipo") // IVA | INC | RETEFUENTE | RETEICA ...
+  porcentaje         Float    @default(0) @map("Porcentaje")
+  codigoDIAN         String?  @db.VarChar(10) @map("CodigoDIAN") // Tipo_Impuesto DIAN (ej. "01")
+  ctaCreditoVentas   String?  @db.VarChar(30) @map("CtaCreditoVentas")
+  ctaDebitoVentas    String?  @db.VarChar(30) @map("CtaDebitoVentas")
+  ctaDebitoCompras   String?  @db.VarChar(30) @map("CtaDebitoCompras")
+  ctaCreditoCompras  String?  @db.VarChar(30) @map("CtaCreditoCompras")
+  exportado          Boolean  @default(false) @map("Exportado")
+  valorImpuesto      Float    @default(0) @map("ValorImpuesto") // valor fijo (cuando el impuesto no es porcentual)
+  activo             Boolean  @default(true) @map("Activo")
+  createdAt          DateTime @default(now()) @map("FechaCreacion")
+  productos          Producto[]
+
+  @@map("Impuestos")
+}
+
+// Eventos DIAN de una factura (acuse, aceptacion, rechazo, etc.)
+model EventoDIAN {
+  id         String   @id @default(uuid()) @db.Uuid @map("Id")
+  facturaId  String?  @db.Uuid @map("FacturaId")
+  factura    Factura? @relation(fields: [facturaId], references: [id], onDelete: SetNull)
+  tipoEvento String?  @db.VarChar(50) @map("TipoEvento")
+  estado     String?  @db.VarChar(50) @map("Estado")
+  cufe       String?  @db.VarChar(200) @map("CUFE")
+  mensaje    String?  @map("Mensaje")
+  fecha      DateTime @default(now()) @map("Fecha")
+
+  @@map("EventosDIAN")
+}
+
+// Log de integraciones con sistemas externos (DIAN, pasarelas, etc.)
+model LogIntegracion {
+  id        String   @id @default(uuid()) @db.Uuid @map("Id")
+  sistema   String?  @db.VarChar(50) @map("Sistema")
+  tipo      String?  @db.VarChar(50) @map("Tipo")
+  estado    String?  @db.VarChar(30) @map("Estado")
+  request   String?  @map("Request")
+  response  String?  @map("Response")
+  mensaje   String?  @map("Mensaje")
+  fecha     DateTime @default(now()) @map("Fecha")
+
+  @@map("LogIntegraciones")
+}
+
