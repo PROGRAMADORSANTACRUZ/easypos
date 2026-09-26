@@ -4,6 +4,7 @@ import { Icon } from '../icons.jsx';
 import { useToast, useAuth } from '../App.jsx';
 import { LoadingState, PageHeader, Modal, Button, EmptyState } from '../components/ui/index.jsx';
 import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir } from '../print.js';
+import { tipoDocumentoListo } from '../tipoDocumentoListo.js';
 
 const puede = (user, codigo) => (user?.permisos || []).includes(codigo);
 
@@ -177,6 +178,7 @@ export default function Cortesias() {
   const [cortesias, setCortesias] = useState([]);
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [tipoCortesia, setTipoCortesia] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -191,14 +193,16 @@ export default function Cortesias() {
 
   const cargar = async () => {
     try {
-      const [cs, ps, cls] = await Promise.all([
+      const [cs, ps, cls, tipos] = await Promise.all([
         api.get('/cortesias'),
         api.get('/productos'),
         api.get('/clientes').catch(() => []),
+        api.get('/tipos-documento').catch(() => []),
       ]);
       setCortesias(cs);
       setProductos(ps.filter((p) => p.activo !== false && p.precio > 0));
       setClientes(cls);
+      setTipoCortesia(tipoDocumentoListo(tipos, 'CORTESIA') || null);
     } catch (e) {
       notify(e.message, 'err');
     } finally {
@@ -242,10 +246,14 @@ export default function Cortesias() {
     setProductoId('');
     setCantidad(1);
   };
-  const abrirNuevo = () => { limpiar(); setModalAbierto(true); };
+  const abrirNuevo = () => {
+    if (!tipoCortesia) return notify('Configura el tipo de documento CORTESIA antes de registrar.', 'err');
+    limpiar(); setModalAbierto(true);
+  };
   const cerrarModal = () => { setModalAbierto(false); limpiar(); };
 
   const registrar = async () => {
+    if (!tipoCortesia) return notify('Configura el tipo de documento CORTESIA.', 'err');
     if (carrito.length === 0) { notify('Agrega al menos un producto', 'err'); return; }
     setProcesando(true);
     try {
@@ -274,8 +282,10 @@ export default function Cortesias() {
       <PageHeader
         title="Cortesías"
         subtitle="Entregas sin costo a clientes. Genera un comprobante interno (no es factura)."
-        actions={puedeCrear && <Button variant="primary" icon="add" onClick={abrirNuevo} title="Nueva cortesía" />}
+        actions={puedeCrear && <Button variant="primary" icon="add" disabled={!tipoCortesia} onClick={abrirNuevo} title={tipoCortesia ? 'Nueva cortesía' : 'Configura el tipo de documento de Cortesía'} />}
       />
+
+      {!tipoCortesia && <p className="mini" role="alert">Configura el tipo de documento CORTESIA y su rango para registrar entregas.</p>}
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Historial</h3>

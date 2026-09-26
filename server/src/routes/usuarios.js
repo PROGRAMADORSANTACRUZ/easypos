@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
-import { firmarToken, requireAuth } from '../middleware/auth.js';
+import { firmarToken, requireAuth, MODULOS_FACTURACION, permisosEfectivos } from '../middleware/auth.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -47,9 +47,7 @@ async function conRolesYPermisos(u) {
     include: { rol: { include: { permisos: { include: { permiso: true } } } } },
   });
   const roles = asignaciones.map((a) => a.rol.nombre);
-  const permisos = [
-    ...new Set(asignaciones.flatMap((a) => a.rol.permisos.map((rp) => rp.permiso.codigo))),
-  ];
+  const permisos = permisosEfectivos(roles, u.modulosFacturacion, asignaciones.flatMap((a) => a.rol.permisos.map((rp) => rp.permiso.codigo)));
   return { ...sinHash(u), roles, permisos };
 }
 
@@ -84,6 +82,15 @@ router.post('/login', wrap(async (req, res) => {
 // A partir de aqui todas las rutas de usuarios requieren sesion valida.
 router.use(requireAuth);
 
+const soloAdmin = wrap(async (req, res, next) => {
+  const asignacion = await prisma.usuarioRol.findFirst({
+    where: { usuarioId: req.usuario.id, rol: { nombre: 'ADMIN' } },
+  });
+  if (!asignacion) return res.status(403).json({ error: 'Solo el administrador puede gestionar usuarios' });
+  next();
+});
+const validarModulos = (modulos) => Array.isArray(modulos) && modulos.every((modulo) => MODULOS_FACTURACION.includes(modulo));
+
 router.get('/', wrap(async (_req, res) => {
   const usuarios = await prisma.usuario.findMany({
     orderBy: { nombre: 'asc' },
@@ -97,26 +104,28 @@ router.get('/', wrap(async (_req, res) => {
   );
 }));
 
-router.post('/', wrap(async (req, res) => {
-  const { nombre, usuario, correo, password, roles } = req.body;
+router.post('/', soloAdmin, wrap(async (req, res) => {
+  const { nombre, usuario, correo, password, roles, modulosFacturacion = [] } = req.body;
   if (!nombre || !usuario || !password) {
     return res.status(400).json({ error: 'nombre, usuario y contraseña son requeridos' });
   }
   const errorPass = validarPassword(password);
   if (errorPass) return res.status(400).json({ error: errorPass });
+  if (!validarModulos(modulosFacturacion)) return res.status(400).json({ error: 'Módulos de facturación inválidos' });
   const existe = await prisma.usuario.findUnique({ where: { usuario } });
   if (existe) return res.status(409).json({ error: 'Ese usuario ya existe' });
   const creado = await prisma.usuario.create({
-    data: { nombre, usuario, correo: correo || null, passwordHash: bcrypt.hashSync(password, 10) },
+    data: { nombre, usuario, correo: correo || null, passwordHash: bcrypt.hashSync(password, 10), modulosFacturacion },
   });
   await asignarRoles(creado.id, roles);
   await auditar({ req, accion: 'CREAR', entidad: 'Usuario', entidadId: creado.id, detalle: usuario });
   res.status(201).json(sinHash(creado));
 }));
 
-router.put('/:id', wrap(async (req, res) => {
+router.put('/:id', soloAdmin, wrap(async (req, res) => {
   const id = req.params.id;
-  const { nombre, usuario, correo, password, activo, roles } = req.body;
+  const { nombre, usuario, correo, password, activo, roles, modulosFacturacion } = req.body;
+  if (modulosFacturacion !== undefined && !validarModulos(modulosFacturacion)) return res.status(400).json({ error: 'Módulos de facturación inválidos' });
   if (password !== undefined && password !== '') {
     const errorPass = validarPassword(password);
     if (errorPass) return res.status(400).json({ error: errorPass });
@@ -129,6 +138,7 @@ router.put('/:id', wrap(async (req, res) => {
       ...(correo !== undefined && { correo }),
       ...(password !== undefined && password !== '' && { passwordHash: bcrypt.hashSync(password, 10) }),
       ...(activo !== undefined && { activo }),
+      ...(modulosFacturacion !== undefined && { modulosFacturacion }),
     },
   });
   if (Array.isArray(roles)) {
@@ -139,7 +149,7 @@ router.put('/:id', wrap(async (req, res) => {
   res.json(sinHash(actualizado));
 }));
 
-router.delete('/:id', wrap(async (req, res) => {
+router.delete('/:id', soloAdmin, wrap(async (req, res) => {
   const id = req.params.id;
   await prisma.usuario.delete({ where: { id } });
   await auditar({ req, accion: 'ELIMINAR', entidad: 'Usuario', entidadId: id });

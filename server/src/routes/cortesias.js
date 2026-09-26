@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
+import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -9,9 +10,8 @@ const redondear = (n) => Math.round(n * 100) / 100;
 
 // Asigna el siguiente consecutivo propio de cortesias (independiente de la numeracion DIAN).
 async function siguienteConsecutivo(tx) {
-  const ultima = await tx.cortesia.findFirst({ orderBy: { consecutivo: 'desc' }, select: { consecutivo: true } });
-  const consecutivo = (ultima?.consecutivo || 0) + 1;
-  const numero = `CORT-${String(consecutivo).padStart(6, '0')}`;
+  const { prefijo, consecutivo } = await reservarNumeroDocumento(tx, 'CORTESIA');
+  const numero = `${prefijo}${String(consecutivo).padStart(6, '0')}`;
   return { consecutivo, numero };
 }
 

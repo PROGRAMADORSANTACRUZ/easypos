@@ -7,6 +7,7 @@ import { LOGO_RECIBO } from '../logoRecibo.js';
 import { useAuth, useToast } from '../App.jsx';
 import CierreCajaModal from '../components/CierreCajaModal.jsx';
 import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir, registrarEmpresa } from '../print.js';
+import { tipoDocumentoListo } from '../tipoDocumentoListo.js';
 
 // Número visible de la factura: prefijo + consecutivo DIAN, o el ID corto si aún no tiene numeración.
 function numeroDian(f) {
@@ -593,6 +594,7 @@ export default function Facturas() {
     try { return JSON.parse(localStorage.getItem('easypos_congeladas') || '[]'); } catch { return []; }
   });
   const [apertura, setApertura] = useState(null); // caja abierta actual (null = cerrada)
+  const [tipoFactura, setTipoFactura] = useState(null);
   const [cerrandoCaja, setCerrandoCaja] = useState(false); // muestra el modal de cierre
   const [filtroCat, setFiltroCat] = useState(''); // categoría seleccionada en el menú directo ('' = todas)
   const [busquedaProd, setBusquedaProd] = useState(''); // buscador de producto en el menú directo
@@ -616,8 +618,9 @@ export default function Facturas() {
       empresaRecibo = empresa;
       try {
         const tipos = await api.get('/tipos-documento');
-        tipoFacturaRecibo = (tipos || []).find((t) => t.clase === 'FACTURA ELECTRONICA DE VENTA' && t.activo) || null;
-      } catch { tipoFacturaRecibo = null; }
+        tipoFacturaRecibo = tipoDocumentoListo(tipos || [], 'FACTURA ELECTRONICA DE VENTA') || null;
+        setTipoFactura(tipoFacturaRecibo);
+      } catch { tipoFacturaRecibo = null; setTipoFactura(null); }
       setPendientes(abiertos);
       setFacturas(facs);
       setProductos(prods.filter((p) => p.activo !== false && p.precio > 0));
@@ -685,6 +688,7 @@ export default function Facturas() {
   const totalPedido = (p) => p.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0);
 
   const facturar = async (pedido) => {
+    if (!tipoFactura) return notify('Configura el tipo de documento FACTURA ELECTRONICA DE VENTA.', 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     const total = totalPedido(pedido);
     const cliId = (clientesSel[pedido.id] ?? idDefault) || null;
@@ -757,6 +761,7 @@ export default function Facturas() {
 
   // Abre el modal POS de cobro para un pedido, precargando el método de pago del domicilio.
   const abrirCobro = (pedido) => {
+    if (!tipoFactura) return notify('Configura el tipo de documento FACTURA ELECTRONICA DE VENTA.', 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     if (pedido.tipo === 'DOMICILIO' && pedido.metodoPago && pagos[pedido.id] === undefined) {
       const m = pedido.metodoPago.toUpperCase();
@@ -772,6 +777,7 @@ export default function Facturas() {
 
   // --- Factura directa (venta en caja para llevar) ---
   const abrirDirecta = () => {
+    if (!tipoFactura) return notify('Configura el tipo de documento FACTURA ELECTRONICA DE VENTA.', 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     setCarrito([]);
     setCliente(idDefault);
@@ -866,6 +872,7 @@ export default function Facturas() {
   };
 
   const facturarDirecta = async () => {
+    if (!tipoFactura) return notify('Configura el tipo de documento FACTURA ELECTRONICA DE VENTA.', 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     if (carrito.length === 0) return notify('Agrega al menos un producto', 'err');
     const cli = clienteDe(cliente);
@@ -935,8 +942,9 @@ export default function Facturas() {
           <h1>Facturación</h1>
           <p className="subtitle">Cobra los pedidos abiertos y consulta el historial de ventas.</p>
         </div>
-        <button className="btn btn-primary" onClick={abrirDirecta}><Icon name="cart" size={16} /> Factura directa</button>
+        <button className="btn btn-primary" disabled={!tipoFactura} title={tipoFactura ? 'Factura directa' : 'Configura el tipo de documento de Facturas'} onClick={abrirDirecta}><Icon name="cart" size={16} /> Factura directa</button>
       </div>
+      {!tipoFactura && <p className="mini" role="alert">Configura el tipo de documento FACTURA ELECTRONICA DE VENTA y su rango antes de facturar.</p>}
 
       {/* Caja: para facturar debe haber una apertura con base (para dar vueltos) */}
       {apertura ? (

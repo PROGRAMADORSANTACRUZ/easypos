@@ -4,9 +4,16 @@ import { Icon } from '../icons.jsx';
 import { useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, EmptyState } from '../components/ui/index.jsx';
 
-const uVacio = { nombre: '', usuario: '', correo: '', password: '', roles: [], activo: true };
+const uVacio = { nombre: '', usuario: '', correo: '', password: '', roles: [], modulosFacturacion: [], activo: true };
+const modulosVenta = [
+  { codigo: 'facturas', nombre: 'Facturas' },
+  { codigo: 'factura_venta', nombre: 'Factura de venta' },
+  { codigo: 'cortesias', nombre: 'Cortesías' },
+];
 
 export default function Usuarios() {
+  const { user } = useAuth();
+  const esAdmin = user?.roles?.includes('ADMIN');
   const [usuarios, setUsuarios] = useState([]);
   const [roles, setRoles] = useState([]);
   const [meseras, setMeseras] = useState([]);
@@ -53,6 +60,7 @@ export default function Usuarios() {
       correo: u.correo || '',
       password: '',
       roles: u.roles || [],
+      modulosFacturacion: u.modulosFacturacion || [],
       activo: u.activo,
     });
     setModalUsuario(true);
@@ -164,7 +172,7 @@ export default function Usuarios() {
           <>
             <Button variant="secondary" icon="mesas" onClick={() => { setMForm({ nombre: '', codigo: '' }); setModalMesera(true); }}>Nueva mesera</Button>
             <Button variant="secondary" icon="cocina" onClick={() => { setCForm({ nombre: '', codigo: '' }); setModalCocinero(true); }}>Nuevo cocinero</Button>
-            <Button variant="primary" icon="add" onClick={nuevoUsuario} title="Nuevo usuario" />
+            {esAdmin && <Button variant="primary" icon="add" onClick={nuevoUsuario} title="Nuevo usuario" />}
           </>
         )}
       />
@@ -191,11 +199,11 @@ export default function Usuarios() {
                     <span className={`badge ${u.activo ? 'green' : 'red'}`}>{u.activo ? 'Activo' : 'Inactivo'}</span>
                   </td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    <button className="btn btn-sm" title="Editar" onClick={() => editarUsuario(u)}><Icon name="edit" size={16} /></button>{' '}
+                    {esAdmin && <><button className="btn btn-sm" title="Editar" onClick={() => editarUsuario(u)}><Icon name="edit" size={16} /></button>{' '}
                     <button className="btn btn-sm" title={u.activo ? 'Inactivar' : 'Activar'} onClick={() => alternarActivo(u)}>
                       {u.activo ? <Icon name="ban" size={16} /> : <Icon name="check" size={16} />}
                     </button>{' '}
-                    <button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminarUsuario(u)}><Icon name="delete" size={16} /></button>
+                    <button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminarUsuario(u)}><Icon name="delete" size={16} /></button></>}
                   </td>
                 </tr>
               ))}
@@ -293,6 +301,18 @@ export default function Usuarios() {
                   </label>
                 ))}
                 {roles.length === 0 && <span className="mini">Sin roles definidos.</span>}
+              </div>
+            </div>
+            <div className="field">
+              <label>Submódulos de facturación</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                {modulosVenta.map(({ codigo, nombre }) => (
+                  <label key={codigo} className="mini" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <input type="checkbox" checked={uForm.roles.includes('ADMIN') || uForm.modulosFacturacion.includes(codigo)} disabled={uForm.roles.includes('ADMIN')}
+                      onChange={() => setUForm((form) => ({ ...form, modulosFacturacion: form.modulosFacturacion.includes(codigo) ? form.modulosFacturacion.filter((modulo) => modulo !== codigo) : [...form.modulosFacturacion, codigo] }))} />
+                    {nombre}
+                  </label>
+                ))}
               </div>
             </div>
             {editId && (

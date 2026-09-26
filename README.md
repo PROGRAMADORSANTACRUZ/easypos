@@ -119,4 +119,10 @@ EXTERNA: crea primero un servidor Postgres aparte en Dokploy (app tipo
    de una instalación nueva debe hacerse manualmente, antes de cargar datos.
 5. Si Dokploy no conserva los labels de Traefik tras un redeploy, correr
    `./deploy.sh <nombre-real-del-servicio>` (ver el id real en el panel).
+
+Antes de desplegar la asignación de submódulos de facturación, aplica la migración
+`20260926180000_modulos_facturacion_usuario` a la base activa. En Usuarios, ADMIN
+marca Facturas, Factura de venta y Cortesías por persona; cada usuario debe volver
+a iniciar sesión para actualizar su menú. Cada submódulo exige su tipo de documento
+activo, con prefijo y rango propio, antes de registrar comprobantes.
 ```

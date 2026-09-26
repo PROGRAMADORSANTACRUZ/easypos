@@ -60,7 +60,7 @@ import auditoriaRouter from './routes/auditoria.js';
 import restaurantesRouter from './routes/restaurantes.js';
 import { resolverTenant } from './middleware/tenant.js';
 import { mayusculas } from './middleware/mayusculas.js';
-import { requireAuth, permisoPorMetodo } from './middleware/auth.js';
+import { requireAuth, permisoPorMetodo, permisoModuloFacturacion, permisoSegunFactura } from './middleware/auth.js';
 
 const app = express();
 app.use(cors());
@@ -113,8 +113,8 @@ app.use('/api/eventos-dian', requireAuth, permisoPorMetodo('eventos_dian'), even
 app.use('/api/logs-integraciones', requireAuth, permisoPorMetodo('logs_integraciones'), logsIntegracionesRouter);
 app.use('/api/factus', requireAuth, permisoPorMetodo('empresa'), factusRouter);
 app.use('/api/pedidos', requireAuth, permisoPorMetodo('pedidos'), pedidosRouter);
-app.use('/api/facturas', requireAuth, permisoPorMetodo('facturas'), facturasRouter);
-app.use('/api/cortesias', requireAuth, permisoPorMetodo('cortesias'), cortesiasRouter);
+app.use('/api/facturas', requireAuth, permisoSegunFactura, facturasRouter);
+app.use('/api/cortesias', requireAuth, permisoModuloFacturacion('cortesias'), cortesiasRouter);
 app.use('/api/usuarios', usuariosRouter);
 app.use('/api/reportes', requireAuth, permisoPorMetodo('reportes'), reportesRouter);
 app.use('/api/clientes', requireAuth, permisoPorMetodo('clientes'), clientesRouter);

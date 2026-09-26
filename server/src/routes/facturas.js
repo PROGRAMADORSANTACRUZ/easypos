@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { crearFacturaFactus } from '../factus.js';
+import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -19,51 +20,11 @@ const calcularVence = (dias) => {
   return f;
 };
 
-// Toma el siguiente numero de facturacion y lo incrementa de forma atomica.
-// Prioriza el Tipo de documento activo (clase FACTURA), compartido por todas las cajas:
-// el primero que graba bloquea la fila y toma el consecutivo, el siguiente continua.
-// Si no hay tipo configurado, cae al comportamiento anterior con la resolucion DIAN vigente.
-// Devuelve { prefijo, numeroFactura } o nulos si no hay numeracion disponible.
-async function asignarNumeracion(tx) {
-  const hoy = new Date();
-
-  // 1) Tipo de documento activo de clase FACTURA (numeracion compartida entre cajas)
-  const tipo = await tx.tipoDocumento.findFirst({
-    where: { clase: 'FACTURA ELECTRONICA DE VENTA', activo: true },
-    orderBy: { createdAt: 'asc' },
-  });
-  if (tipo) {
-    // Si aun no se ha inicializado el proximo consecutivo, arranca desde el inicial (o 1).
-    const proximo = tipo.consProximo != null ? tipo.consProximo : (tipo.consInicial != null ? tipo.consInicial : 1);
-    if (tipo.consFinal == null || proximo <= tipo.consFinal) {
-      // Incremento atomico: el UPDATE bloquea la fila y serializa las cajas concurrentes.
-      const actualizado = await tx.tipoDocumento.update({
-        where: { id: tipo.id },
-        data: { consProximo: proximo + 1 },
-      });
-      const asignado = actualizado.consProximo - 1; // consecutivo tomado por esta factura
-      return { prefijo: tipo.prefijo, numeroFactura: String(asignado) };
-    }
-  }
-
-  // 2) Fallback: resolucion DIAN vigente (comportamiento anterior)
-  // La resolucion mas reciente vigente tiene prioridad (orden determinista).
-  const resoluciones = await tx.resolucionFacturacion.findMany({
-    orderBy: { fechaInicio: { sort: 'desc', nulls: 'last' } },
-  });
-  const vigente = resoluciones.find((r) => {
-    const iniOk = !r.fechaInicio || r.fechaInicio <= hoy;
-    const finOk = !r.fechaFin || r.fechaFin >= hoy;
-    const cupoOk = r.siguienteNumero != null && (r.rangoFinal == null || r.siguienteNumero <= r.rangoFinal);
-    return iniOk && finOk && cupoOk;
-  });
-  if (!vigente) return { prefijo: null, numeroFactura: null };
-  const numero = vigente.siguienteNumero;
-  await tx.resolucionFacturacion.update({
-    where: { id: vigente.id },
-    data: { siguienteNumero: numero + 1n },
-  });
-  return { prefijo: vigente.prefijo, numeroFactura: String(numero) };
+// Reserva el consecutivo del submodulo en la misma transaccion que crea la factura.
+async function asignarNumeracion(tx, electronica = true) {
+  const clase = electronica ? 'FACTURA ELECTRONICA DE VENTA' : 'FACTURA DE VENTA (NO ELECTRONICA)';
+  const { prefijo, consecutivo } = await reservarNumeroDocumento(tx, clase);
+  return { prefijo, numeroFactura: String(consecutivo) };
 }
 
 // Resuelve el cliente de una factura. Por defecto "Consumidor Final".
@@ -336,7 +297,7 @@ router.post('/directa', wrap(async (req, res) => {
         },
       },
     });
-    const num = await asignarNumeracion(tx);
+    const num = await asignarNumeracion(tx, electronica !== false);
     return tx.factura.create({
       data: {
         pedidoId: pedido.id,

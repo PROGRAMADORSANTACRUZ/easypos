@@ -14,6 +14,17 @@
 //    la accion exacta (crear/editar/eliminar/etc.), pero evita que un usuario
 //    de solo lectura pueda modificar datos y bloquea el acceso anonimo.
 import jwt from 'jsonwebtoken';
+import { prisma } from '../prisma.js';
+
+export const MODULOS_FACTURACION = ['facturas', 'factura_venta', 'cortesias'];
+
+export function permisosEfectivos(roles, asignados, permisosRol) {
+  const habilitados = roles.includes('ADMIN') ? MODULOS_FACTURACION : asignados;
+  return [...new Set([
+    ...permisosRol.filter((codigo) => !MODULOS_FACTURACION.some((modulo) => codigo.startsWith(`${modulo}.`)) || habilitados.some((modulo) => codigo.startsWith(`${modulo}.`))),
+    ...habilitados.flatMap((modulo) => [`${modulo}.ver`, `${modulo}.crear`]),
+  ])];
+}
 
 const SECRET = process.env.JWT_SECRET;
 const EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h';
@@ -71,4 +82,32 @@ export function permisoPorMetodo(modulo) {
     }
     return res.status(403).json({ error: 'No tienes permiso para esta acción' });
   };
+}
+
+export function permisoModuloFacturacion(modulo) {
+  return async (req, res, next) => {
+    try {
+      const usuario = await prisma.usuario.findUnique({
+        where: { id: req.usuario.id },
+        select: { activo: true, modulosFacturacion: true, roles: { include: { rol: true } } },
+      });
+      if (!usuario?.activo || (!usuario.roles.some((ur) => ur.rol.nombre === 'ADMIN') && !usuario.modulosFacturacion.includes(modulo))) {
+        return res.status(403).json({ error: 'No tienes acceso a este módulo' });
+      }
+      return permisoPorMetodo(modulo)(req, res, next);
+    } catch (error) { return next(error); }
+  };
+}
+
+export async function permisoSegunFactura(req, res, next) {
+  try {
+    let modulo = 'facturas';
+    if (req.query.electronica === 'false' || (req.path === '/directa' && req.body?.electronica === false)) {
+      modulo = 'factura_venta';
+    } else if (req.method === 'GET' && /^\/[0-9a-f-]{36}$/.test(req.path)) {
+      const factura = await prisma.factura.findUnique({ where: { id: req.path.slice(1) }, select: { estadoDIAN: true } });
+      if (factura?.estadoDIAN === 'NO_APLICA') modulo = 'factura_venta';
+    }
+    return permisoModuloFacturacion(modulo)(req, res, next);
+  } catch (error) { return next(error); }
 }

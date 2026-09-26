@@ -39,6 +39,7 @@ model Usuario {
   correo        String?      @db.VarChar(150) @map("Correo")
   passwordHash  String       @map("PasswordHash")
   activo        Boolean      @default(true) @map("Activo")
+  modulosFacturacion String[] @default([]) @map("ModulosFacturacion")
   fechaCreacion DateTime     @default(now()) @map("FechaCreacion")
   roles         UsuarioRol[]
   auditorias    Auditoria[]

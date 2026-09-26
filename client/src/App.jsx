@@ -55,7 +55,7 @@ const puede = (user, codigo) => user?.__dev === true || (user?.permisos || []).i
 
 // Primera ruta permitida, usada como destino tras login y como "/"
 const ORDEN_INICIO = [
-  ['pedidos.ver', '/pedidos'], ['mesas.ver', '/mesas'], ['cocina.ver', '/cocina'], ['facturas.ver', '/facturas'],
+  ['pedidos.ver', '/pedidos'], ['mesas.ver', '/mesas'], ['cocina.ver', '/cocina'], ['facturas.ver', '/facturas'], ['factura_venta.ver', '/cotizaciones'],
   ['cuentas.ver', '/cuentas'], ['productos.ver', '/productos'], ['inventario.ver', '/inventario'],
   ['bodegas.ver', '/bodegas'], ['movimientos.ver', '/movimientos'], ['caja.ver', '/caja'], ['resoluciones.ver', '/resoluciones'], ['notas_credito.ver', '/notas-credito'], ['notas_debito.ver', '/notas-debito'], ['retenciones.ver', '/retenciones'], ['compras.ver', '/compras'], ['proveedores.ver', '/proveedores'], ['clientes.ver', '/clientes'], ['reportes.ver', '/reportes'], ['usuarios.ver', '/usuarios'],
   ['roles.ver', '/roles'], ['auditoria.ver', '/auditoria'],
@@ -94,7 +94,7 @@ const NAV_GRUPOS = [
       { permiso: 'mesas.ver', ruta: '/mesas', label: 'Mesas', icon: 'mesas' },
       { permiso: 'cocina.ver', ruta: '/cocina', label: 'Cocina', icon: 'cocina' },
       { permiso: 'facturas.ver', ruta: '/facturas', label: 'Facturas', icon: 'facturas' },
-      { permiso: 'facturas.ver', ruta: '/cotizaciones', label: 'Factura de venta', icon: 'facturas' },
+      { permiso: 'factura_venta.ver', ruta: '/cotizaciones', label: 'Factura de venta', icon: 'facturas' },
       { permiso: 'cortesias.ver', ruta: '/cortesias', label: 'Cortesías', icon: 'cortesias' },
       { permiso: 'pedidos.ver', ruta: '/pedidos', label: 'Domicilios', icon: 'pedidos' },
       { permiso: 'pedidos.ver', ruta: '/repartidor', label: 'Repartidor / Entregas', icon: 'remisiones' },
@@ -411,7 +411,7 @@ export default function App() {
               {puede(user, 'compras.ver') && <Route path="/compras" element={<Compras />} />}
               {puede(user, 'proveedores.ver') && <Route path="/proveedores" element={<Proveedores />} />}
               {puede(user, 'facturas.ver') && <Route path="/facturas" element={<Facturas />} />}
-              {puede(user, 'facturas.ver') && <Route path="/cotizaciones" element={<Cotizaciones />} />}
+              {puede(user, 'factura_venta.ver') && <Route path="/cotizaciones" element={<Cotizaciones />} />}
               {puede(user, 'cortesias.ver') && <Route path="/cortesias" element={<Cortesias />} />}
               {puede(user, 'cuentas.ver') && <Route path="/cuentas" element={<Cuentas />} />}
               {puede(user, 'clientes.ver') && <Route path="/clientes" element={<Clientes />} />}

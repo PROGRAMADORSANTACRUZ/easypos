@@ -6,6 +6,7 @@ import { useToast, useAuth } from '../App.jsx';
 import { LoadingState, PageHeader, Modal, Button, EmptyState, overlayCierre } from '../components/ui/index.jsx';
 import { imprimirRecibo, configurarRecibo, pagoOk, labelPago } from './Facturas.jsx';
 import { abrirVentanaVacia } from '../print.js';
+import { tipoDocumentoListo } from '../tipoDocumentoListo.js';
 
 const puede = (user, codigo) => (user?.permisos || []).includes(codigo);
 
@@ -75,13 +76,14 @@ export default function Cotizaciones() {
   const { user } = useAuth();
   const notify = useToast();
   const navigate = useNavigate();
-  const puedeCrear = puede(user, 'facturas.crear') || puede(user, 'facturas.ver');
+  const puedeCrear = puede(user, 'factura_venta.crear');
 
   const [cotizaciones, setCotizaciones] = useState([]);
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [empresa, setEmpresa] = useState(null);
   const [apertura, setApertura] = useState(null);
+  const [tipoVenta, setTipoVenta] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -113,8 +115,9 @@ export default function Cotizaciones() {
       setApertura(ap);
       try {
         const tipos = await api.get('/tipos-documento');
+        setTipoVenta(tipoDocumentoListo(tipos || [], 'FACTURA DE VENTA (NO ELECTRONICA)') || null);
         configurarRecibo(emp, (tipos || []).find((t) => t.clase === 'FACTURA ELECTRONICA DE VENTA' && t.activo) || null);
-      } catch { configurarRecibo(emp, null); }
+      } catch { setTipoVenta(null); configurarRecibo(emp, null); }
     } catch (e) {
       notify(e.message, 'err');
     } finally {
@@ -170,10 +173,14 @@ export default function Cotizaciones() {
     setFiltroCat('');
     setBusquedaProd('');
   };
-  const abrirNuevo = () => { limpiar(); setModalAbierto(true); };
+  const abrirNuevo = () => {
+    if (!tipoVenta) return notify('Configura el tipo de documento FACTURA DE VENTA (NO ELECTRONICA) antes de vender.', 'err');
+    limpiar(); setModalAbierto(true);
+  };
   const cerrarModal = () => { setModalAbierto(false); limpiar(); };
 
   const registrar = async () => {
+    if (!tipoVenta) return notify('Configura el tipo de documento FACTURA DE VENTA (NO ELECTRONICA).', 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     if (carrito.length === 0) return notify('Agrega al menos un producto', 'err');
     if (mixto) {
@@ -218,8 +225,10 @@ export default function Cotizaciones() {
       <PageHeader
         title="Factura de venta"
         subtitle="Cobra una venta directa: descuenta inventario, pero NO es un documento electrónico (no se reporta a la DIAN/Factus)."
-        actions={puedeCrear && <Button variant="primary" icon="add" onClick={abrirNuevo} title="Nueva venta" />}
+        actions={puedeCrear && <Button variant="primary" icon="add" disabled={!tipoVenta} onClick={abrirNuevo} title={tipoVenta ? 'Nueva venta' : 'Configura el tipo de documento de Factura de venta'} />}
       />
+
+      {!tipoVenta && <p className="mini" role="alert">Configura el tipo de documento FACTURA DE VENTA (NO ELECTRONICA) y su rango para registrar ventas.</p>}
 
       {!apertura && (
         <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid var(--red)' }}>
