@@ -4,6 +4,11 @@ import { auditar } from '../auditoria.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const soloAdmin = wrap(async (req, res, next) => {
+  const admin = await prisma.usuarioRol.findFirst({ where: { usuarioId: req.usuario.id, rol: { nombre: 'ADMIN' } } });
+  if (!admin) return res.status(403).json({ error: 'Solo el administrador puede gestionar roles' });
+  next();
+});
 
 // Lista de roles con sus permisos y conteo de usuarios
 router.get('/', wrap(async (_req, res) => {
@@ -26,7 +31,7 @@ router.get('/', wrap(async (_req, res) => {
   );
 }));
 
-router.post('/', wrap(async (req, res) => {
+router.post('/', soloAdmin, wrap(async (req, res) => {
   const { nombre, descripcion, permisos } = req.body;
   if (!nombre) return res.status(400).json({ error: 'El nombre del rol es requerido' });
   const existe = await prisma.rol.findUnique({ where: { nombre } });
@@ -38,9 +43,11 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json(rol);
 }));
 
-router.put('/:id', wrap(async (req, res) => {
+router.put('/:id', soloAdmin, wrap(async (req, res) => {
   const id = Number(req.params.id);
   const { nombre, descripcion, activo, permisos } = req.body;
+  const actual = await prisma.rol.findUnique({ where: { id } });
+  if (actual?.nombre === 'ADMIN') return res.status(403).json({ error: 'El rol ADMIN mantiene acceso total y no se puede modificar' });
   const rol = await prisma.rol.update({
     where: { id },
     data: {
@@ -57,8 +64,10 @@ router.put('/:id', wrap(async (req, res) => {
   res.json(rol);
 }));
 
-router.delete('/:id', wrap(async (req, res) => {
+router.delete('/:id', soloAdmin, wrap(async (req, res) => {
   const id = Number(req.params.id);
+  const actual = await prisma.rol.findUnique({ where: { id } });
+  if (actual?.nombre === 'ADMIN') return res.status(403).json({ error: 'No se puede eliminar el rol ADMIN' });
   await prisma.rol.delete({ where: { id } });
   await auditar({ req, accion: 'ELIMINAR', entidad: 'Rol', entidadId: id });
   res.status(204).end();

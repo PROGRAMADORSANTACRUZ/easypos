@@ -5,6 +5,7 @@ const MODULOS = {
   mesas: ['ver', 'crear', 'editar', 'eliminar'],
   cocina: ['ver'],
   facturas: ['ver', 'crear', 'anular'],
+  factura_venta: ['ver', 'crear'],
   cortesias: ['ver', 'crear'],
   notas_credito: ['ver', 'crear', 'editar', 'eliminar'],
   notas_debito: ['ver', 'crear', 'editar', 'eliminar'],

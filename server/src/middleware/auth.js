@@ -19,10 +19,10 @@ import { prisma } from '../prisma.js';
 export const MODULOS_FACTURACION = ['facturas', 'factura_venta', 'cortesias'];
 
 export function permisosEfectivos(roles, asignados, permisosRol) {
-  const habilitados = roles.includes('ADMIN') ? MODULOS_FACTURACION : asignados;
+  const individuales = roles.includes('ADMIN') ? MODULOS_FACTURACION : asignados;
   return [...new Set([
-    ...permisosRol.filter((codigo) => !MODULOS_FACTURACION.some((modulo) => codigo.startsWith(`${modulo}.`)) || habilitados.some((modulo) => codigo.startsWith(`${modulo}.`))),
-    ...habilitados.flatMap((modulo) => [`${modulo}.ver`, `${modulo}.crear`]),
+    ...permisosRol,
+    ...individuales.flatMap((modulo) => [`${modulo}.ver`, `${modulo}.crear`]),
   ])];
 }
 
@@ -89,11 +89,16 @@ export function permisoModuloFacturacion(modulo) {
     try {
       const usuario = await prisma.usuario.findUnique({
         where: { id: req.usuario.id },
-        select: { activo: true, modulosFacturacion: true, roles: { include: { rol: true } } },
+        select: { activo: true, modulosFacturacion: true, roles: { include: { rol: { include: { permisos: { include: { permiso: true } } } } } } },
       });
-      if (!usuario?.activo || (!usuario.roles.some((ur) => ur.rol.nombre === 'ADMIN') && !usuario.modulosFacturacion.includes(modulo))) {
+      if (!usuario?.activo) {
         return res.status(403).json({ error: 'No tienes acceso a este módulo' });
       }
+      req.usuario.permisos = permisosEfectivos(
+        usuario.roles.map((ur) => ur.rol.nombre),
+        usuario.modulosFacturacion,
+        usuario.roles.flatMap((ur) => ur.rol.permisos.map((rp) => rp.permiso.codigo)),
+      );
       return permisoPorMetodo(modulo)(req, res, next);
     } catch (error) { return next(error); }
   };

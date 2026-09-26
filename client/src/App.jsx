@@ -86,7 +86,7 @@ const REPORTES_NAV = [
 ];
 
 // Módulos agrupados por categoría para un navbar compacto tipo acordeón
-const NAV_GRUPOS = [
+export const NAV_GRUPOS = [
   {
     id: 'ventas', label: 'Ventas', icon: 'facturas',
     items: [

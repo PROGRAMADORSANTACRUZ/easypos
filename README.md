@@ -122,7 +122,10 @@ EXTERNA: crea primero un servidor Postgres aparte en Dokploy (app tipo
 
 Antes de desplegar la asignación de submódulos de facturación, aplica la migración
 `20260926180000_modulos_facturacion_usuario` a la base activa. En Usuarios, ADMIN
-marca Facturas, Factura de venta y Cortesías por persona; cada usuario debe volver
-a iniciar sesión para actualizar su menú. Cada submódulo exige su tipo de documento
-activo, con prefijo y rango propio, antes de registrar comprobantes.
+puede marcar excepciones individuales; en Roles administra módulos, submódulos
+y acciones para todos los usuarios de cada rol. Aplica también la migración
+`20260926220000_factura_venta_permisos_roles` para registrar el permiso de
+Factura de venta. Cada usuario debe volver a iniciar sesión para actualizar su
+menú. Cada submódulo exige su tipo de documento activo, con prefijo y rango
+propio, antes de registrar comprobantes.
 ```
