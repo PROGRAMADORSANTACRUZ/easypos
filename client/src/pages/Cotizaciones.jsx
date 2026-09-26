@@ -2,15 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
-import { LOGO_RECIBO } from '../logoRecibo.js';
 import { useToast, useAuth } from '../App.jsx';
 import { LoadingState, PageHeader, Modal, Button, EmptyState, overlayCierre } from '../components/ui/index.jsx';
 import { imprimirRecibo, configurarRecibo, pagoOk, labelPago } from './Facturas.jsx';
-import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir } from '../print.js';
+import { abrirVentanaVacia } from '../print.js';
 
 const puede = (user, codigo) => (user?.permisos || []).includes(codigo);
-
-const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 
 // Numero visible de la factura de venta: prefijo + consecutivo (registros reales de Factura) o legacy.
 const numeroCot = (c) => (c?.numeroFactura ? `${c.prefijo || ''}${c.numeroFactura}` : (c?.numero || `${c?.prefijo || 'FDV'}${c?.consecutivo ?? ''}`));
@@ -72,91 +69,6 @@ function ClienteBuscador({ clientes, value, onChange }) {
       )}
     </div>
   );
-}
-
-// Imprime registros antiguos (antes de convertirse en "Factura de venta"). NO es factura electronica: sin bloque legal ni CUFE.
-function imprimirCotizacion(c, empresa) {
-  imprimirCotizacionAsync(c, empresa);
-}
-async function imprimirCotizacionAsync(c, empresa) {
-  if (!c) return;
-  const ventana = abrirVentanaVacia(); // debe abrirse ya (sincrono) para que el navegador no bloquee el popup
-  const dt = new Date(c.fecha || Date.now());
-  const fechaDia = dt.toLocaleDateString('es-CO');
-  const horaDia = dt.toLocaleTimeString('es-CO');
-  const validez = c.validezDias
-    ? new Date(dt.getTime() + c.validezDias * 86400000).toLocaleDateString('es-CO')
-    : '';
-  const filas = (c.detalle || [])
-    .map((d) => {
-      const nombre = esc((d.producto?.nombre || '').toUpperCase());
-      const importe = money(d.total != null ? d.total : d.precioUnitario * d.cantidad);
-      return `<tr><td class="c">${d.cantidad}×</td><td class="n">${nombre}<br><span class="cu">${money(d.precioUnitario)} c/u</span></td><td class="p">${importe}</td></tr>`;
-    })
-    .join('');
-  const cli = c.cliente || null;
-
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Factura de venta ${esc(numeroCot(c))}</title>
-  <style>
-    ${estiloPagina(await formatoDe('formatoFacturaVenta'))}
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; font-size: 12px; padding: 3mm 4mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .logo { display: block; width: 28mm; max-width: 55%; margin: 0 auto 2px; }
-    .marca { text-align: center; font-size: 20px; font-weight: 900; letter-spacing: 2px; margin-top: 0; }
-    .sub { text-align: center; font-size: 10px; color: #333; margin-bottom: 2px; }
-    .hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; }
-    .info { font-size: 11px; text-align: left; line-height: 1.45; }
-    .info div { margin: 1px 0; }
-    .info b { font-weight: 700; }
-    .doc { text-align: left; font-weight: 800; font-size: 12px; letter-spacing: .5px; margin: 4px 0; }
-    table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-    thead th { font-size: 9px; text-transform: uppercase; letter-spacing: .5px; color: #444; text-align: left; border-bottom: 1px dashed #000; padding-bottom: 2px; }
-    thead th.p { text-align: right; }
-    td { padding: 3px 0; vertical-align: top; font-size: 12px; }
-    td.c { width: 24px; font-weight: 700; }
-    td.n { text-transform: uppercase; line-height: 1.15; }
-    td.n .cu { text-transform: none; font-size: 9px; color: #666; }
-    td.p { text-align: right; white-space: nowrap; font-weight: 700; }
-    .tot { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
-    .tot.grand { font-weight: 900; font-size: 16px; border-top: 1px dashed #000; margin-top: 4px; padding-top: 6px; }
-    .obs { border: 1px solid #000; border-radius: 3px; padding: 4px 6px; margin-top: 6px; font-size: 11px; }
-    .nota { font-size: 10px; margin-top: 6px; line-height: 1.35; }
-    .pie { text-align: center; margin-top: 10px; font-size: 10px; color: #333; }
-    .pie .big { font-size: 12px; font-weight: 700; color: #000; }
-  </style></head><body>
-    <img class="logo" src="${LOGO_RECIBO}" alt="Logo">
-    <div class="marca">${esc(empresa?.nombreComercial || empresa?.razonSocial || 'Asados Santacruz')}</div>
-    ${empresa?.nit ? `<div class="sub">NIT ${esc(empresa.nit)}</div>` : ''}
-    <div class="sub">${esc(empresa?.direccion || 'KM 3 VIA ORIENTAL')}</div>
-    <div class="sub">${esc(empresa?.ciudad || 'Malambo - Atlántico')}</div>
-    <div class="sub">Cel ${esc(empresa?.telefono || '3005682955')}</div>
-    <hr class="hr" />
-    <div class="doc">FACTURA DE VENTA ${esc(numeroCot(c))}</div>
-    <div class="info">
-      <div><b>Fecha:</b> ${fechaDia} &nbsp; <b>Hora:</b> ${horaDia}</div>
-      ${validez ? `<div><b>Válida hasta:</b> ${validez} (${c.validezDias} días)</div>` : ''}
-      <div><b>Cliente:</b> ${esc(cli?.nombre || 'CONSUMIDOR FINAL')}</div>
-      ${cli?.documento ? `<div><b>Nit/C.C.:</b> ${esc(cli.documento)}</div>` : ''}
-      ${cli?.direccion ? `<div><b>Dirección:</b> ${esc(String(cli.direccion).toUpperCase())}</div>` : ''}
-      ${cli?.telefono ? `<div><b>Teléfono:</b> ${esc(cli.telefono)}</div>` : ''}
-    </div>
-    <hr class="hr" />
-    <table>
-      <thead><tr><th class="c">Cant</th><th class="n">Producto</th><th class="p">Importe</th></tr></thead>
-      <tbody>${filas}</tbody>
-    </table>
-    <hr class="hr" />
-    <div class="tot"><span>Subtotal</span><span>${money(c.subtotal ?? c.total ?? 0)}</span></div>
-    <div class="tot"><span>Impuesto</span><span>${money(c.iva || 0)}</span></div>
-    <div class="tot grand"><span>TOTAL</span><span>${money(c.total || 0)}</span></div>
-    ${c.observaciones ? `<div class="obs"><b>Observaciones:</b> ${esc(c.observaciones)}</div>` : ''}
-    <div class="nota">Documento no válido como factura. Precios sujetos a cambio después de la vigencia.</div>
-    <div class="pie">
-      <div class="big">¡Gracias!</div>
-      <div>${esc(empresa?.nombreComercial || empresa?.razonSocial || 'Asados Santacruz')}</div>
-    </div>
-  </body></html>`;
-
-  escribirEImprimir(ventana, html);
 }
 
 export default function Cotizaciones() {
@@ -339,7 +251,7 @@ export default function Cotizaciones() {
                     <button
                       type="button"
                       className="btn btn-sm"
-                      onClick={() => (c.numeroFactura ? imprimirRecibo(c, null, 'formatoFacturaVenta') : imprimirCotizacion(c, empresa))}
+                      onClick={() => imprimirRecibo(c, null, 'formatoFacturaVenta')}
                     >
                       <Icon name="receipt" size={14} /> Imprimir
                     </button>

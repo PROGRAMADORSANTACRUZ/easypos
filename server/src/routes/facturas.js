@@ -7,6 +7,8 @@ const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 const redondear = (n) => Math.round(n * 100) / 100;
+export const impuestoSobrePrecio = (precio, porcentaje, incluido = false) =>
+  redondear(precio * porcentaje / (incluido ? 100 + porcentaje : 100));
 
 // Calcula la fecha de vencimiento sumando los dias de credito a hoy.
 const calcularVence = (dias) => {
@@ -305,12 +307,13 @@ router.post('/directa', wrap(async (req, res) => {
     }
   }
 
-  const subtotal = redondear(items.reduce((s, i) => s + buscar(i.productoId).precio * (Number(i.cantidad) || 1), 0));
+  const precioProductos = redondear(items.reduce((s, i) => s + buscar(i.productoId).precio * (Number(i.cantidad) || 1), 0));
   const impuesto = redondear(items.reduce((s, i) => {
     const prod = buscar(i.productoId);
-    return s + prod.precio * (Number(i.cantidad) || 1) * ((prod.iva || 0) / 100);
+    return s + impuestoSobrePrecio(prod.precio * (Number(i.cantidad) || 1), prod.iva || 0, electronica === false);
   }, 0));
-  const total = redondear(subtotal + impuesto);
+  const subtotal = electronica === false ? redondear(precioProductos - impuesto) : precioProductos;
+  const total = electronica === false ? precioProductos : redondear(subtotal + impuesto);
   const ivaPctPromedio = subtotal > 0 ? redondear((impuesto / subtotal) * 100) : 0;
 
   const cli = await resolverCliente(clienteId);
@@ -356,13 +359,13 @@ router.post('/directa', wrap(async (req, res) => {
             const cant = Number(i.cantidad) || 1;
             const precio = buscar(i.productoId).precio;
             const lineaSub = precio * cant;
-            const lineaIva = redondear(lineaSub * ((buscar(i.productoId).iva || 0) / 100));
+            const lineaIva = impuestoSobrePrecio(lineaSub, buscar(i.productoId).iva || 0, electronica === false);
             return {
               productoId: String(i.productoId),
               cantidad: cant,
               precioUnitario: precio,
               iva: lineaIva,
-              total: redondear(lineaSub + lineaIva),
+              total: electronica === false ? redondear(lineaSub) : redondear(lineaSub + lineaIva),
             };
           }),
         },
