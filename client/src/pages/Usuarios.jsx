@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Icon } from '../icons.jsx';
-import { useToast } from '../App.jsx';
+import { useAuth, useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, EmptyState } from '../components/ui/index.jsx';
 
 const uVacio = { nombre: '', usuario: '', correo: '', password: '', roles: [], modulosFacturacion: [], activo: true };
