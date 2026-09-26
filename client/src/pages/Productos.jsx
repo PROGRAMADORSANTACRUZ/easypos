@@ -212,7 +212,7 @@ export default function Productos() {
               </div>
               <div className="field">
                 <label>Nombre *</label>
-                <input value={nombre} onChange={(e) => setNombre(e.target.value)} required />
+                <input value={nombre} onChange={(e) => setNombre(e.target.value.toUpperCase())} required />
               </div>
               <div className="field">
                 <label>Código de barras</label>
@@ -220,7 +220,7 @@ export default function Productos() {
               </div>
               <div className="field">
                 <label>Descripción</label>
-                <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción del producto" />
+                <input value={descripcion} onChange={(e) => setDescripcion(e.target.value.toUpperCase())} placeholder="Descripción del producto" />
               </div>
             </div>
             <div className="grid form-4col" style={{ gap: 12 }}>

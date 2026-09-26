@@ -5,6 +5,7 @@ import { useAuth, useToast } from '../App.jsx';
 import { PageHeader, EmptyState, TableSkeleton, Modal, Button } from './ui/index.jsx';
 
 const puede = (user, codigo) => user?.__dev === true || (user?.permisos || []).includes(codigo);
+const camposMayusculas = new Set(['nombre', 'descripcion', 'observaciones', 'direccion', 'razonSocial']);
 
 // Valor inicial vacío de un campo según su tipo.
 const vacioCampo = (c) => (c.type === 'checkbox' ? (c.default ?? true) : (c.default ?? ''));
@@ -51,7 +52,10 @@ export default function CrudPage({ cfg }) {
   };
   useEffect(() => { cargar(); setForm(VACIO); setEditId(null); }, [cfg]);
 
-  const set = (campo, valor) => setForm((f) => ({ ...f, [campo]: valor }));
+  const set = (campo, valor) => setForm((f) => ({
+    ...f,
+    [campo]: camposMayusculas.has(campo) && typeof valor === 'string' ? valor.toUpperCase() : valor,
+  }));
   const limpiar = () => { setEditId(null); setForm(VACIO); };
   const abrirNuevo = () => { limpiar(); setModalAbierto(true); };
   const cerrarModal = () => { setModalAbierto(false); limpiar(); };

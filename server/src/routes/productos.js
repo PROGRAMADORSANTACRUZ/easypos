@@ -51,7 +51,7 @@ async function siguienteCodigoCategoria() {
 }
 
 router.post('/categorias', wrap(async (req, res) => {
-  const nombre = (req.body?.nombre || '').trim();
+  const nombre = (req.body?.nombre || '').trim().toUpperCase();
   if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
   const impresoraIp = req.body?.impresoraIp?.trim() || null;
   const impresoraPuerto = req.body?.impresoraPuerto ? Number(req.body.impresoraPuerto) : 9100;
@@ -67,7 +67,7 @@ router.post('/categorias', wrap(async (req, res) => {
 
 // El codigo es fijo desde la creacion: no se acepta en la edicion, solo nombre e impresora.
 router.put('/categorias/:id', wrap(async (req, res) => {
-  const nombre = (req.body?.nombre || '').trim();
+  const nombre = (req.body?.nombre || '').trim().toUpperCase();
   if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
   const impresoraIp = req.body?.impresoraIp?.trim() || null;
   const impresoraPuerto = req.body?.impresoraPuerto ? Number(req.body.impresoraPuerto) : 9100;
@@ -122,11 +122,11 @@ router.post('/', wrap(async (req, res) => {
     }
     const producto = await prisma.producto.create({
       data: {
-        nombre,
+        nombre: nombre?.trim().toUpperCase(),
         precio: Number(precio),
         codigo: codigo?.trim() || null,
         codigoBarras: codigoBarras?.trim() || null,
-        descripcion: descripcion?.trim() || null,
+        descripcion: descripcion?.trim().toUpperCase() || null,
         costo: Number(costo) || 0,
         impuestoId: impuestoId ? String(impuestoId) : null,
         iva: ivaFinal,
@@ -182,11 +182,11 @@ router.put('/:id', wrap(async (req, res) => {
       return tx.producto.update({
         where: { id },
         data: {
-          ...(nombre !== undefined && { nombre }),
+          ...(nombre !== undefined && { nombre: nombre?.trim().toUpperCase() }),
           ...(precio !== undefined && { precio: Number(precio) }),
           ...(codigo !== undefined && { codigo: codigo?.trim() || null }),
           ...(codigoBarras !== undefined && { codigoBarras: codigoBarras?.trim() || null }),
-          ...(descripcion !== undefined && { descripcion: descripcion?.trim() || null }),
+          ...(descripcion !== undefined && { descripcion: descripcion?.trim().toUpperCase() || null }),
           ...(costo !== undefined && { costo: Number(costo) || 0 }),
           ...(impuestoId !== undefined && { impuestoId: impuestoId ? String(impuestoId) : null }),
           ...(ivaSync !== undefined ? { iva: ivaSync } : (iva !== undefined && { iva: Number(iva) || 0 })),

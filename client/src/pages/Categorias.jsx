@@ -159,7 +159,7 @@ export default function Categorias() {
             )}
             <div className="field">
               <label>Nombre *</label>
-              <input value={form.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder="Ej: Bebidas" autoFocus required />
+              <input value={form.nombre} onChange={(e) => set('nombre', e.target.value.toUpperCase())} placeholder="Ej: Bebidas" autoFocus required />
             </div>
             <div className="grid form-2col" style={{ gap: 12 }}>
               <div className="field">

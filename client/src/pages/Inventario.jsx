@@ -345,11 +345,11 @@ export default function Inventario() {
             </div>
             <div className="field">
               <label>Desc. Item *</label>
-              <input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} required />
+              <input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value.toUpperCase() })} required />
             </div>
             <div className="field">
               <label>U.M.</label>
-              <input value={form.unidad} onChange={(e) => setForm({ ...form, unidad: e.target.value })} placeholder="unidad, gramo, ml..." />
+              <input value={form.unidad} onChange={(e) => setForm({ ...form, unidad: e.target.value.toUpperCase() })} placeholder="unidad, gramo, ml..." />
             </div>
             <div className="field">
               <label>Existencia</label>

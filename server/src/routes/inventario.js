@@ -24,8 +24,8 @@ router.post('/', wrap(async (req, res) => {
     const item = await prisma.inventarioItem.create({
       data: {
         codigo: codigo?.trim() || null,
-        nombre,
-        unidad: unidad || 'unidad',
+        nombre: nombre?.trim().toUpperCase(),
+        unidad: unidad?.trim().toUpperCase() || 'UNIDAD',
         stock: Number(stock) || 0,
         stockMinimo: Number(stockMinimo) || 0,
         costo: Number(costo) || 0,
@@ -49,8 +49,8 @@ router.put('/:id', wrap(async (req, res) => {
       where: { id: Number(req.params.id) },
       data: {
         ...(codigo !== undefined && { codigo: codigo?.trim() || null }),
-        ...(nombre !== undefined && { nombre }),
-        ...(unidad !== undefined && { unidad }),
+        ...(nombre !== undefined && { nombre: nombre?.trim().toUpperCase() }),
+        ...(unidad !== undefined && { unidad: unidad?.trim().toUpperCase() }),
         ...(stock !== undefined && { stock: Number(stock) }),
         ...(stockMinimo !== undefined && { stockMinimo: Number(stockMinimo) }),
         ...(costo !== undefined && { costo: Number(costo) }),

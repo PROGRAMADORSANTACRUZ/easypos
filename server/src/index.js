@@ -59,11 +59,13 @@ import permisosRouter from './routes/permisos.js';
 import auditoriaRouter from './routes/auditoria.js';
 import restaurantesRouter from './routes/restaurantes.js';
 import { resolverTenant } from './middleware/tenant.js';
+import { mayusculas } from './middleware/mayusculas.js';
 import { requireAuth, permisoPorMetodo } from './middleware/auth.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
+app.use(mayusculas);
 app.use(resolverTenant);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, servicio: 'EASYPOS API' }));
