@@ -112,8 +112,10 @@ EXTERNA: crea primero un servidor Postgres aparte en Dokploy (app tipo
    solo con el mismo valor de `DATABASE_URL`, una sola base para todo).
 3. Configura el dominio en Dokploy (ajusta `easypos.grupo-santacruz.com` en
    `docker-compose.yml`/`deploy.sh` si el dominio real es otro).
-4. Primer despliegue: pon `RUN_DB_INIT=true` (aplica el esquema de la base de
-   PLATAFORMA), despliega, y luego vuelve a ponerlo en `false`.
+4. Primer despliegue: pon `RUN_DB_INIT=true` (crea las tablas de las 2 bases)
+   y `RUN_SEED=true` (usuario admin + roles + menú/inventario de arranque) —
+   luego de que quede arriba, vuelve a poner ambos en `false` (RUN_SEED borra
+   datos existentes si se re-siembra, nunca debe quedar en `true`).
 5. Si Dokploy no conserva los labels de Traefik tras un redeploy, correr
    `./deploy.sh <nombre-real-del-servicio>` (ver el id real en el panel).
 ```
