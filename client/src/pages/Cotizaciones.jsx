@@ -339,7 +339,7 @@ export default function Cotizaciones() {
                     <button
                       type="button"
                       className="btn btn-sm"
-                      onClick={() => (c.numeroFactura ? imprimirRecibo(c) : imprimirCotizacion(c, empresa))}
+                      onClick={() => (c.numeroFactura ? imprimirRecibo(c, null, 'formatoFacturaVenta') : imprimirCotizacion(c, empresa))}
                     >
                       <Icon name="receipt" size={14} /> Imprimir
                     </button>

@@ -68,6 +68,9 @@ export async function imprimirRecibo(f, efectivo, campoFormato = 'formatoFactura
   // CUFE, fecha de aceptacion y firma digital los entrega el proveedor tecnologico al conectar. Sin integracion quedan en blanco.
   // Si la factura no es electronica (Factura de venta, estadoDIAN='NO_APLICA') no debe mostrarse nada de CUFE/QR/bloque legal DIAN.
   const esElectronica = f.estadoDIAN !== 'NO_APLICA';
+  const nombreEmisor = esElectronica
+    ? empresaRecibo?.nombreComercial || empresaRecibo?.razonSocial || 'Asados Santacruz'
+    : 'CRISTIAN FABIAN SERRANO MILLAN';
   const cufe = f.cufe || '';
   const fechaAceptacion = f.fechaAceptacion || '';
   const firmaDigital = f.firmaDigital || '';
@@ -101,6 +104,7 @@ export async function imprimirRecibo(f, efectivo, campoFormato = 'formatoFactura
     body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; font-size: 12px; padding: 3mm 4mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .logo { display: block; width: 28mm; max-width: 55%; margin: 0 auto 2px; }
     .marca { text-align: center; font-size: 20px; font-weight: 900; letter-spacing: 2px; margin-top: 0; }
+    .marca.venta { font-size: 14px; letter-spacing: 0; overflow-wrap: anywhere; }
     .sub { text-align: center; font-size: 10px; color: #333; margin-bottom: 2px; }
     .hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; }
     .meta { font-size: 11px; text-align: center; line-height: 1.4; }
@@ -128,12 +132,18 @@ export async function imprimirRecibo(f, efectivo, campoFormato = 'formatoFactura
     .pie { text-align: center; margin-top: 10px; font-size: 10px; color: #333; }
     .pie .big { font-size: 12px; font-weight: 700; color: #000; }
   </style></head><body>
-    <img class="logo" src="${LOGO_RECIBO}" alt="Asados Santacruz">
-    <div class="marca">${esc(empresaRecibo?.nombreComercial || empresaRecibo?.razonSocial || 'Asados Santacruz')}</div>
-    ${empresaRecibo?.nit ? `<div class="sub">NIT ${esc(empresaRecibo.nit)}</div>` : ''}
-    <div class="sub">${esc(empresaRecibo?.direccion || 'KM 3 VIA ORIENTAL')}</div>
-    <div class="sub">${esc(empresaRecibo?.ciudad || 'Malambo - Atlántico')}</div>
-    <div class="sub">Cel ${esc(empresaRecibo?.telefono || '3005682955')}</div>
+    ${esElectronica ? `<img class="logo" src="${LOGO_RECIBO}" alt="Asados Santacruz">` : ''}
+    <div class="marca${esElectronica ? '' : ' venta'}">${esc(nombreEmisor)}</div>
+    ${esElectronica ? `
+      ${empresaRecibo?.nit ? `<div class="sub">NIT ${esc(empresaRecibo.nit)}</div>` : ''}
+      <div class="sub">${esc(empresaRecibo?.direccion || 'KM 3 VIA ORIENTAL')}</div>
+      <div class="sub">${esc(empresaRecibo?.ciudad || 'Malambo - Atlántico')}</div>
+      <div class="sub">Cel ${esc(empresaRecibo?.telefono || '3005682955')}</div>
+    ` : `
+      <div class="sub">NIT 1045679622</div>
+      <div class="sub">Centro Comercial Muelle del Río, local C 07</div>
+      <div class="sub">Calle 118 # 42B-185 Barranquilla</div>
+    `}
     <hr class="hr" />
     <div class="info">
       <div><b>Caja:</b> ${esc(f.apertura?.caja?.nombre || '1')}</div>
@@ -208,7 +218,7 @@ export async function imprimirRecibo(f, efectivo, campoFormato = 'formatoFactura
       : ''}
     <div class="pie">
       <div class="big">¡Gracias por su compra!</div>
-      <div>${esc(empresaRecibo?.nombreComercial || empresaRecibo?.razonSocial || 'Asados Santacruz')}</div>
+      <div>${esc(nombreEmisor)}</div>
     </div>
   </body></html>`;
 
