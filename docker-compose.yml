@@ -34,13 +34,10 @@ services:
       FACTUS_PASSWORD: ${FACTUS_PASSWORD:-}
       FACTUS_NUMBERING_RANGE_FACTURA: ${FACTUS_NUMBERING_RANGE_FACTURA:-}
       FACTUS_NUMBERING_RANGE_NOTA_CREDITO: ${FACTUS_NUMBERING_RANGE_NOTA_CREDITO:-}
-      # true SOLO la primera vez (crea las tablas de las 2 bases) — después
-      # ponlo en false, no hace falta en cada reinicio.
-      RUN_DB_INIT: ${RUN_DB_INIT:-false}
-      # true SOLO la primera vez (crea el usuario admin + roles + menú de
-      # arranque) — BORRA facturas/pedidos/productos existentes al re-sembrar,
-      # nunca lo dejes en true en despliegues normales.
-      RUN_SEED: ${RUN_SEED:-false}
+      # La inicializacion y el seed se ejecutan manualmente al crear una
+      # instalacion; nunca al reiniciar un servicio con datos reales.
+      RUN_DB_INIT: "false"
+      RUN_SEED: "false"
     networks:
       - dokploy-network
     labels:
