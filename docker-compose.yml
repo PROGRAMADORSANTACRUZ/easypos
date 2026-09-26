@@ -14,7 +14,9 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      PORT: 4000
+      # nginx.conf es una plantilla que toma este mismo valor en runtime
+      # (start.sh + envsubst), así que cambiarlo acá basta para los dos.
+      PORT: ${PORT:-4000}
       # Conexión "por defecto" (requests sin header x-tenant-id, scripts, seed)
       # y también la base de PLATAFORMA (directorio de restaurantes) — se
       # unifican en UNA sola base (sin colisión de nombres de tabla entre los

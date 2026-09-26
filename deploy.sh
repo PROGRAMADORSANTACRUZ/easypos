@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-SERVICE_NAME="${1:-easypos-easyposapp}"
+SERVICE_NAME="posgruposantacruz-5wzjke"
 
 docker service update \
   --label-add 'traefik.enable=true' \

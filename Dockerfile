@@ -32,11 +32,14 @@ RUN npx prisma generate --schema=prisma/schema.prisma \
 
 # ---- Etapa 3: runtime (Nginx + Node, para poder correr el backend y `npx prisma`) ----
 FROM nginx:1.27-alpine AS runtime
-RUN apk add --no-cache nodejs npm
+# gettext trae envsubst, usado para inyectar el puerto real del backend
+# (PORT) en nginx.conf al arrancar el contenedor (start.sh) — el puerto puede
+# variar segun la variable de entorno configurada en Dokploy.
+RUN apk add --no-cache nodejs npm gettext
 
 WORKDIR /app
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf.template
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
