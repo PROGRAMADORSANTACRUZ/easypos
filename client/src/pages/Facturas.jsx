@@ -8,6 +8,7 @@ import { useAuth, useToast } from '../App.jsx';
 import CierreCajaModal from '../components/CierreCajaModal.jsx';
 import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir, registrarEmpresa } from '../print.js';
 import { tipoDocumentoListo } from '../tipoDocumentoListo.js';
+import { diaColombia } from '../fechaComercial.js';
 
 // Número visible de la factura: prefijo + consecutivo DIAN, o el ID corto si aún no tiene numeración.
 function numeroDian(f) {
@@ -638,18 +639,20 @@ export default function Facturas({ electronica = true }) {
 
   const [reenviando, setReenviando] = useState(null); // id de factura en proceso de reenvio a DIAN
 
-  // Filtro de fechas del historial: por defecto muestra el MES ACTUAL.
-  const hoyISO = () => new Date().toISOString().slice(0, 10);
+  // La fecha del historial y el filtro usan siempre el dia comercial de Colombia.
   const NOMBRES_MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const mesActualValor = () => {
-    const hoy = new Date();
-    return `${hoy.getFullYear()}-${hoy.getMonth() + 1}`;
+    const [anio, mes] = diaColombia(new Date()).split('-');
+    return `${anio}-${Number(mes)}`;
   };
   const rangoDeMes = (anio, mes) => ({
-    desde: new Date(anio, mes - 1, 1).toISOString().slice(0, 10),
-    hasta: new Date(anio, mes, 0).toISOString().slice(0, 10),
+    desde: `${anio}-${String(mes).padStart(2, '0')}-01`,
+    hasta: `${anio}-${String(mes).padStart(2, '0')}-${new Date(anio, mes, 0).getDate()}`,
   });
-  const [filtroFecha, setFiltroFecha] = useState(() => ({ desde: hoyISO(), hasta: hoyISO() }));
+  const [filtroFecha, setFiltroFecha] = useState(() => {
+    const [anio, mes] = diaColombia(new Date()).split('-').map(Number);
+    return rangoDeMes(anio, mes);
+  });
   const aplicarRangoRapido = (valor) => {
     if (valor === 'todas') {
       setFiltroFecha({ desde: '', hasta: '' });
@@ -660,7 +663,7 @@ export default function Facturas({ electronica = true }) {
     }
   };
   const facturasFiltradas = facturas.filter((f) => {
-    const d = String(f.createdAt || '').slice(0, 10);
+    const d = diaColombia(f.createdAt);
     if (filtroFecha.desde && d < filtroFecha.desde) return false;
     if (filtroFecha.hasta && d > filtroFecha.hasta) return false;
     return true;
@@ -1379,7 +1382,7 @@ export default function Facturas({ electronica = true }) {
                     )}
                     {!f.estadoDIAN && <span className="mini" style={{ color: 'var(--muted)' }}>—</span>}
                   </td>}
-                  <td className="mini">{fecha(f.createdAt)}</td>
+                  <td className="mini">{new Date(f.createdAt).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
                 </tr>
               ))}
               {facturasFiltradas.length === 0 && <tr><td colSpan={electronica ? 6 : 5} className="empty">No hay facturas en el rango seleccionado.</td></tr>}
