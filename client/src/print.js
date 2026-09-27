@@ -52,8 +52,7 @@ export function abrirVentanaVacia() {
   return window.open('', '_blank', 'width=380,height=640');
 }
 
-// Escribe el HTML en una ventana ya abierta (ver abrirVentanaVacia) y espera a que las imágenes
-// (ej. QR externo) carguen antes de imprimir. No cierra la ventana sola (evita la "pantalla en blanco").
+// Escribe el HTML en una ventana ya abierta y la cierra al terminar o cancelar el diálogo de impresión.
 export function escribirEImprimir(win, html) {
   if (!win) return;
   win.document.write(html);
@@ -63,7 +62,14 @@ export function escribirEImprimir(win, html) {
   const imprimirAhora = () => {
     if (yaImprimio) return;
     yaImprimio = true;
-    try { win.print(); } catch { /* ignorar */ }
+    win.addEventListener('afterprint', () => {
+      win.setTimeout(() => win.close(), 250);
+    }, { once: true });
+    try {
+      win.print();
+    } catch {
+      win.close();
+    }
   };
   const imprimirCuandoListo = () => {
     const imgs = Array.from(win.document.images || []);
