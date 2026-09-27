@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ExcelJS from 'exceljs';
 import { api, money } from '../api.js';
+import { diaColombia } from '../fechaComercial.js';
 import { useToast } from '../App.jsx';
 import { LoadingState } from '../components/ui/index.jsx';
+
+const fechaHoraColombia = (fecha) => new Date(fecha).toLocaleString('es-CO', { timeZone: 'America/Bogota' });
 
 // Catálogo de reportes seleccionables
 const REPORTES = [
@@ -75,7 +78,7 @@ export default function Reportes() {
   const [cocina, setCocina] = useState([]);
   const [searchParams] = useSearchParams();
   const sel = searchParams.get('r') || 'totales';
-  const hoy = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD en hora local
+  const hoy = diaColombia(new Date());
   const [desde, setDesde] = useState(hoy);
   const [hasta, setHasta] = useState(hoy);
   const notify = useToast();
@@ -170,7 +173,7 @@ export default function Reportes() {
           columnas: ['# Factura', 'Fecha', 'Mesa/Cliente', 'Forma de pago', 'Total'],
           filas: (rep.detalle || []).map((d) => [
             `#${d.numero}`,
-            new Date(d.fecha).toLocaleString('es-CO'),
+            fechaHoraColombia(d.fecha),
             d.ubicacion === 'Directa' ? d.cliente : d.ubicacion,
             d.formaPago,
             money(d.total),
@@ -214,7 +217,7 @@ export default function Reportes() {
         return {
           columnas: ['Fecha/Hora', 'Mesa', 'Mesero', 'Producto', 'Cantidad', 'Editado', 'Qué cambió', 'Observaciones'],
           filas: pedidosMesa.map((p) => [
-            new Date(p.fecha).toLocaleString('es-CO'),
+            fechaHoraColombia(p.fecha),
             p.mesa != null ? `Mesa ${p.mesa}` : '-',
             p.mesera || '-',
             p.producto || '-',
@@ -228,7 +231,7 @@ export default function Reportes() {
         return {
           columnas: ['Hora listo', 'Mesa', 'Productos', 'Cocinero', 'Listo'],
           filas: cocina.map((c) => [
-            c.fechaListo ? new Date(c.fechaListo).toLocaleString('es-CO') : '-',
+            c.fechaListo ? fechaHoraColombia(c.fechaListo) : '-',
             c.mesa != null ? `Mesa ${c.mesa}` : '-',
             c.productos || '',
             c.cocinero || '-',
@@ -274,7 +277,7 @@ export default function Reportes() {
     // Rango y fecha de generación
     ws.mergeCells(`A3:${lastCol}3`);
     const cSub = ws.getCell('A3');
-    cSub.value = `Rango: ${rangoTexto}  ·  Generado: ${new Date().toLocaleString('es-CO')}`;
+    cSub.value = `Rango: ${rangoTexto}  ·  Generado: ${fechaHoraColombia(new Date())}`;
     cSub.font = { size: 10, italic: true, color: { argb: 'FF6B7280' } };
 
     // Fila 4 vacía como separador
@@ -360,7 +363,7 @@ export default function Reportes() {
       <div class="head">
         <img class="marca-logo" src="${window.location.origin}/logo-oscuro.png" alt="Asados Santacruz">
         <h1>${actual?.nombre || 'Reporte'}</h1>
-        <div class="sub">Rango: ${rangoTexto} · Generado: ${new Date().toLocaleString('es-CO')}</div>
+        <div class="sub">Rango: ${rangoTexto} · Generado: ${fechaHoraColombia(new Date())}</div>
       </div>
       <table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>
       <div class="pie">Asados Santacruz · Reporte de ventas</div>
@@ -448,7 +451,7 @@ export default function Reportes() {
               {rep.detalle.map((d) => (
                 <tr key={d.numero}>
                   <td style={{ fontWeight: 700 }}>#{d.numero}</td>
-                  <td className="mini">{new Date(d.fecha).toLocaleString('es-CO')}</td>
+                  <td className="mini">{fechaHoraColombia(d.fecha)}</td>
                   <td>{d.ubicacion === 'Directa' ? d.cliente : d.ubicacion}</td>
                   <td>{d.formaPago}</td>
                   <td style={{ textAlign: 'right', fontWeight: 700 }}>{money(d.total)}</td>
@@ -534,7 +537,7 @@ export default function Reportes() {
             <tbody>
               {pedidosMesa.map((p) => (
                 <tr key={p.consecutivo}>
-                  <td className="mini">{new Date(p.fecha).toLocaleString('es-CO')}</td>
+                  <td className="mini">{fechaHoraColombia(p.fecha)}</td>
                   <td>{p.mesa != null ? `Mesa ${p.mesa}` : '-'}</td>
                   <td>{p.mesera || '-'}</td>
                   <td style={{ textTransform: 'uppercase' }}>{p.producto || '-'}</td>
@@ -554,7 +557,7 @@ export default function Reportes() {
             <tbody>
               {cocina.map((c) => (
                 <tr key={c.consecutivo}>
-                  <td className="mini">{c.fechaListo ? new Date(c.fechaListo).toLocaleString('es-CO') : '—'}</td>
+                  <td className="mini">{c.fechaListo ? fechaHoraColombia(c.fechaListo) : '—'}</td>
                   <td>{c.mesa != null ? `Mesa ${c.mesa}` : '-'}</td>
                   <td>{c.productos}</td>
                   <td>{c.cocinero || '-'}</td>

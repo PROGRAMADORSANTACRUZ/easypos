@@ -1,15 +1,17 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
+import { diaColombia, inicioDiaColombia, finDiaColombia } from '../fechaColombia.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 const pad = (n) => String(n).padStart(2, '0');
-const diaKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const mesKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+const diaKey = diaColombia;
+const mesKey = (d) => diaKey(d).slice(0, 7);
 // Semana ISO (ej: 2026-S32)
 const semanaKey = (d) => {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const [anio, mes, dia] = diaKey(d).split('-').map(Number);
+  const date = new Date(Date.UTC(anio, mes - 1, dia));
   const dayNum = (date.getUTCDay() + 6) % 7;
   date.setUTCDate(date.getUTCDate() - dayNum + 3);
   const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
@@ -59,8 +61,8 @@ router.get('/', wrap(async (req, res) => {
   const where = {};
   if (desde || hasta) {
     where.createdAt = {};
-    if (desde) where.createdAt.gte = new Date(`${desde}T00:00:00`);
-    if (hasta) where.createdAt.lte = new Date(`${hasta}T23:59:59.999`);
+    if (desde) where.createdAt.gte = inicioDiaColombia(desde);
+    if (hasta) where.createdAt.lt = finDiaColombia(hasta);
   }
 
   const facturas = await prisma.factura.findMany({
@@ -84,8 +86,8 @@ router.get('/', wrap(async (req, res) => {
   const whereCompras = {};
   if (desde || hasta) {
     whereCompras.fecha = {};
-    if (desde) whereCompras.fecha.gte = new Date(`${desde}T00:00:00`);
-    if (hasta) whereCompras.fecha.lte = new Date(`${hasta}T23:59:59.999`);
+    if (desde) whereCompras.fecha.gte = inicioDiaColombia(desde);
+    if (hasta) whereCompras.fecha.lt = finDiaColombia(hasta);
   }
   const compras = await prisma.compra.findMany({ where: whereCompras, include: { proveedor: true, detalle: { include: { item: true } } } });
   const totalCompras = compras.reduce((s, c) => s + (c.total || 0), 0);
@@ -263,8 +265,8 @@ router.get('/pedidos-mesa', wrap(async (req, res) => {
   const where = {};
   if (desde || hasta) {
     where.fecha = {};
-    if (desde) where.fecha.gte = new Date(`${desde}T00:00:00`);
-    if (hasta) where.fecha.lte = new Date(`${hasta}T23:59:59.999`);
+    if (desde) where.fecha.gte = inicioDiaColombia(desde);
+    if (hasta) where.fecha.lt = finDiaColombia(hasta);
   }
   const filas = await prisma.pedidoMesa.findMany({
     where,
@@ -291,8 +293,8 @@ router.get('/cocina', wrap(async (req, res) => {
   const where = {};
   if (desde || hasta) {
     where.createdAt = {};
-    if (desde) where.createdAt.gte = new Date(`${desde}T00:00:00`);
-    if (hasta) where.createdAt.lte = new Date(`${hasta}T23:59:59.999`);
+    if (desde) where.createdAt.gte = inicioDiaColombia(desde);
+    if (hasta) where.createdAt.lt = finDiaColombia(hasta);
   }
   const filas = await prisma.preparacionCocina.findMany({
     where,
