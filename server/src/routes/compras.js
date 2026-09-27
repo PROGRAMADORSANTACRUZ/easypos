@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
+import { inicioDiaColombia, finDiaColombia } from '../fechaColombia.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -55,8 +56,8 @@ router.get('/', wrap(async (req, res) => {
   };
   if (desde || hasta) {
     where.fecha = {};
-    if (desde) where.fecha.gte = new Date(`${desde}T00:00:00`);
-    if (hasta) where.fecha.lte = new Date(`${hasta}T23:59:59.999`);
+    if (desde) where.fecha.gte = inicioDiaColombia(desde);
+    if (hasta) where.fecha.lt = finDiaColombia(hasta);
   }
   const compras = await prisma.compra.findMany({ where, include: conRelaciones, orderBy: { fecha: 'desc' } });
   res.json(compras);
