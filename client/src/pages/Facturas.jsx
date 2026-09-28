@@ -641,19 +641,21 @@ export default function Facturas({ electronica = true }) {
 
   // La fecha del historial y el filtro usan siempre el dia comercial de Colombia.
   const NOMBRES_MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  const mesActualValor = () => {
-    const [anio, mes] = diaColombia(new Date()).split('-');
-    return `${anio}-${Number(mes)}`;
-  };
+  const hoy = diaColombia(new Date());
+  const anioActual = hoy.slice(0, 4);
+  const [periodoRapido, setPeriodoRapido] = useState('hoy');
   const rangoDeMes = (anio, mes) => ({
     desde: `${anio}-${String(mes).padStart(2, '0')}-01`,
     hasta: `${anio}-${String(mes).padStart(2, '0')}-${new Date(anio, mes, 0).getDate()}`,
   });
-  const [filtroFecha, setFiltroFecha] = useState(() => {
-    const [anio, mes] = diaColombia(new Date()).split('-').map(Number);
-    return rangoDeMes(anio, mes);
-  });
+  const [filtroFecha, setFiltroFecha] = useState(() => ({ desde: hoy, hasta: hoy }));
   const aplicarRangoRapido = (valor) => {
+    setPeriodoRapido(valor);
+    if (valor === 'personalizado') return;
+    if (valor === 'hoy') {
+      setFiltroFecha({ desde: hoy, hasta: hoy });
+      return;
+    }
     if (valor === 'todas') {
       setFiltroFecha({ desde: '', hasta: '' });
     } else {
@@ -1334,21 +1336,23 @@ export default function Facturas({ electronica = true }) {
           <h3 style={{ marginTop: 0 }}>Historial</h3>
           <div className="row" style={{ gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div className="field" style={{ margin: 0 }}>
-              <label>Mes</label>
-              <select onChange={(e) => aplicarRangoRapido(e.target.value)} defaultValue={mesActualValor()}>
+              <label>Periodo</label>
+              <select value={periodoRapido} onChange={(e) => aplicarRangoRapido(e.target.value)}>
+                <option value="hoy">Hoy</option>
                 {NOMBRES_MES.map((nombre, i) => (
-                  <option key={nombre} value={`${new Date().getFullYear()}-${i + 1}`}>{nombre}</option>
+                  <option key={nombre} value={`${anioActual}-${i + 1}`}>{nombre}</option>
                 ))}
                 <option value="todas">Todas</option>
+                <option value="personalizado">Personalizado</option>
               </select>
             </div>
             <div className="field" style={{ margin: 0 }}>
               <label>Fecha inicial</label>
-              <input type="date" value={filtroFecha.desde} onChange={(e) => setFiltroFecha((f) => ({ ...f, desde: e.target.value }))} />
+              <input type="date" value={filtroFecha.desde} onChange={(e) => { setPeriodoRapido('personalizado'); setFiltroFecha((f) => ({ ...f, desde: e.target.value })); }} />
             </div>
             <div className="field" style={{ margin: 0 }}>
               <label>Fecha final</label>
-              <input type="date" value={filtroFecha.hasta} onChange={(e) => setFiltroFecha((f) => ({ ...f, hasta: e.target.value }))} />
+              <input type="date" value={filtroFecha.hasta} onChange={(e) => { setPeriodoRapido('personalizado'); setFiltroFecha((f) => ({ ...f, hasta: e.target.value })); }} />
             </div>
           </div>
           <div className="facturas-historial-scroll">
