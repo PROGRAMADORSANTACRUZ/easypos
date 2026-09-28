@@ -456,6 +456,15 @@ label { font-size: var(--fs-sm); color: var(--muted); font-weight: 600; display:
 .field { margin-bottom: var(--sp-4); }
 
 table { width: 100%; border-collapse: collapse; }
+.facturas-historial-scroll {
+  height: 418px;
+  max-height: 65vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.facturas-historial-scroll table { display: table; overflow: visible; white-space: normal; }
+.facturas-historial-scroll thead { position: sticky; top: 0; z-index: 2; }
 th, td { text-align: left; padding: 8px var(--sp-3); border-bottom: 1px solid var(--border); font-size: var(--fs-body); }
 th {
   color: var(--muted); font-size: var(--fs-caption); font-weight: 700;
@@ -1310,6 +1319,13 @@ tbody tr:last-child td { border-bottom: none; }
     overflow-x: auto;
     white-space: nowrap;
     -webkit-overflow-scrolling: touch;
+  }
+  .content .facturas-historial-scroll table {
+    display: table;
+    width: max-content;
+    min-width: 100%;
+    overflow: visible;
+    white-space: nowrap;
   }
   /* Acciones de encabezado: no se amontonan */
   .page-header__actions { width: 100%; }

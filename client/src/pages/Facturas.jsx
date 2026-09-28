@@ -1351,43 +1351,45 @@ export default function Facturas({ electronica = true }) {
               <input type="date" value={filtroFecha.hasta} onChange={(e) => setFiltroFecha((f) => ({ ...f, hasta: e.target.value }))} />
             </div>
           </div>
-          <table>
-            <thead>
-              <tr><th>N°</th><th>Mesa</th><th>Mesera</th><th>Total</th>{electronica && <th>DIAN</th>}<th>Fecha</th></tr>
-            </thead>
-            <tbody>
-              {facturasFiltradas.map((f) => (
-                <tr key={f.id} style={{ cursor: 'pointer' }} onClick={() => setSel(f)}>
-                  <td>
-                    {numeroDian(f)}
-                    {f.notasCredito?.length > 0 && <span className="badge orange" style={{ marginLeft: 6 }} title="Con nota crédito">NC</span>}
-                    {f.notasDebito?.length > 0 && <span className="badge" style={{ marginLeft: 6 }} title="Con nota débito">ND</span>}
-                    {f.retenciones?.length > 0 && <span className="badge gray" style={{ marginLeft: 6 }} title="Con retención">RET</span>}
-                  </td>
-                  <td>{f.pedido?.mesa?.numero ?? <span className="badge orange">Directa</span>}</td>
-                  <td>{f.pedido?.mesera?.nombre ?? (f.pedido?.cliente || '—')}</td>
-                  <td style={{ fontWeight: 700 }}>{money(f.total)}</td>
-                  {electronica && <td>
-                    {f.estadoDIAN === 'ACEPTADA' && <span className="badge" style={{ background: 'var(--green-soft)', color: 'var(--green)' }}>Aceptada</span>}
-                    {f.estadoDIAN === 'ERROR' && (
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-red"
-                        disabled={reenviando === f.id}
-                        onClick={(e) => { e.stopPropagation(); reenviarDian(f); }}
-                        title="Reintentar envío a la DIAN"
-                      >
-                        {reenviando === f.id ? 'Enviando…' : 'Reintentar'}
-                      </button>
-                    )}
-                    {!f.estadoDIAN && <span className="mini" style={{ color: 'var(--muted)' }}>—</span>}
-                  </td>}
-                  <td className="mini">{new Date(f.createdAt).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
-                </tr>
-              ))}
-              {facturasFiltradas.length === 0 && <tr><td colSpan={electronica ? 6 : 5} className="empty">No hay facturas en el rango seleccionado.</td></tr>}
-            </tbody>
-          </table>
+          <div className="facturas-historial-scroll">
+            <table>
+              <thead>
+                <tr><th>N°</th><th>Mesa</th><th>Mesera</th><th>Total</th>{electronica && <th>DIAN</th>}<th>Fecha</th></tr>
+              </thead>
+              <tbody>
+                {facturasFiltradas.map((f) => (
+                  <tr key={f.id} style={{ cursor: 'pointer' }} onClick={() => setSel(f)}>
+                    <td>
+                      {numeroDian(f)}
+                      {f.notasCredito?.length > 0 && <span className="badge orange" style={{ marginLeft: 6 }} title="Con nota crédito">NC</span>}
+                      {f.notasDebito?.length > 0 && <span className="badge" style={{ marginLeft: 6 }} title="Con nota débito">ND</span>}
+                      {f.retenciones?.length > 0 && <span className="badge gray" style={{ marginLeft: 6 }} title="Con retención">RET</span>}
+                    </td>
+                    <td>{f.pedido?.mesa?.numero ?? <span className="badge orange">Directa</span>}</td>
+                    <td>{f.pedido?.mesera?.nombre ?? (f.pedido?.cliente || '—')}</td>
+                    <td style={{ fontWeight: 700 }}>{money(f.total)}</td>
+                    {electronica && <td>
+                      {f.estadoDIAN === 'ACEPTADA' && <span className="badge" style={{ background: 'var(--green-soft)', color: 'var(--green)' }}>Aceptada</span>}
+                      {f.estadoDIAN === 'ERROR' && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-red"
+                          disabled={reenviando === f.id}
+                          onClick={(e) => { e.stopPropagation(); reenviarDian(f); }}
+                          title="Reintentar envío a la DIAN"
+                        >
+                          {reenviando === f.id ? 'Enviando…' : 'Reintentar'}
+                        </button>
+                      )}
+                      {!f.estadoDIAN && <span className="mini" style={{ color: 'var(--muted)' }}>—</span>}
+                    </td>}
+                    <td className="mini">{new Date(f.createdAt).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
+                  </tr>
+                ))}
+                {facturasFiltradas.length === 0 && <tr><td colSpan={electronica ? 6 : 5} className="empty">No hay facturas en el rango seleccionado.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="card">
