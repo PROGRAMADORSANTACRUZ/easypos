@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
@@ -25,6 +25,9 @@ export default function Caja() {
   const [abrirModal, setAbrirModal] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [cerrando, setCerrando] = useState(null);
+  const [aperturaPagosAbierta, setAperturaPagosAbierta] = useState(null);
+  const [cuadresPagos, setCuadresPagos] = useState({});
+  const [cargandoCuadre, setCargandoCuadre] = useState(null);
 
   const cargar = async () => {
     try {
@@ -77,6 +80,40 @@ export default function Caja() {
   const fmt = (f) => (f ? new Date(f).toLocaleString() : '—');
   const turnoAbierto = aperturas.find((a) => a.estado === 'ABIERTA') || null;
 
+  const alternarDesglose = async (ap) => {
+    if (aperturaPagosAbierta === ap.id) {
+      setAperturaPagosAbierta(null);
+      return;
+    }
+    setAperturaPagosAbierta(ap.id);
+    if (cuadresPagos[ap.id]) return;
+    try {
+      setCargandoCuadre(ap.id);
+      const cuadre = await api.get(`/aperturas/${ap.id}/cuadre`);
+      setCuadresPagos((actuales) => ({ ...actuales, [ap.id]: cuadre }));
+    } catch (error) {
+      notify(error.message, 'err');
+      setAperturaPagosAbierta(null);
+    } finally {
+      setCargandoCuadre(null);
+    }
+  };
+
+  const pagosAgrupados = (desglose = []) => {
+    const resumen = new Map();
+    for (const pago of desglose) {
+      const metodo = /efectivo/i.test(pago.metodo) ? 'Efectivo'
+        : /transfer/i.test(pago.metodo) ? 'Transferencia'
+          : /tarjeta|datafono|datáfono/i.test(pago.metodo) ? 'Tarjeta'
+            : /cr[eé]dito/i.test(pago.metodo) ? 'Crédito'
+              : pago.metodo || 'Otros';
+      resumen.set(metodo, (resumen.get(metodo) || 0) + pago.monto);
+    }
+    return ['Efectivo', 'Transferencia', 'Tarjeta', 'Crédito', ...resumen.keys()]
+      .filter((metodo, indice, lista) => lista.indexOf(metodo) === indice)
+      .map((metodo) => ({ metodo, monto: resumen.get(metodo) || 0 }));
+  };
+
   if (cargando) return <div><PageHeader title="Caja" subtitle="Abre la caja con la base para facturar y dar vueltos." /><LoadingState /></div>;
 
   return (
@@ -127,12 +164,13 @@ export default function Caja() {
               <tr>
                 <th>Usuario</th><th style={{ textAlign: 'right' }}>Base</th>
                 <th style={{ textAlign: 'right' }}>Esperado</th><th style={{ textAlign: 'right' }}>Contado</th><th style={{ textAlign: 'right' }}>Dif.</th>
-                <th>Apertura</th><th>Cierre</th><th>Estado</th><th></th>
+                <th>Apertura</th><th>Cierre</th><th>Estado</th><th>Medios de pago</th><th></th>
               </tr>
             </thead>
             <tbody>
               {aperturas.map((ap) => (
-                <tr key={ap.id}>
+                <Fragment key={ap.id}>
+                <tr>
                   <td>{ap.usuario?.usuario || '—'}</td>
                   <td style={{ textAlign: 'right' }}>{money(ap.valorInicial)}</td>
                   <td style={{ textAlign: 'right' }}>{ap.valorEsperado != null ? money(ap.valorEsperado) : '—'}</td>
@@ -143,12 +181,31 @@ export default function Caja() {
                   <td className="mini">{fmt(ap.fechaApertura)}</td>
                   <td className="mini">{fmt(ap.fechaCierre)}</td>
                   <td><span className={`badge ${ap.estado === 'ABIERTA' ? 'green' : 'gray'}`}>{ap.estado || '—'}</span></td>
+                  <td>
+                    <button className="btn btn-sm" onClick={() => alternarDesglose(ap)} aria-expanded={aperturaPagosAbierta === ap.id}>
+                      {aperturaPagosAbierta === ap.id ? 'Ocultar' : 'Ver desglose'}
+                    </button>
+                  </td>
                   <td style={{ textAlign: 'right' }}>
                     {puedeCerrar && ap.estado === 'ABIERTA' && (
                       <Button variant="secondary" size="sm" onClick={() => cerrar(ap)}>Cerrar</Button>
                     )}
                   </td>
                 </tr>
+                {aperturaPagosAbierta === ap.id && (
+                  <tr key={`${ap.id}-pagos`}>
+                    <td colSpan={10} style={{ background: 'var(--panel-2)' }}>
+                      {cargandoCuadre === ap.id && !cuadresPagos[ap.id] ? <span className="mini">Calculando desglose…</span> : (
+                        <div className="row" style={{ gap: 20, flexWrap: 'wrap' }}>
+                          {pagosAgrupados(cuadresPagos[ap.id]?.desglosePagos).map(({ metodo, monto }) => (
+                            <span key={metodo}><b>{metodo}:</b> {money(monto)}</span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
