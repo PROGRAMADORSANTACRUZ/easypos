@@ -1,0 +1,7 @@
+ALTER TABLE "Impuestos"
+ALTER COLUMN "CuentasBase" DROP DEFAULT,
+ALTER COLUMN "CuentasBase" TYPE VARCHAR(30)
+  USING CASE WHEN "CuentasBase" THEN '1' ELSE NULL END,
+ALTER COLUMN "CuentasBaseDevoluciones" DROP DEFAULT,
+ALTER COLUMN "CuentasBaseDevoluciones" TYPE VARCHAR(30)
+  USING CASE WHEN "CuentasBaseDevoluciones" THEN '1' ELSE NULL END;
