@@ -300,3 +300,21 @@ export const CRUD_ENTIDADES = [
     },
   },
 ];
+
+export const COMPANIAS_CFG = {
+  titulo: 'Compañías',
+  singular: 'Compañía',
+  modulo: 'companias',
+  endpoint: '/companias',
+  descripcion: 'Empresas registradas en el grupo.',
+  campos: [
+    { name: 'codigo', label: 'Código', type: 'text', required: true, maxLength: 3 },
+    { name: 'nit', label: 'NIT', type: 'text', required: true, maxLength: 20 },
+    { name: 'razonSocial', label: 'Razón social', type: 'text', required: true, maxLength: 250 },
+  ],
+  columnas: [
+    { label: 'Código', get: (r) => r.codigo },
+    { label: 'NIT', get: (r) => r.nit },
+    { label: 'Razón social', get: (r) => r.razonSocial },
+  ],
+};

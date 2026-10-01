@@ -161,6 +161,7 @@ async function sembrarRolesYPermisos() {
     caja: ['ver', 'crear', 'editar', 'eliminar', 'abrir', 'cerrar'],
     resoluciones: ['ver', 'crear', 'editar', 'eliminar'],
     clientes: ['ver', 'crear', 'editar', 'eliminar'],
+    companias: ['ver', 'crear', 'editar', 'eliminar'],
     empresa: ['ver', 'editar'],
     sucursales: ['ver', 'crear', 'editar', 'eliminar'],
     listas_precios: ['ver', 'crear', 'editar', 'eliminar'],

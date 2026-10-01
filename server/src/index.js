@@ -31,6 +31,7 @@ import retencionesRouter from './routes/retenciones.js';
 import comprasRouter from './routes/compras.js';
 import proveedoresRouter from './routes/proveedores.js';
 import empresaRouter from './routes/empresa.js';
+import companiasRouter from './routes/companias.js';
 import sucursalesRouter from './routes/sucursales.js';
 import listasPreciosRouter from './routes/listasPrecios.js';
 import promocionesRouter from './routes/promociones.js';
@@ -95,6 +96,7 @@ app.use('/api/retenciones', requireAuth, permisoPorMetodo('retenciones'), retenc
 app.use('/api/compras', requireAuth, permisoPorMetodo('compras'), comprasRouter);
 app.use('/api/proveedores', requireAuth, permisoPorMetodo('proveedores'), proveedoresRouter);
 app.use('/api/empresa', requireAuth, permisoPorMetodo('empresa'), empresaRouter);
+app.use('/api/companias', requireAuth, permisoPorMetodo('companias'), companiasRouter);
 app.use('/api/sucursales', requireAuth, permisoPorMetodo('sucursales'), sucursalesRouter);
 app.use('/api/listas-precios', requireAuth, permisoPorMetodo('listas_precios'), listasPreciosRouter);
 app.use('/api/promociones', requireAuth, permisoPorMetodo('promociones'), promocionesRouter);

@@ -23,7 +23,7 @@ import MediosPago from './pages/MediosPago.jsx';
 import Restaurantes from './pages/Restaurantes.jsx';
 import ListasPrecios from './pages/ListasPrecios.jsx';
 import CrudPage from './components/CrudPage.jsx';
-import { CRUD_ENTIDADES } from './crudConfig.js';
+import { COMPANIAS_CFG, CRUD_ENTIDADES } from './crudConfig.js';
 import Productos from './pages/Productos.jsx';
 import Kits from './pages/Kits.jsx';
 import Facturas from './pages/Facturas.jsx';
@@ -127,6 +127,7 @@ export const NAV_GRUPOS = [
     id: 'parametros', label: 'Parámetros', icon: 'empresa',
     items: [
       { permiso: 'empresa.ver', ruta: '/parametros/categorias', label: 'Categorías', icon: 'tags' },
+      { permiso: 'companias.ver', ruta: '/parametros/companias', label: 'Compañías', icon: 'empresa' },
       { permiso: 'empresa.ver', ruta: '/parametros/asignacion-cajas', label: 'Asignación de cajas', icon: 'caja' },
       { permiso: 'empresa.ver', ruta: '/parametros/tipos-documentos', label: 'Tipos de documentos', icon: 'resoluciones' },
       { permiso: 'empresa.ver', ruta: '/plataforma/restaurantes', label: 'Restaurantes', icon: 'empresa' },
@@ -418,6 +419,7 @@ export default function App() {
               {puede(user, 'roles.ver') && <Route path="/roles" element={<Roles />} />}
               {puede(user, 'empresa.ver') && <Route path="/empresa" element={<Empresa />} />}
               {puede(user, 'empresa.ver') && <Route path="/parametros/categorias" element={<Categorias />} />}
+              {puede(user, 'companias.ver') && <Route path="/parametros/companias" element={<CrudPage cfg={COMPANIAS_CFG} />} />}
               {puede(user, 'empresa.ver') && <Route path="/parametros/asignacion-cajas" element={<AsignacionCajas />} />}
               {puede(user, 'empresa.ver') && <Route path="/parametros/tipos-documentos" element={<TiposDocumento />} />}
               {puede(user, 'empresa.ver') && <Route path="/parametros/medios-pago" element={<MediosPago />} />}
