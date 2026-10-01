@@ -88,6 +88,8 @@ export default function TiposDocumento() {
       : '',
   }));
   const centrosDisponibles = centros.filter((c) => c.companiaCodigo === form.companiaCodigo);
+  const tipoActual = rows.find((r) => r.id === editId);
+  const asociacionesBloqueadas = !!editId && ((tipoActual?._count?.facturas || 0) + (tipoActual?._count?.facturasVenta || 0) > 0);
 
   const nuevo = () => { setEditId(null); setForm(VACIO); setModal(true); };
   const editar = (r) => {
@@ -235,19 +237,24 @@ export default function TiposDocumento() {
             <div className="grid grid-2">
               <div className="field">
                 <label>Compañía</label>
-                <select value={form.companiaCodigo} onChange={(e) => cambiarCompania(e.target.value)}>
+                <select value={form.companiaCodigo} onChange={(e) => cambiarCompania(e.target.value)} disabled={asociacionesBloqueadas}>
                   <option value="">Seleccionar compañía…</option>
                   {companias.map((c) => <option key={c.codigo} value={c.codigo}>{c.codigo} · {c.razonSocial}</option>)}
                 </select>
               </div>
               <div className="field">
                 <label>Centro de operaciones</label>
-                <select value={form.centroOperacionCodigo} onChange={(e) => set('centroOperacionCodigo', e.target.value)} disabled={!form.companiaCodigo}>
+                <select value={form.centroOperacionCodigo} onChange={(e) => set('centroOperacionCodigo', e.target.value)} disabled={!form.companiaCodigo || asociacionesBloqueadas}>
                   <option value="">Seleccionar centro…</option>
                   {centrosDisponibles.map((c) => <option key={c.codigo} value={c.codigo}>{c.codigo} · {c.descripcion}</option>)}
                 </select>
               </div>
             </div>
+            {asociacionesBloqueadas && (
+              <p className="mini" style={{ color: 'var(--muted)', marginTop: -4 }}>
+                Compañía y centro no se pueden cambiar porque este tipo ya tiene facturas asociadas.
+              </p>
+            )}
             <div className="field">
               <label>Clase</label>
               <select value={form.clase} onChange={(e) => cambiarClase(e.target.value)} autoFocus>

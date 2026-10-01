@@ -61,7 +61,10 @@ async function validarAsociacion({ companiaCodigo, centroOperacionCodigo }) {
 }
 
 router.get('/', wrap(async (_req, res) => {
-  res.json(await prisma.tipoDocumento.findMany({ orderBy: [{ clase: 'asc' }, { codigo: 'asc' }] }));
+  res.json(await prisma.tipoDocumento.findMany({
+    include: { _count: { select: { facturas: true, facturasVenta: true } } },
+    orderBy: [{ clase: 'asc' }, { codigo: 'asc' }],
+  }));
 }));
 
 router.get('/:id', wrap(async (req, res) => {
@@ -88,6 +91,17 @@ router.put('/:id', wrap(async (req, res) => {
     const data = datosDesdeBody(req.body, { parcial: true });
     const errorAsociacion = await validarAsociacion({ ...actual, ...data });
     if (errorAsociacion) return res.status(400).json({ error: errorAsociacion });
+    const cambiaAsociacion = (data.companiaCodigo !== undefined && data.companiaCodigo !== actual.companiaCodigo)
+      || (data.centroOperacionCodigo !== undefined && data.centroOperacionCodigo !== actual.centroOperacionCodigo);
+    if (cambiaAsociacion) {
+      const [facturas, facturasVenta] = await Promise.all([
+        prisma.factura.count({ where: { tipoDocumentoId: actual.id } }),
+        prisma.facturaVenta.count({ where: { tipoDocumentoId: actual.id } }),
+      ]);
+      if (facturas + facturasVenta > 0) {
+        return res.status(409).json({ error: 'No puedes cambiar compañía o centro: este tipo de documento ya tiene facturas asociadas' });
+      }
+    }
     const t = await prisma.tipoDocumento.update({
       where: { id: String(req.params.id) },
       data,
