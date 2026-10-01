@@ -331,6 +331,7 @@ export const CENTROS_OPERACIONES_CFG = {
     { name: 'estado', label: 'Estado', type: 'select', options: ['Activo', 'Inactivo'] },
     { name: 'regional', label: 'Regional', type: 'text', maxLength: 10, readOnly: true },
     { name: 'nombre', label: 'Nombre', type: 'text', maxLength: 100, readOnly: true },
+    { name: 'companiaCodigo', label: 'Código de compañía', type: 'text', maxLength: 3, readOnly: true },
   ],
   columnas: [
     { label: 'Código', get: (r) => r.codigo },
@@ -338,5 +339,6 @@ export const CENTROS_OPERACIONES_CFG = {
     { label: 'Estado', get: (r) => r.estado },
     { label: 'Regional', get: (r) => r.regional },
     { label: 'Nombre', get: (r) => r.nombre },
+    { label: 'Compañía', get: (r) => r.compania?.razonSocial ?? r.companiaCodigo },
   ],
 };

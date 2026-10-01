@@ -667,6 +667,7 @@ model Compania {
   codigo     String   @id @db.VarChar(3) @map("Codigo")
   nit        String   @unique @db.VarChar(20) @map("Nit")
   razonSocial String  @db.VarChar(250) @map("RazonSocial")
+  centrosOperacion CentroOperacion[]
   createdAt  DateTime @default(now()) @map("FechaCreacion")
 
   @@map("Compania")
@@ -678,6 +679,8 @@ model CentroOperacion {
   estado      String   @default("Activo") @db.VarChar(10) @map("Estado")
   regional    String   @db.VarChar(10) @map("Regional")
   nombre      String   @db.VarChar(100) @map("Nombre")
+  companiaCodigo String @default("004") @db.VarChar(3) @map("CompaniaCodigo")
+  compania    Compania @relation(fields: [companiaCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
 
   @@map("CentrosOperaciones")
 }

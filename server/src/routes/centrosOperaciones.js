@@ -7,7 +7,10 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 const serializar = ({ codigo, ...centro }) => ({ id: codigo, codigo, ...centro });
 
 router.get('/', wrap(async (_req, res) => {
-  const centros = await prisma.centroOperacion.findMany({ orderBy: { codigo: 'asc' } });
+  const centros = await prisma.centroOperacion.findMany({
+    include: { compania: true },
+    orderBy: { codigo: 'asc' },
+  });
   res.json(centros.map(serializar));
 }));
 
@@ -24,6 +27,7 @@ router.put('/:codigo', wrap(async (req, res) => {
     const centro = await prisma.centroOperacion.update({
       where: { codigo },
       data: { descripcion, estado },
+      include: { compania: true },
     });
     await auditar({ req, accion: 'EDITAR', entidad: 'centro_operacion', entidadId: codigo, detalle: descripcion });
     res.json(serializar(centro));
