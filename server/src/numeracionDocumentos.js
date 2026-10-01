@@ -13,7 +13,15 @@ export async function reservarNumeroDocumento(tx, clase) {
       where: { id: tipo.id, consProximo: tipo.consProximo },
       data: { consProximo: consecutivo + 1 },
     });
-    if (reserva.count) return { prefijo: tipo.prefijo, consecutivo };
+    if (reserva.count) {
+      return {
+        prefijo: tipo.prefijo,
+        consecutivo,
+        tipoDocumentoId: tipo.id,
+        companiaCodigo: tipo.companiaCodigo,
+        centroOperacionCodigo: tipo.centroOperacionCodigo,
+      };
+    }
   }
   throw Object.assign(new Error('No se pudo reservar el consecutivo. Intenta de nuevo.'), { status: 409 });
 }

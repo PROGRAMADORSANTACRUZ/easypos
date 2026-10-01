@@ -23,8 +23,8 @@ const calcularVence = (dias) => {
 // Reserva el consecutivo del submodulo en la misma transaccion que crea la factura.
 async function asignarNumeracion(tx, electronica = true) {
   const clase = electronica ? 'FACTURA ELECTRONICA DE VENTA' : 'FACTURA DE VENTA (NO ELECTRONICA)';
-  const { prefijo, consecutivo } = await reservarNumeroDocumento(tx, clase);
-  return { prefijo, numeroFactura: String(consecutivo) };
+  const reserva = await reservarNumeroDocumento(tx, clase);
+  return { ...reserva, numeroFactura: String(reserva.consecutivo) };
 }
 
 // Resuelve el cliente de una factura. Por defecto "Consumidor Final".
@@ -96,6 +96,9 @@ router.get('/', wrap(async (req, res) => {
     usuario: true,
     apertura: { include: { caja: true } },
     detalle: { include: { producto: true } },
+    tipoDocumento: true,
+    compania: true,
+    centroOperacion: true,
   };
   if (soloNoElectronicas) {
     const ventas = await prisma.facturaVenta.findMany({
@@ -127,6 +130,9 @@ router.get('/:id', wrap(async (req, res) => {
     usuario: true,
     apertura: { include: { caja: true } },
     detalle: { include: { producto: true } },
+    tipoDocumento: true,
+    compania: true,
+    centroOperacion: true,
   };
   const factura = await prisma.factura.findUnique({
     where: { id: String(req.params.id) },
@@ -207,6 +213,9 @@ router.post('/', wrap(async (req, res) => {
         prefijo: num.prefijo,
         numeroFactura: num.numeroFactura,
         ...(electronica === false && { estadoDIAN: 'NO_APLICA' }),
+        tipoDocumentoId: num.tipoDocumentoId,
+        companiaCodigo: num.companiaCodigo,
+        centroOperacionCodigo: num.centroOperacionCodigo,
         clienteId: cli.clienteId,
         usuarioId: req.headers['x-usuario-id'] ? String(req.headers['x-usuario-id']) : null,
         subtotal,
@@ -328,6 +337,9 @@ router.post('/directa', wrap(async (req, res) => {
         prefijo: num.prefijo,
         numeroFactura: num.numeroFactura,
         ...(electronica === false && { estadoDIAN: 'NO_APLICA' }),
+        tipoDocumentoId: num.tipoDocumentoId,
+        companiaCodigo: num.companiaCodigo,
+        centroOperacionCodigo: num.centroOperacionCodigo,
         clienteId: cli.clienteId,
         usuarioId: req.headers['x-usuario-id'] ? String(req.headers['x-usuario-id']) : null,
         subtotal,
