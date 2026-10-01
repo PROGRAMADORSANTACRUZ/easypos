@@ -110,8 +110,10 @@ export async function permisoSegunFactura(req, res, next) {
     if (req.query.electronica === 'false' || ((req.path === '/directa' || req.path === '/') && req.body?.electronica === false)) {
       modulo = 'factura_venta';
     } else if (req.method === 'GET' && /^\/[0-9a-f-]{36}$/.test(req.path)) {
-      const factura = await prisma.factura.findUnique({ where: { id: req.path.slice(1) }, select: { estadoDIAN: true } });
-      if (factura?.estadoDIAN === 'NO_APLICA') modulo = 'factura_venta';
+      const id = req.path.slice(1);
+      const factura = await prisma.factura.findUnique({ where: { id }, select: { estadoDIAN: true } });
+      const venta = factura ? null : await prisma.facturaVenta.findUnique({ where: { id }, select: { estadoDIAN: true } });
+      if (factura?.estadoDIAN === 'NO_APLICA' || venta?.estadoDIAN === 'NO_APLICA') modulo = 'factura_venta';
     }
     return permisoModuloFacturacion(modulo)(req, res, next);
   } catch (error) { return next(error); }

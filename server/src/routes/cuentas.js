@@ -32,11 +32,17 @@ const resumenFactura = (f) => {
 // ?todas=1 incluye tambien las facturas ya pagadas.
 router.get('/', wrap(async (req, res) => {
   const incluirPagadas = req.query.todas === '1';
-  const facturas = await prisma.factura.findMany({
-    where: { credito: true },
-    include: { abonos: true, notasCredito: true, notasDebito: true, retenciones: true, pedido: { include: { clienteRel: true } } },
-    orderBy: { createdAt: 'asc' },
-  });
+  const include = { abonos: true, pedido: { include: { clienteRel: true } } };
+  const [facturas, ventas] = await Promise.all([
+    prisma.factura.findMany({
+      where: { credito: true },
+      include: { ...include, notasCredito: true, notasDebito: true, retenciones: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.facturaVenta.findMany({ where: { credito: true }, include, orderBy: { createdAt: 'asc' } }),
+  ]);
+  facturas.push(...ventas.map((f) => ({ ...f, notasCredito: [], notasDebito: [], retenciones: [] })));
+  facturas.sort((a, b) => a.createdAt - b.createdAt);
 
   const porCliente = new Map();
   for (const f of facturas) {
@@ -72,7 +78,13 @@ router.post('/abonos', wrap(async (req, res) => {
   if (!facturaId) return res.status(400).json({ error: 'facturaId es requerido' });
   if (!monto || monto <= 0) return res.status(400).json({ error: 'El monto del abono debe ser mayor a 0' });
 
-  const factura = await prisma.factura.findUnique({ where: { id: facturaId }, include: { abonos: true, notasCredito: true, notasDebito: true, retenciones: true } });
+  let esVenta = false;
+  let factura = await prisma.factura.findUnique({ where: { id: facturaId }, include: { abonos: true, notasCredito: true, notasDebito: true, retenciones: true } });
+  if (!factura) {
+    factura = await prisma.facturaVenta.findUnique({ where: { id: facturaId }, include: { abonos: true } });
+    esVenta = !!factura;
+    if (factura) Object.assign(factura, { notasCredito: [], notasDebito: [], retenciones: [] });
+  }
   if (!factura) return res.status(404).json({ error: 'Factura no encontrada' });
   if (!factura.credito) return res.status(400).json({ error: 'La factura no es a crédito' });
 
@@ -86,14 +98,16 @@ router.post('/abonos', wrap(async (req, res) => {
 
   await prisma.abono.create({
     data: {
-      facturaId,
+      ...(esVenta ? { facturaVentaId: facturaId } : { facturaId }),
       monto: redondear(monto),
       metodoPago: (req.body?.metodoPago || 'EFECTIVO'),
       nota: req.body?.nota ? String(req.body.nota).trim() : null,
     },
   });
 
-  const actualizada = await prisma.factura.findUnique({ where: { id: facturaId }, include: { abonos: true } });
+  const actualizada = esVenta
+    ? await prisma.facturaVenta.findUnique({ where: { id: facturaId }, include: { abonos: true } })
+    : await prisma.factura.findUnique({ where: { id: facturaId }, include: { abonos: true } });
   res.status(201).json(resumenFactura(actualizada));
 }));
 

@@ -48,18 +48,21 @@ function efectivoDeFactura(f) {
 
 // Calcula el cuadre de una apertura a partir de sus facturas.
 async function calcularCuadre(apertura) {
-  const facturas = await prisma.factura.findMany({
-    where: { aperturaId: apertura.id },
-    select: { total: true, propina: true, metodoPago: true, credito: true },
-  });
-  const totalVentas = facturas.reduce((s, f) => s + (f.total || 0), 0);
-  const totalPropinas = facturas.reduce((s, f) => s + (f.propina || 0), 0);
-  const totalEfectivo = facturas.reduce((s, f) => s + efectivoDeFactura(f), 0);
+  const where = { aperturaId: apertura.id };
+  const select = { total: true, propina: true, metodoPago: true, credito: true };
+  const [facturas, ventas] = await Promise.all([
+    prisma.factura.findMany({ where, select }),
+    prisma.facturaVenta.findMany({ where, select }),
+  ]);
+  const todas = [...facturas, ...ventas];
+  const totalVentas = todas.reduce((s, f) => s + (f.total || 0), 0);
+  const totalPropinas = todas.reduce((s, f) => s + (f.propina || 0), 0);
+  const totalEfectivo = todas.reduce((s, f) => s + efectivoDeFactura(f), 0);
   const valorEsperado = (apertura.valorInicial || 0) + totalEfectivo;
 
   // Desglose por forma de pago para el cuadre.
   const acum = {};
-  for (const f of facturas) {
+  for (const f of todas) {
     for (const p of desglosarFactura(f)) {
       acum[p.metodo] = (acum[p.metodo] || 0) + p.monto;
     }
@@ -69,7 +72,7 @@ async function calcularCuadre(apertura) {
     .sort((a, b) => b.monto - a.monto);
 
   return {
-    numFacturas: facturas.length,
+    numFacturas: todas.length,
     totalVentas: Math.round(totalVentas * 100) / 100,
     totalPropinas: Math.round(totalPropinas * 100) / 100,
     totalEfectivo: Math.round(totalEfectivo * 100) / 100,

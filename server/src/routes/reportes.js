@@ -65,22 +65,26 @@ router.get('/', wrap(async (req, res) => {
     if (hasta) where.createdAt.lt = finDiaColombia(hasta);
   }
 
-  const facturas = await prisma.factura.findMany({
-    where,
-    include: {
-      notasCredito: true,
-      notasDebito: true,
-      retenciones: true,
-      pedido: {
-        include: {
-          mesa: true,
-          mesera: true,
-          items: { include: { producto: { include: { categoria: true, componentes: { include: { item: true } } } } } },
-        },
+  const include = {
+    pedido: {
+      include: {
+        mesa: true,
+        mesera: true,
+        items: { include: { producto: { include: { categoria: true, componentes: { include: { item: true } } } } } },
       },
     },
-    orderBy: { createdAt: 'desc' },
-  });
+  };
+  const [facturasElectronicas, facturasVenta] = await Promise.all([
+    prisma.factura.findMany({
+      where,
+      include: { ...include, notasCredito: true, notasDebito: true, retenciones: true },
+    }),
+    prisma.facturaVenta.findMany({ where, include }),
+  ]);
+  const facturas = [
+    ...facturasElectronicas,
+    ...facturasVenta.map((f) => ({ ...f, notasCredito: [], notasDebito: [], retenciones: [] })),
+  ].sort((a, b) => b.createdAt - a.createdAt);
 
   // Compras del mismo periodo (filtran por su propia fecha)
   const whereCompras = {};

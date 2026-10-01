@@ -13,12 +13,12 @@ const limpiar = (v) => {
 };
 const toNum = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
 const toDate = (v) => (v === undefined || v === null || v === '' ? undefined : new Date(v));
-const conRelaciones = { factura: true, metodoPago: true };
+const conRelaciones = { factura: true, facturaVenta: true, metodoPago: true };
 
 router.get('/', wrap(async (req, res) => {
   const { facturaId, metodoPagoId } = req.query;
   const where = {
-    ...(facturaId && { facturaId: String(facturaId) }),
+    ...(facturaId && { OR: [{ facturaId: String(facturaId) }, { facturaVentaId: String(facturaId) }] }),
     ...(metodoPagoId && { metodoPagoId: String(metodoPagoId) }),
   };
   res.json(await prisma.pago.findMany({
@@ -35,10 +35,13 @@ router.get('/:id', wrap(async (req, res) => {
 }));
 
 router.post('/', wrap(async (req, res) => {
-  const { facturaId, metodoPagoId, monto, referencia, fecha } = req.body;
+  const { facturaId, facturaVentaId, metodoPagoId, monto, referencia, fecha } = req.body;
+  const id = facturaVentaId || facturaId;
+  const esVenta = !!id && !!(await prisma.facturaVenta.findUnique({ where: { id: String(id) }, select: { id: true } }));
   const p = await prisma.pago.create({
     data: {
-      facturaId: facturaId ? String(facturaId) : null,
+      facturaId: !esVenta && facturaId ? String(facturaId) : null,
+      facturaVentaId: esVenta ? String(id) : null,
       metodoPagoId: metodoPagoId ? String(metodoPagoId) : null,
       monto: toNum(monto) ?? 0,
       referencia: limpiar(referencia),
@@ -51,12 +54,19 @@ router.post('/', wrap(async (req, res) => {
 }));
 
 router.put('/:id', wrap(async (req, res) => {
-  const { facturaId, metodoPagoId, monto, referencia, fecha } = req.body;
+  const { facturaId, facturaVentaId, metodoPagoId, monto, referencia, fecha } = req.body;
+  const linkedId = facturaVentaId || facturaId;
+  const esVenta = linkedId !== undefined && linkedId !== null
+    ? !!(await prisma.facturaVenta.findUnique({ where: { id: String(linkedId) }, select: { id: true } }))
+    : false;
   try {
     const p = await prisma.pago.update({
       where: { id: String(req.params.id) },
       data: {
-        ...(facturaId !== undefined && { facturaId: facturaId ? String(facturaId) : null }),
+        ...((facturaId !== undefined || facturaVentaId !== undefined) && {
+          facturaId: !esVenta && linkedId ? String(linkedId) : null,
+          facturaVentaId: esVenta && linkedId ? String(linkedId) : null,
+        }),
         ...(metodoPagoId !== undefined && { metodoPagoId: metodoPagoId ? String(metodoPagoId) : null }),
         ...(monto !== undefined && { monto: toNum(monto) ?? 0 }),
         ...(referencia !== undefined && { referencia: limpiar(referencia) }),

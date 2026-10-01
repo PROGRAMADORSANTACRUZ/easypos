@@ -1,5 +1,5 @@
 // Borra TODOS los productos, kits, insumos de inventario y todo lo que los referencia
-// (pedidos, facturas, notas, compras, cortesias, cotizaciones, listas de precio),
+// (pedidos, facturas, notas, compras, cortesias, facturas de venta, listas de precio),
 // dejando el catalogo en cero para cargarlo de nuevo desde la interfaz.
 // Uso: node scripts/limpiar-productos-inventario.mjs
 import { PrismaClient } from '@prisma/client';
@@ -18,6 +18,8 @@ async function main() {
     prisma.notaCredito.deleteMany(),
     prisma.notaDebito.deleteMany(),
     prisma.retencionFactura.deleteMany(),
+    prisma.facturaVentaDetalle.deleteMany(),
+    prisma.facturaVenta.deleteMany(),
     prisma.facturaDetalle.deleteMany(),
     prisma.factura.deleteMany(),
 
@@ -28,10 +30,6 @@ async function main() {
     // Cortesias
     prisma.cortesiaDetalle.deleteMany(),
     prisma.cortesia.deleteMany(),
-
-    // Cotizaciones
-    prisma.cotizacionDetalle.deleteMany(),
-    prisma.cotizacion.deleteMany(),
 
     // Compras a proveedores
     prisma.compraDetalle.deleteMany(),

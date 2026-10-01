@@ -45,6 +45,7 @@ model Usuario {
   auditorias    Auditoria[]
   aperturasCaja AperturaCaja[]
   facturas      Factura[]
+  facturasVenta FacturaVenta[]
   comisiones    ComisionVendedor[]
 
   @@map("Usuarios")
@@ -135,7 +136,7 @@ model Cliente {
   activo    Boolean  @default(true)
   pedidos   Pedido[]
   facturas  Factura[]
-  cotizaciones Cotizacion[]
+  facturasVenta FacturaVenta[]
   remisiones Remision[]
   cortesias Cortesia[]
   createdAt DateTime @default(now()) @map("FechaCreacion")
@@ -270,6 +271,7 @@ model AperturaCaja {
   diferencia        Float?  @map("Diferencia")
   observacionCierre String? @map("ObservacionCierre")
   facturas      Factura[]
+  facturasVenta FacturaVenta[]
 
   @@map("AperturasCaja")
 }
@@ -357,9 +359,9 @@ model Producto {
   existencias Inventario[]
   movimientos MovimientoInventario[]
   facturaDetalles FacturaDetalle[]
+  facturaVentaDetalles FacturaVentaDetalle[]
   listaPrecios ProductoListaPrecio[]
   cortesiaDetalles CortesiaDetalle[]
-  cotizacionDetalles CotizacionDetalle[]
   createdAt   DateTime        @default(now())
 }
 
@@ -402,6 +404,7 @@ model Pedido {
   seguimientoToken     String?   // token para que el cliente consulte su pedido
   items     PedidoItem[]
   factura   Factura?
+  facturaVenta FacturaVenta?
   pedidosMesa PedidoMesa[]
   preparacion PreparacionCocina?
   createdAt DateTime     @default(now())
@@ -493,6 +496,56 @@ model Factura {
   comisiones    ComisionVendedor[]
   eventosDIAN   EventoDIAN[]
   createdAt     DateTime  @default(now()) @map("Fecha")
+}
+
+model FacturaVenta {
+  id            String    @id @default(uuid()) @db.Uuid @map("Id")
+  numeroFactura String?   @db.VarChar(50) @map("Numero")
+  prefijo       String?   @db.VarChar(20) @map("Prefijo")
+  estado        String    @default("FACTURADA") @db.VarChar(20) @map("Estado")
+  pedidoId      Int       @unique @map("PedidoId")
+  pedido        Pedido    @relation(fields: [pedidoId], references: [id])
+  clienteId     String?   @db.Uuid @map("ClienteId")
+  cliente       Cliente?  @relation(fields: [clienteId], references: [id])
+  subtotal      Float     @map("Subtotal")
+  impuestoPct   Float     @map("ImpuestoPct")
+  impuesto      Float     @map("IVA")
+  total         Float     @map("Total")
+  propina       Float     @default(0) @map("Propina")
+  metodoPago    String    @default("EFECTIVO") @map("MetodoPago")
+  credito       Boolean   @default(false) @map("Credito")
+  creditoDias   Int?      @map("CreditoDias")
+  vence         DateTime? @map("Vence")
+  cufe          String?   @db.VarChar(200) @map("CUFE")
+  numeroFactus  String?   @db.VarChar(50) @map("NumeroFactus")
+  xmlPath       String?   @map("XmlPath")
+  pdfPath       String?   @map("PdfPath")
+  estadoDIAN    String?   @db.VarChar(50) @map("EstadoDIAN")
+  usuarioId     String?   @db.Uuid @map("UsuarioId")
+  usuario       Usuario?  @relation(fields: [usuarioId], references: [id])
+  aperturaId    String?   @db.Uuid @map("AperturaId")
+  apertura      AperturaCaja? @relation(fields: [aperturaId], references: [id])
+  abonos        Abono[]
+  detalle       FacturaVentaDetalle[]
+  pagos         Pago[]
+  comisiones    ComisionVendedor[]
+  createdAt     DateTime  @default(now()) @map("Fecha")
+
+  @@map("FacturaVenta")
+}
+
+model FacturaVentaDetalle {
+  id             String         @id @default(uuid()) @db.Uuid @map("Id")
+  facturaVentaId String?        @db.Uuid @map("FacturaVentaId")
+  facturaVenta   FacturaVenta?  @relation(fields: [facturaVentaId], references: [id], onDelete: Cascade)
+  productoId     String?        @db.Uuid @map("ProductoId")
+  producto       Producto?      @relation(fields: [productoId], references: [id])
+  cantidad       Float          @default(0) @map("Cantidad")
+  precioUnitario Float          @default(0) @map("PrecioUnitario")
+  iva            Float          @default(0) @map("IVA")
+  total          Float          @default(0) @map("Total")
+
+  @@map("FacturaVentaDetalle")
 }
 
 // Cortesia: entrega de productos sin cobro. Mueve inventario y tiene su propio consecutivo (no es factura DIAN).
@@ -652,13 +705,15 @@ model FacturaDetalle {
 
 // Abono / pago parcial de una factura a credito
 model Abono {
-  id         Int      @id @default(autoincrement())
-  facturaId  String   @db.Uuid
-  factura    Factura  @relation(fields: [facturaId], references: [id], onDelete: Cascade)
-  monto      Float
-  metodoPago String   @default("EFECTIVO")
-  nota       String?
-  createdAt  DateTime @default(now())
+  id             Int            @id @default(autoincrement())
+  facturaId      String?        @db.Uuid
+  factura        Factura?       @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  facturaVentaId String?        @db.Uuid @map("FacturaVentaId")
+  facturaVenta   FacturaVenta?  @relation(fields: [facturaVentaId], references: [id], onDelete: Cascade)
+  monto          Float
+  metodoPago     String         @default("EFECTIVO")
+  nota           String?
+  createdAt      DateTime       @default(now())
 }
 
 // Sucursales / puntos de venta de la empresa
@@ -722,6 +777,8 @@ model ComisionVendedor {
   vendedor   Usuario?  @relation(fields: [vendedorId], references: [id], onDelete: SetNull)
   facturaId  String?   @db.Uuid @map("FacturaId")
   factura    Factura?  @relation(fields: [facturaId], references: [id], onDelete: SetNull)
+  facturaVentaId String? @db.Uuid @map("FacturaVentaId")
+  facturaVenta FacturaVenta? @relation(fields: [facturaVentaId], references: [id], onDelete: SetNull)
   base       Float?    @map("Base")
   porcentaje Float?    @map("Porcentaje")
   valor      Float?    @map("Valor")
@@ -729,40 +786,6 @@ model ComisionVendedor {
   fecha      DateTime  @default(now()) @map("Fecha")
 
   @@map("ComisionesVendedores")
-}
-
-// Cotizaciones a clientes
-model Cotizacion {
-  id          String    @id @default(uuid()) @db.Uuid @map("Id")
-  numero      String?   @db.VarChar(50) @map("Numero")
-  prefijo     String?   @default("COT") @db.VarChar(20) @map("Prefijo")
-  consecutivo Int?      @map("Consecutivo")
-  clienteId   String?   @db.Uuid @map("ClienteId")
-  cliente     Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
-  fecha       DateTime  @default(now()) @map("Fecha")
-  validezDias Int?      @map("ValidezDias")
-  subtotal    Float?    @map("Subtotal")
-  iva         Float?    @map("IVA")
-  total       Float?    @map("Total")
-  estado      String    @default("BORRADOR") @db.VarChar(20) @map("Estado") // BORRADOR | ENVIADA | APROBADA | RECHAZADA
-  observaciones String? @map("Observaciones")
-  detalle     CotizacionDetalle[]
-
-  @@map("Cotizaciones")
-}
-
-// Detalle (items) de una cotizacion: producto, cantidad y precio de venta cotizado
-model CotizacionDetalle {
-  id             String      @id @default(uuid()) @db.Uuid @map("Id")
-  cotizacionId   String?     @db.Uuid @map("CotizacionId")
-  cotizacion     Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
-  productoId     String?     @db.Uuid @map("ProductoId")
-  producto       Producto?   @relation(fields: [productoId], references: [id])
-  cantidad       Float       @default(0) @map("Cantidad")
-  precioUnitario Float       @default(0) @map("PrecioUnitario")
-  total          Float       @default(0) @map("Total")
-
-  @@map("CotizacionDetalle")
 }
 
 // Remisiones / notas de entrega
@@ -795,6 +818,8 @@ model Pago {
   id           String      @id @default(uuid()) @db.Uuid @map("Id")
   facturaId    String?     @db.Uuid @map("FacturaId")
   factura      Factura?    @relation(fields: [facturaId], references: [id], onDelete: SetNull)
+  facturaVentaId String?   @db.Uuid @map("FacturaVentaId")
+  facturaVenta FacturaVenta? @relation(fields: [facturaVentaId], references: [id], onDelete: SetNull)
   metodoPagoId String?     @db.Uuid @map("MetodoPagoId")
   metodoPago   MetodoPago? @relation(fields: [metodoPagoId], references: [id], onDelete: SetNull)
   monto        Float       @default(0) @map("Monto")

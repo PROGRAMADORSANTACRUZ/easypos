@@ -90,19 +90,28 @@ async function emitirEnFactus(factura) {
 // por defecto (sin query) devuelve solo las facturas electronicas reales del modulo Facturacion.
 router.get('/', wrap(async (req, res) => {
   const soloNoElectronicas = req.query.electronica === 'false';
+  const include = {
+    pedido: { include: { mesa: true, mesera: true, items: { include: { producto: true } } } },
+    cliente: true,
+    usuario: true,
+    apertura: { include: { caja: true } },
+    detalle: { include: { producto: true } },
+  };
+  if (soloNoElectronicas) {
+    const ventas = await prisma.facturaVenta.findMany({
+      where: { estadoDIAN: 'NO_APLICA' },
+      orderBy: { createdAt: 'desc' },
+      include,
+    });
+    return res.json(ventas.map((f) => ({ ...f, notasCredito: [], notasDebito: [], retenciones: [] })));
+  }
   // OJO: en SQL, "columna <> 'X'" NO incluye filas NULL — hay que pedirlas aparte con OR,
   // si no, las facturas antiguas (sin estadoDIAN) quedan invisibles en el historial.
   const facturas = await prisma.factura.findMany({
-    where: soloNoElectronicas
-      ? { estadoDIAN: 'NO_APLICA' }
-      : { OR: [{ estadoDIAN: { not: 'NO_APLICA' } }, { estadoDIAN: null }] },
+    where: { OR: [{ estadoDIAN: { not: 'NO_APLICA' } }, { estadoDIAN: null }] },
     orderBy: { createdAt: 'desc' },
     include: {
-      pedido: { include: { mesa: true, mesera: true, items: { include: { producto: true } } } },
-      cliente: true,
-      usuario: true,
-      apertura: { include: { caja: true } },
-      detalle: { include: { producto: true } },
+      ...include,
       notasCredito: true,
       notasDebito: true,
       retenciones: true,
@@ -112,21 +121,29 @@ router.get('/', wrap(async (req, res) => {
 }));
 
 router.get('/:id', wrap(async (req, res) => {
+  const include = {
+    pedido: { include: { mesa: true, mesera: true, items: { include: { producto: true } } } },
+    cliente: true,
+    usuario: true,
+    apertura: { include: { caja: true } },
+    detalle: { include: { producto: true } },
+  };
   const factura = await prisma.factura.findUnique({
     where: { id: String(req.params.id) },
     include: {
-      pedido: { include: { mesa: true, mesera: true, items: { include: { producto: true } } } },
-      cliente: true,
-      usuario: true,
-      apertura: { include: { caja: true } },
-      detalle: { include: { producto: true } },
+      ...include,
       notasCredito: true,
       notasDebito: true,
       retenciones: true,
     },
   });
-  if (!factura) return res.status(404).json({ error: 'Factura no encontrada' });
-  res.json(factura);
+  if (factura) return res.json(factura);
+  const venta = await prisma.facturaVenta.findUnique({
+    where: { id: String(req.params.id) },
+    include,
+  });
+  if (venta) return res.json({ ...venta, notasCredito: [], notasDebito: [], retenciones: [] });
+  return res.status(404).json({ error: 'Factura no encontrada' });
 }));
 
 // Reintenta el envío a Factus (DIAN) de una factura que quedó con estadoDIAN = 'ERROR' o sin reportar.
@@ -173,13 +190,18 @@ router.post('/', wrap(async (req, res) => {
 
   const factura = await prisma.$transaction(async (tx) => {
     // Cerrar pedido, asignar cliente y liberar mesa (los domicilios no tienen mesa)
-    await tx.pedido.update({ where: { id }, data: { estado: 'FACTURADO', cliente: cli.nombre, clienteId: cli.clienteId } });
+    const cerrado = await tx.pedido.updateMany({
+      where: { id, estado: 'ABIERTO' },
+      data: { estado: 'FACTURADO', cliente: cli.nombre, clienteId: cli.clienteId },
+    });
+    if (!cerrado.count) throw Object.assign(new Error('El pedido ya fue facturado'), { status: 409 });
     if (pedido.mesaId) {
       await tx.mesa.update({ where: { id: pedido.mesaId }, data: { estado: 'LIBRE' } });
     }
     const num = await asignarNumeracion(tx, electronica !== false);
     // Crear factura
-    return tx.factura.create({
+    const modeloFactura = electronica === false ? tx.facturaVenta : tx.factura;
+    return modeloFactura.create({
       data: {
         pedidoId: id,
         prefijo: num.prefijo,
@@ -299,11 +321,13 @@ router.post('/directa', wrap(async (req, res) => {
       },
     });
     const num = await asignarNumeracion(tx, electronica !== false);
-    return tx.factura.create({
+    const modeloFactura = electronica === false ? tx.facturaVenta : tx.factura;
+    return modeloFactura.create({
       data: {
         pedidoId: pedido.id,
         prefijo: num.prefijo,
         numeroFactura: num.numeroFactura,
+        ...(electronica === false && { estadoDIAN: 'NO_APLICA' }),
         clienteId: cli.clienteId,
         usuarioId: req.headers['x-usuario-id'] ? String(req.headers['x-usuario-id']) : null,
         subtotal,
@@ -344,17 +368,7 @@ router.post('/directa', wrap(async (req, res) => {
 
   await auditar({ req, accion: 'FACTURAR', entidad: 'factura', entidadId: factura.id, detalle: `Venta directa • total ${factura.total}` });
   if (electronica === false) {
-    return res.status(201).json(await prisma.factura.update({
-      where: { id: factura.id },
-      data: { estadoDIAN: 'NO_APLICA' },
-      include: {
-        pedido: { include: { mesa: true, mesera: true, items: { include: { producto: true } } } },
-        cliente: true,
-        usuario: true,
-        apertura: { include: { caja: true } },
-        detalle: { include: { producto: true } },
-      },
-    }));
+    return res.status(201).json(factura);
   }
   const facturaFinal = await emitirEnFactus(factura);
   res.status(201).json(facturaFinal);

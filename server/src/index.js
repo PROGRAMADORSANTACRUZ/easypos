@@ -35,7 +35,6 @@ import sucursalesRouter from './routes/sucursales.js';
 import listasPreciosRouter from './routes/listasPrecios.js';
 import promocionesRouter from './routes/promociones.js';
 import comisionesRouter from './routes/comisiones.js';
-import cotizacionesRouter from './routes/cotizaciones.js';
 import remisionesRouter from './routes/remisiones.js';
 import metodosPagoRouter from './routes/metodosPago.js';
 import pagosRouter from './routes/pagos.js';
@@ -100,7 +99,6 @@ app.use('/api/sucursales', requireAuth, permisoPorMetodo('sucursales'), sucursal
 app.use('/api/listas-precios', requireAuth, permisoPorMetodo('listas_precios'), listasPreciosRouter);
 app.use('/api/promociones', requireAuth, permisoPorMetodo('promociones'), promocionesRouter);
 app.use('/api/comisiones', requireAuth, permisoPorMetodo('comisiones'), comisionesRouter);
-app.use('/api/cotizaciones', requireAuth, permisoPorMetodo('cotizaciones'), cotizacionesRouter);
 app.use('/api/remisiones', requireAuth, permisoPorMetodo('remisiones'), remisionesRouter);
 app.use('/api/metodos-pago', requireAuth, permisoPorMetodo('metodos_pago'), metodosPagoRouter);
 app.use('/api/pagos', requireAuth, permisoPorMetodo('pagos'), pagosRouter);

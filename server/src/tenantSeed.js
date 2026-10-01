@@ -25,7 +25,6 @@ const MODULOS = {
   listas_precios: ['ver', 'crear', 'editar', 'eliminar'],
   promociones: ['ver', 'crear', 'editar', 'eliminar'],
   comisiones: ['ver', 'crear', 'editar', 'eliminar'],
-  cotizaciones: ['ver', 'crear', 'editar', 'eliminar'],
   remisiones: ['ver', 'crear', 'editar', 'eliminar'],
   metodos_pago: ['ver', 'crear', 'editar', 'eliminar'],
   pagos: ['ver', 'crear', 'editar', 'eliminar'],

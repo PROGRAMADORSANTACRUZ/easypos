@@ -22,6 +22,7 @@ const pedidoInclude = {
   clienteRel: true,
   items: { include: { producto: { include: { categoria: true, componentes: { include: { item: true } } } } } },
   factura: true,
+  facturaVenta: true,
 };
 
 const limpiar = (v) => {
