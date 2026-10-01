@@ -96,7 +96,10 @@ app.use('/api/retenciones', requireAuth, permisoPorMetodo('retenciones'), retenc
 app.use('/api/compras', requireAuth, permisoPorMetodo('compras'), comprasRouter);
 app.use('/api/proveedores', requireAuth, permisoPorMetodo('proveedores'), proveedoresRouter);
 app.use('/api/empresa', requireAuth, permisoPorMetodo('empresa'), empresaRouter);
-app.use('/api/companias', requireAuth, permisoPorMetodo('companias'), companiasRouter);
+app.use('/api/companias', requireAuth, (req, res, next) => {
+  const modulo = req.method === 'GET' || req.method === 'HEAD' ? 'empresa' : 'companias';
+  return permisoPorMetodo(modulo)(req, res, next);
+}, companiasRouter);
 app.use('/api/sucursales', requireAuth, permisoPorMetodo('sucursales'), sucursalesRouter);
 app.use('/api/listas-precios', requireAuth, permisoPorMetodo('listas_precios'), listasPreciosRouter);
 app.use('/api/promociones', requireAuth, permisoPorMetodo('promociones'), promocionesRouter);
