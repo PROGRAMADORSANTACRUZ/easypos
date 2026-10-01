@@ -318,3 +318,25 @@ export const COMPANIAS_CFG = {
     { label: 'Razón social', get: (r) => r.razonSocial },
   ],
 };
+
+export const CENTROS_OPERACIONES_CFG = {
+  titulo: 'Centros de operaciones',
+  singular: 'Centro de operaciones',
+  modulo: 'centros_operaciones',
+  endpoint: '/centros-operaciones',
+  descripcion: 'Centros de operación y puntos de venta.',
+  campos: [
+    { name: 'codigo', label: 'Código', type: 'text', maxLength: 10, readOnly: true },
+    { name: 'descripcion', label: 'Descripción', type: 'text', required: true, maxLength: 250 },
+    { name: 'estado', label: 'Estado', type: 'select', options: ['Activo', 'Inactivo'] },
+    { name: 'regional', label: 'Regional', type: 'text', maxLength: 10, readOnly: true },
+    { name: 'nombre', label: 'Nombre', type: 'text', maxLength: 100, readOnly: true },
+  ],
+  columnas: [
+    { label: 'Código', get: (r) => r.codigo },
+    { label: 'Descripción', get: (r) => r.descripcion },
+    { label: 'Estado', get: (r) => r.estado },
+    { label: 'Regional', get: (r) => r.regional },
+    { label: 'Nombre', get: (r) => r.nombre },
+  ],
+};

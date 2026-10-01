@@ -32,6 +32,7 @@ import comprasRouter from './routes/compras.js';
 import proveedoresRouter from './routes/proveedores.js';
 import empresaRouter from './routes/empresa.js';
 import companiasRouter from './routes/companias.js';
+import centrosOperacionesRouter from './routes/centrosOperaciones.js';
 import sucursalesRouter from './routes/sucursales.js';
 import listasPreciosRouter from './routes/listasPrecios.js';
 import promocionesRouter from './routes/promociones.js';
@@ -100,6 +101,10 @@ app.use('/api/companias', requireAuth, (req, res, next) => {
   const modulo = req.method === 'GET' || req.method === 'HEAD' ? 'empresa' : 'companias';
   return permisoPorMetodo(modulo)(req, res, next);
 }, companiasRouter);
+app.use('/api/centros-operaciones', requireAuth, (req, res, next) => {
+  const modulo = req.method === 'GET' || req.method === 'HEAD' ? 'empresa' : 'centros_operaciones';
+  return permisoPorMetodo(modulo)(req, res, next);
+}, centrosOperacionesRouter);
 app.use('/api/sucursales', requireAuth, permisoPorMetodo('sucursales'), sucursalesRouter);
 app.use('/api/listas-precios', requireAuth, permisoPorMetodo('listas_precios'), listasPreciosRouter);
 app.use('/api/promociones', requireAuth, permisoPorMetodo('promociones'), promocionesRouter);

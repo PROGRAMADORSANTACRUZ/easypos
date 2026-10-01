@@ -195,14 +195,14 @@ export default function CrudPage({ cfg }) {
                 <div className="field" key={c.name} style={c.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
                   <label>{c.label}{c.required ? ' *' : ''}</label>
                   {c.type === 'textarea' ? (
-                    <textarea value={form[c.name] ?? ''} onChange={(e) => set(c.name, e.target.value)} rows={2} />
+                    <textarea value={form[c.name] ?? ''} onChange={(e) => set(c.name, e.target.value)} rows={2} readOnly={c.readOnly} />
                   ) : c.type === 'checkbox' ? (
                     <label className="row" style={{ gap: 8 }}>
                       <input type="checkbox" checked={!!form[c.name]} onChange={(e) => set(c.name, e.target.checked)} />
                       <span className="mini">{c.hint || 'Activo'}</span>
                     </label>
                   ) : c.type === 'select' ? (
-                    <select value={form[c.name] ?? ''} onChange={(e) => set(c.name, e.target.value)}>
+                    <select value={form[c.name] ?? ''} onChange={(e) => set(c.name, e.target.value)} disabled={c.readOnly}>
                       <option value="">—</option>
                       {(c.options || []).map((o) => (
                         <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o}</option>
@@ -222,6 +222,7 @@ export default function CrudPage({ cfg }) {
                       value={form[c.name] ?? ''}
                       onChange={(e) => set(c.name, e.target.value)}
                       maxLength={c.maxLength}
+                      readOnly={c.readOnly}
                     />
                   )}
                 </div>

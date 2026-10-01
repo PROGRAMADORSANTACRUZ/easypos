@@ -21,6 +21,7 @@ const MODULOS = {
   resoluciones: ['ver', 'crear', 'editar', 'eliminar'],
   clientes: ['ver', 'crear', 'editar', 'eliminar'],
   companias: ['ver', 'crear', 'editar', 'eliminar'],
+  centros_operaciones: ['ver', 'editar'],
   empresa: ['ver', 'editar'],
   sucursales: ['ver', 'crear', 'editar', 'eliminar'],
   listas_precios: ['ver', 'crear', 'editar', 'eliminar'],

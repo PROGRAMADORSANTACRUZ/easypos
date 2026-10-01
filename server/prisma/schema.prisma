@@ -672,6 +672,16 @@ model Compania {
   @@map("Compania")
 }
 
+model CentroOperacion {
+  codigo      String   @id @db.VarChar(10) @map("Codigo")
+  descripcion String   @db.VarChar(250) @map("Descripcion")
+  estado      String   @default("Activo") @db.VarChar(10) @map("Estado")
+  regional    String   @db.VarChar(10) @map("Regional")
+  nombre      String   @db.VarChar(100) @map("Nombre")
+
+  @@map("CentrosOperaciones")
+}
+
 // Compras a proveedores (encabezado de la factura de compra)
 model Compra {
   id          String          @id @default(uuid()) @db.Uuid @map("Id")
