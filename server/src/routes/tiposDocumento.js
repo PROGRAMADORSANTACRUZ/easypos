@@ -38,6 +38,8 @@ function datosDesdeBody(body, { parcial } = { parcial: false }) {
     fechaResolucionVcto: () => aFecha(body.fechaResolucionVcto),
     diasAvisoVcto: () => aInt(body.diasAvisoVcto),
     tipoIdentificacion: () => limpiar(body.tipoIdentificacion),
+    companiaCodigo: () => limpiar(body.companiaCodigo),
+    centroOperacionCodigo: () => limpiar(body.centroOperacionCodigo),
     activo: () => aBool(body.activo),
   };
   const data = {};
@@ -46,6 +48,16 @@ function datosDesdeBody(body, { parcial } = { parcial: false }) {
     data[k] = fn();
   }
   return data;
+}
+
+async function validarAsociacion({ companiaCodigo, centroOperacionCodigo }) {
+  if (!companiaCodigo && !centroOperacionCodigo) return null;
+  if (!companiaCodigo || !centroOperacionCodigo) return 'Selecciona una compañía y su centro de operaciones';
+  const centro = await prisma.centroOperacion.findFirst({
+    where: { codigo: centroOperacionCodigo, companiaCodigo },
+    select: { codigo: true },
+  });
+  return centro ? null : 'El centro de operaciones no pertenece a la compañía seleccionada';
 }
 
 router.get('/', wrap(async (_req, res) => {
@@ -62,6 +74,8 @@ router.post('/', wrap(async (req, res) => {
   const data = datosDesdeBody(req.body);
   if (!data.clase) return res.status(400).json({ error: 'La clase es obligatoria' });
   if (!data.codigo) return res.status(400).json({ error: 'El código (C.O) es obligatorio' });
+  const errorAsociacion = await validarAsociacion(data);
+  if (errorAsociacion) return res.status(400).json({ error: errorAsociacion });
   const t = await prisma.tipoDocumento.create({ data });
   await auditar({ req, accion: 'CREAR', entidad: 'tipoDocumento', entidadId: t.id, detalle: `${t.codigo} ${t.prefijo || ''}`.trim() });
   res.status(201).json(t);
@@ -69,9 +83,14 @@ router.post('/', wrap(async (req, res) => {
 
 router.put('/:id', wrap(async (req, res) => {
   try {
+    const actual = await prisma.tipoDocumento.findUnique({ where: { id: String(req.params.id) } });
+    if (!actual) return res.status(404).json({ error: 'Tipo de documento no encontrado' });
+    const data = datosDesdeBody(req.body, { parcial: true });
+    const errorAsociacion = await validarAsociacion({ ...actual, ...data });
+    if (errorAsociacion) return res.status(400).json({ error: errorAsociacion });
     const t = await prisma.tipoDocumento.update({
       where: { id: String(req.params.id) },
-      data: datosDesdeBody(req.body, { parcial: true }),
+      data,
     });
     await auditar({ req, accion: 'EDITAR', entidad: 'tipoDocumento', entidadId: t.id, detalle: `${t.codigo} ${t.prefijo || ''}`.trim() });
     res.json(t);

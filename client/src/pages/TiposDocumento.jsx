@@ -33,6 +33,8 @@ const VACIO = {
   fechaResolucionVcto: '',
   diasAvisoVcto: '',
   tipoIdentificacion: '',
+  companiaCodigo: '',
+  centroOperacionCodigo: '',
   activo: true,
 };
 
@@ -51,6 +53,8 @@ export default function TiposDocumento() {
   const puedeEliminar = puede(user, 'empresa.eliminar') || puede(user, 'empresa.ver');
 
   const [rows, setRows] = useState([]);
+  const [companias, setCompanias] = useState([]);
+  const [centros, setCentros] = useState([]);
   const [form, setForm] = useState(VACIO);
   const [editId, setEditId] = useState(null);
   const [modal, setModal] = useState(false);
@@ -58,8 +62,14 @@ export default function TiposDocumento() {
 
   const cargar = async () => {
     try {
-      const lista = await api.get('/tipos-documento');
+      const [lista, listaCompanias, listaCentros] = await Promise.all([
+        api.get('/tipos-documento'),
+        api.get('/companias'),
+        api.get('/centros-operaciones'),
+      ]);
       setRows(Array.isArray(lista) ? lista : []);
+      setCompanias(Array.isArray(listaCompanias) ? listaCompanias : []);
+      setCentros(Array.isArray(listaCentros) ? listaCentros : []);
     } catch (e) {
       notify(e.message, 'err');
     }
@@ -70,6 +80,14 @@ export default function TiposDocumento() {
 
   // Al elegir la clase, sugiere automáticamente si es electrónica (el usuario puede cambiarlo después).
   const cambiarClase = (clase) => setForm((f) => ({ ...f, clase, esElectronico: CLASES_ELECTRONICAS.includes(clase) }));
+  const cambiarCompania = (companiaCodigo) => setForm((f) => ({
+    ...f,
+    companiaCodigo,
+    centroOperacionCodigo: centros.some((c) => c.codigo === f.centroOperacionCodigo && c.companiaCodigo === companiaCodigo)
+      ? f.centroOperacionCodigo
+      : '',
+  }));
+  const centrosDisponibles = centros.filter((c) => c.companiaCodigo === form.companiaCodigo);
 
   const nuevo = () => { setEditId(null); setForm(VACIO); setModal(true); };
   const editar = (r) => {
@@ -90,6 +108,8 @@ export default function TiposDocumento() {
       fechaResolucionVcto: fecha(r.fechaResolucionVcto),
       diasAvisoVcto: r.diasAvisoVcto ?? '',
       tipoIdentificacion: r.tipoIdentificacion || '',
+      companiaCodigo: r.companiaCodigo || '',
+      centroOperacionCodigo: r.centroOperacionCodigo || '',
       activo: r.activo !== false,
     });
     setModal(true);
@@ -212,6 +232,22 @@ export default function TiposDocumento() {
           )}
         >
           <form id="tipodoc-form" onSubmit={guardar}>
+            <div className="grid grid-2">
+              <div className="field">
+                <label>Compañía</label>
+                <select value={form.companiaCodigo} onChange={(e) => cambiarCompania(e.target.value)}>
+                  <option value="">Seleccionar compañía…</option>
+                  {companias.map((c) => <option key={c.codigo} value={c.codigo}>{c.codigo} · {c.razonSocial}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label>Centro de operaciones</label>
+                <select value={form.centroOperacionCodigo} onChange={(e) => set('centroOperacionCodigo', e.target.value)} disabled={!form.companiaCodigo}>
+                  <option value="">Seleccionar centro…</option>
+                  {centrosDisponibles.map((c) => <option key={c.codigo} value={c.codigo}>{c.codigo} · {c.descripcion}</option>)}
+                </select>
+              </div>
+            </div>
             <div className="field">
               <label>Clase</label>
               <select value={form.clase} onChange={(e) => cambiarClase(e.target.value)} autoFocus>

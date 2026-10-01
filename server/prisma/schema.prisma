@@ -216,6 +216,10 @@ model TipoDocumento {
   diasAvisoVcto       Int?      @default(0)       @map("DiasAvisoVcto")
   tipoIdentificacion  String?   @db.VarChar(50)  @map("TipoIdentificacion")
   activo              Boolean   @default(true)   @map("Activo")
+  companiaCodigo      String?   @db.VarChar(3)   @map("CompaniaCodigo")
+  centroOperacionCodigo String? @db.VarChar(10)  @map("CentroOperacionCodigo")
+  compania            Compania? @relation(fields: [companiaCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
+  centroOperacion     CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
   createdAt           DateTime  @default(now())  @map("FechaCreacion")
 
   @@map("TiposDocumento")
@@ -668,6 +672,7 @@ model Compania {
   nit        String   @unique @db.VarChar(20) @map("Nit")
   razonSocial String  @db.VarChar(250) @map("RazonSocial")
   centrosOperacion CentroOperacion[]
+  tiposDocumento TipoDocumento[]
   createdAt  DateTime @default(now()) @map("FechaCreacion")
 
   @@map("Compania")
@@ -681,6 +686,7 @@ model CentroOperacion {
   nombre      String   @db.VarChar(100) @map("Nombre")
   companiaCodigo String @default("004") @db.VarChar(3) @map("CompaniaCodigo")
   compania    Compania @relation(fields: [companiaCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
+  tiposDocumento TipoDocumento[]
 
   @@map("CentrosOperaciones")
 }
