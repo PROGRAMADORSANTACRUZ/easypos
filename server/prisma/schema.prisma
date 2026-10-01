@@ -556,6 +556,10 @@ model FacturaVentaDetalle {
   id             String         @id @default(uuid()) @db.Uuid @map("Id")
   facturaVentaId String?        @db.Uuid @map("FacturaVentaId")
   facturaVenta   FacturaVenta?  @relation(fields: [facturaVentaId], references: [id], onDelete: Cascade)
+  companiaCodigo String?        @db.VarChar(3) @map("CompaniaCodigo")
+  compania       Compania?      @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
+  centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
+  centroOperacion CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
   productoId     String?        @db.Uuid @map("ProductoId")
   producto       Producto?      @relation(fields: [productoId], references: [id])
   cantidad       Float          @default(0) @map("Cantidad")
@@ -689,6 +693,8 @@ model Compania {
   tiposDocumento TipoDocumento[]
   facturas    Factura[]
   facturasVenta FacturaVenta[]
+  facturaDetalles FacturaDetalle[]
+  facturaVentaDetalles FacturaVentaDetalle[]
   createdAt  DateTime @default(now()) @map("FechaCreacion")
 
   @@map("Compania")
@@ -705,6 +711,8 @@ model CentroOperacion {
   tiposDocumento TipoDocumento[]
   facturas    Factura[]
   facturasVenta FacturaVenta[]
+  facturaDetalles FacturaDetalle[]
+  facturaVentaDetalles FacturaVentaDetalle[]
 
   @@map("CentrosOperaciones")
 }
@@ -741,6 +749,10 @@ model FacturaDetalle {
   id             String    @id @default(uuid()) @db.Uuid @map("Id")
   facturaId      String?   @db.Uuid @map("FacturaId")
   factura        Factura?  @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  companiaCodigo String?   @db.VarChar(3) @map("CompaniaCodigo")
+  compania       Compania? @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
+  centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
+  centroOperacion CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
   productoId     String?   @db.Uuid @map("ProductoId")
   producto       Producto? @relation(fields: [productoId], references: [id])
   cantidad       Float     @default(0) @map("Cantidad")

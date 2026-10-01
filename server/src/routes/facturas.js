@@ -234,6 +234,8 @@ router.post('/', wrap(async (req, res) => {
             const lineaIva = impuestoSobrePrecio(lineaSub, it.producto.iva || 0, electronica === false);
             return {
               productoId: it.productoId,
+              companiaCodigo: num.companiaCodigo,
+              centroOperacionCodigo: num.centroOperacionCodigo,
               cantidad: it.cantidad,
               precioUnitario: it.precioUnit,
               iva: lineaIva,
@@ -360,6 +362,8 @@ router.post('/directa', wrap(async (req, res) => {
             const lineaIva = impuestoSobrePrecio(lineaSub, buscar(i.productoId).iva || 0, electronica === false);
             return {
               productoId: String(i.productoId),
+              companiaCodigo: num.companiaCodigo,
+              centroOperacionCodigo: num.centroOperacionCodigo,
               cantidad: cant,
               precioUnitario: precio,
               iva: lineaIva,
