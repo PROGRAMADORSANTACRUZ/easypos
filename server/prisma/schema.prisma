@@ -663,6 +663,15 @@ model Empresa {
   @@map("Empresa")
 }
 
+model Compania {
+  codigo     String   @id @db.VarChar(3) @map("Codigo")
+  nit        String   @unique @db.VarChar(20) @map("Nit")
+  razonSocial String  @db.VarChar(250) @map("RazonSocial")
+  createdAt  DateTime @default(now()) @map("FechaCreacion")
+
+  @@map("Compania")
+}
+
 // Compras a proveedores (encabezado de la factura de compra)
 model Compra {
   id          String          @id @default(uuid()) @db.Uuid @map("Id")
