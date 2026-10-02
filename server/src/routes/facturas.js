@@ -66,7 +66,7 @@ async function emitirEnFactus(factura) {
         cliente: true,
         usuario: true,
         apertura: { include: { caja: true } },
-        detalle: { include: { producto: true } },
+        detalle: { include: { producto: { include: { impuesto: true } } } },
       },
     });
   } catch (e) {
@@ -79,7 +79,7 @@ async function emitirEnFactus(factura) {
         cliente: true,
         usuario: true,
         apertura: { include: { caja: true } },
-        detalle: { include: { producto: true } },
+        detalle: { include: { producto: { include: { impuesto: true } } } },
       },
     });
   }
@@ -95,7 +95,7 @@ router.get('/', wrap(async (req, res) => {
     cliente: true,
     usuario: true,
     apertura: { include: { caja: true } },
-    detalle: { include: { producto: true } },
+    detalle: { include: { producto: { include: { impuesto: true } } } },
     tipoDocumento: true,
     compania: true,
     centroOperacion: true,
@@ -129,7 +129,7 @@ router.get('/:id', wrap(async (req, res) => {
     cliente: true,
     usuario: true,
     apertura: { include: { caja: true } },
-    detalle: { include: { producto: true } },
+    detalle: { include: { producto: { include: { impuesto: true } } } },
     tipoDocumento: true,
     compania: true,
     centroOperacion: true,

@@ -7,7 +7,7 @@ import {
   Database, ClipboardList, Sun, Moon, ChevronDown, Tags, PartyPopper,
   BadgeDollarSign, FileText, Truck, CreditCard, Coins, UserRound, FolderTree,
   Landmark, Antenna, Plug, Circle, Calculator, Gift,
-  Pencil, Trash2, X, Plus, Minus, DollarSign, Save, Check, Ban, RotateCw,
+  Pencil, Trash2, X, Plus, Minus, DollarSign, Save, Check, Ban, RotateCw, Download,
   ArrowLeft, ArrowRight, Shuffle, Lock, Snowflake, Menu, MapPin, Navigation, LocateFixed, ChefHat,
 } from 'lucide-react';
 
@@ -70,6 +70,7 @@ const MAP = {
   check: Check,
   ban: Ban,
   reload: RotateCw,
+  download: Download,
   back: ArrowLeft,
   forward: ArrowRight,
   swap: Shuffle,

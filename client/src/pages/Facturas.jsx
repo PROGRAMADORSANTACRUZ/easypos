@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import ExcelJS from 'exceljs';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
@@ -670,6 +671,116 @@ export default function Facturas({ electronica = true }) {
     if (filtroFecha.hasta && d > filtroFecha.hasta) return false;
     return true;
   });
+
+  const exportarInterfaz = async () => {
+    if (electronica) return;
+    if (!facturasFiltradas.length) return notify('No hay facturas en el periodo seleccionado', 'err');
+
+    const columnas = [
+      'Compañía', 'Centro de operaciones', 'Tipo de documento', 'Número de documento',
+      'Auxiliar de cuenta contable', 'Tercero', 'Centro de costo', 'Unidad de negocio',
+      'Auxiliar de documento', 'Auxiliar de concepto', 'Valor débito', 'Valor crédito',
+      'Valor base gravable', 'Tipo de documento referencia', 'Número de documento referencia',
+      'Observaciones del movimiento', 'Factura de venta',
+    ];
+    const filas = [];
+    const faltanCuentas = new Set();
+    const nombresMes = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+    const redondearPeso = (valor) => Math.round(Math.abs(Number(valor) || 0) + Number.EPSILON);
+
+    for (const factura of facturasFiltradas) {
+      const grupos = new Map();
+      for (const linea of factura.detalle || []) {
+        const impuesto = linea.producto?.impuesto;
+        const iva = Number(linea.iva) || 0;
+        const base = (Number(linea.total) || 0) - iva;
+        if (!iva && !base) continue;
+
+        const devolucion = Number(factura.total) < 0 || base < 0 || iva < 0;
+        const cuentaIva = devolucion ? impuesto?.ctaDebitoVentas : impuesto?.ctaCreditoVentas;
+        const cuentaBase = devolucion ? impuesto?.cuentasBaseDevoluciones : impuesto?.cuentasBase;
+        if (Math.abs(iva) > 0.005 && !cuentaIva) faltanCuentas.add(impuesto?.nombre || linea.producto?.nombre || 'impuesto sin configurar');
+        if (Math.abs(base) > 0.005 && !cuentaBase) faltanCuentas.add(impuesto?.nombre || linea.producto?.nombre || 'cuenta base sin configurar');
+
+        const llave = `${devolucion ? 'D' : 'C'}|${cuentaIva || ''}|${cuentaBase || ''}`;
+        const grupo = grupos.get(llave) || { devolucion, cuentaIva, cuentaBase, iva: 0, base: 0 };
+        grupo.iva += iva;
+        grupo.base += base;
+        grupos.set(llave, grupo);
+      }
+
+      const documentoTercero = factura.cliente?.documento || factura.cliente?.numeroDocumento || '222,222,222,222';
+      const [, mes, dia] = diaColombia(factura.createdAt).split('-');
+      const observacion = `VENTAS INTERFAZ ${dia} ${nombresMes[Number(mes) - 1]}`;
+      const numeroFactura = numeroDian(factura);
+
+      for (const grupo of grupos.values()) {
+        const iva = redondearPeso(grupo.iva);
+        const base = redondearPeso(grupo.base);
+        const debitoIva = grupo.devolucion ? iva : 0;
+        const creditoIva = grupo.devolucion ? 0 : iva;
+        const debitoBase = grupo.devolucion ? base : 0;
+        const creditoBase = grupo.devolucion ? 0 : base;
+        const comunes = [
+          factura.companiaCodigo || '',
+          factura.centroOperacionCodigo || '',
+          'DVP',
+          '263',
+          null,
+          documentoTercero,
+          factura.centroOperacionCodigo || '',
+          '001',
+          '',
+          '',
+        ];
+
+        if (iva > 0) {
+          filas.push([
+            ...comunes.slice(0, 4), grupo.cuentaIva || '', ...comunes.slice(5),
+            debitoIva, creditoIva, base, '', '', observacion, numeroFactura,
+          ]);
+        }
+        if (base > 0) {
+          filas.push([
+            ...comunes.slice(0, 4), grupo.cuentaBase || '', ...comunes.slice(5),
+            debitoBase, creditoBase, 0, '', '', observacion, numeroFactura,
+          ]);
+        }
+      }
+    }
+
+    if (faltanCuentas.size) {
+      return notify(`Configura CUENTA IPOCONSUMO y CUENTA BASE para: ${[...faltanCuentas].join(', ')}`, 'err');
+    }
+    if (!filas.length) return notify('Las facturas seleccionadas no tienen líneas para exportar', 'err');
+
+    const libro = new ExcelJS.Workbook();
+    libro.creator = 'Asados Santacruz';
+    libro.created = new Date();
+    const hoja = libro.addWorksheet('Interfaz factura venta', { views: [{ state: 'frozen', ySplit: 1 }] });
+    hoja.addRow(columnas);
+    filas.forEach((fila) => hoja.addRow(fila));
+    hoja.autoFilter = { from: 'A1', to: `${hoja.getColumn(columnas.length).letter}1` };
+    hoja.getRow(1).font = { bold: true };
+    for (let fila = 2; fila <= filas.length + 1; fila++) {
+      for (const columna of [11, 12, 13]) hoja.getCell(fila, columna).numFmt = '$ #,##0.00';
+    }
+    columnas.forEach((columna, i) => {
+      const ancho = Math.max(columna.length, ...filas.map((fila) => String(fila[i] ?? '').length));
+      hoja.getColumn(i + 1).width = Math.min(Math.max(ancho + 2, 12), 40);
+    });
+
+    const buffer = await libro.xlsx.writeBuffer();
+    const url = URL.createObjectURL(new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }));
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = `Interfaz_FacturaVenta_${filtroFecha.desde || 'todas'}_${filtroFecha.hasta || 'todas'}.xlsx`;
+    enlace.click();
+    URL.revokeObjectURL(url);
+  };
+
   const reenviarDian = async (f) => {
     setReenviando(f.id);
     try {
@@ -1333,7 +1444,14 @@ export default function Facturas({ electronica = true }) {
 
       <div className="grid grid-2">
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>Historial</h3>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 style={{ margin: 0 }}>Historial</h3>
+            {!electronica && (
+              <button className="btn btn-sm" type="button" onClick={exportarInterfaz} disabled={!facturasFiltradas.length} title="Descargar interfaz contable Excel">
+                <Icon name="download" size={16} /> Descargar interfaz
+              </button>
+            )}
+          </div>
           <div className="row" style={{ gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div className="field" style={{ margin: 0 }}>
               <label>Periodo</label>
