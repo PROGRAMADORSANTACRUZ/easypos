@@ -44,6 +44,7 @@ model Usuario {
   roles         UsuarioRol[]
   auditorias    Auditoria[]
   aperturasCaja AperturaCaja[]
+  movimientosCaja MovimientoCaja[]
   facturas      Factura[]
   facturasVenta FacturaVenta[]
   comisiones    ComisionVendedor[]
@@ -278,8 +279,24 @@ model AperturaCaja {
   observacionCierre String? @map("ObservacionCierre")
   facturas      Factura[]
   facturasVenta FacturaVenta[]
+  movimientos   MovimientoCaja[]
 
   @@map("AperturasCaja")
+}
+
+model MovimientoCaja {
+  id         String       @id @default(uuid()) @db.Uuid @map("Id")
+  aperturaId String       @db.Uuid @map("AperturaId")
+  apertura   AperturaCaja @relation(fields: [aperturaId], references: [id], onDelete: Cascade)
+  usuarioId  String?      @db.Uuid @map("UsuarioId")
+  usuario    Usuario?     @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  tipo       String       @db.VarChar(10) @map("Tipo")
+  monto      Float        @map("Monto")
+  motivo     String       @db.VarChar(250) @map("Motivo")
+  fecha      DateTime     @default(now()) @map("Fecha")
+
+  @@index([aperturaId, fecha])
+  @@map("MovimientosCaja")
 }
 
 // Existencias: cantidad de un producto en una bodega

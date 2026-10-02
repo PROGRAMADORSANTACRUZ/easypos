@@ -54,11 +54,18 @@ async function calcularCuadre(apertura) {
     prisma.factura.findMany({ where, select }),
     prisma.facturaVenta.findMany({ where, select }),
   ]);
+  const movimientos = await prisma.movimientoCaja.findMany({
+    where: { aperturaId: apertura.id },
+    include: { usuario: { select: { usuario: true } } },
+    orderBy: { fecha: 'desc' },
+  });
   const todas = [...facturas, ...ventas];
   const totalVentas = todas.reduce((s, f) => s + (f.total || 0), 0);
   const totalPropinas = todas.reduce((s, f) => s + (f.propina || 0), 0);
   const totalEfectivo = todas.reduce((s, f) => s + efectivoDeFactura(f), 0);
-  const valorEsperado = (apertura.valorInicial || 0) + totalEfectivo;
+  const totalIngresos = movimientos.filter((m) => m.tipo === 'INGRESO').reduce((s, m) => s + m.monto, 0);
+  const totalEgresos = movimientos.filter((m) => m.tipo === 'EGRESO').reduce((s, m) => s + m.monto, 0);
+  const valorEsperado = (apertura.valorInicial || 0) + totalEfectivo + totalIngresos - totalEgresos;
 
   // Desglose por forma de pago para el cuadre.
   const acum = {};
@@ -76,8 +83,11 @@ async function calcularCuadre(apertura) {
     totalVentas: Math.round(totalVentas * 100) / 100,
     totalPropinas: Math.round(totalPropinas * 100) / 100,
     totalEfectivo: Math.round(totalEfectivo * 100) / 100,
+    totalIngresos: Math.round(totalIngresos * 100) / 100,
+    totalEgresos: Math.round(totalEgresos * 100) / 100,
     valorEsperado: Math.round(valorEsperado * 100) / 100,
     desglosePagos,
+    movimientos,
   };
 }
 
@@ -147,6 +157,27 @@ router.post('/', wrap(async (req, res) => {
   });
   await auditar({ req, accion: 'CREAR', entidad: 'apertura_caja', entidadId: ap.id, detalle: `Apertura ${ap.caja?.nombre || 'caja'} con ${ap.valorInicial}` });
   res.status(201).json(ap);
+}));
+
+router.post('/:id/movimientos', wrap(async (req, res) => {
+  const apertura = await prisma.aperturaCaja.findUnique({ where: { id: String(req.params.id) } });
+  if (!apertura) return res.status(404).json({ error: 'Apertura no encontrada' });
+  if (apertura.estado !== 'ABIERTA') return res.status(400).json({ error: 'La caja debe estar abierta para registrar movimientos' });
+
+  const tipo = String(req.body?.tipo || '').trim().toUpperCase();
+  const monto = Number(req.body?.monto);
+  const motivo = String(req.body?.motivo || '').trim();
+  if (!['INGRESO', 'EGRESO'].includes(tipo)) return res.status(400).json({ error: 'Tipo de movimiento inválido' });
+  if (!Number.isFinite(monto) || monto <= 0) return res.status(400).json({ error: 'Ingresa un monto mayor que cero' });
+  if (!motivo || motivo.length > 250) return res.status(400).json({ error: 'Ingresa un motivo de hasta 250 caracteres' });
+
+  const usuarioId = req.headers['x-usuario-id'];
+  const movimiento = await prisma.movimientoCaja.create({
+    data: { aperturaId: apertura.id, usuarioId: usuarioId || null, tipo, monto, motivo },
+    include: { usuario: { select: { usuario: true } } },
+  });
+  await auditar({ req, accion: 'CREAR', entidad: 'movimiento_caja', entidadId: movimiento.id, detalle: `${tipo} ${monto} • ${motivo}` });
+  res.status(201).json(movimiento);
 }));
 
 // Cerrar caja (marca fechaCierre y estado CERRADA)

@@ -25,6 +25,10 @@ export default function Caja() {
   const [abrirModal, setAbrirModal] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [cerrando, setCerrando] = useState(null);
+  const [tipoMovimiento, setTipoMovimiento] = useState(null);
+  const [montoMovimiento, setMontoMovimiento] = useState('');
+  const [motivoMovimiento, setMotivoMovimiento] = useState('');
+  const [guardandoMovimiento, setGuardandoMovimiento] = useState(false);
   const [aperturaPagosAbierta, setAperturaPagosAbierta] = useState(null);
   const [cuadresPagos, setCuadresPagos] = useState({});
   const [cargandoCuadre, setCargandoCuadre] = useState(null);
@@ -77,6 +81,36 @@ export default function Caja() {
   };
 
   const cerrar = (ap) => setCerrando(ap);
+  const registrarMovimiento = async (e) => {
+    e.preventDefault();
+    if (!turnoAbierto) return;
+    try {
+      setGuardandoMovimiento(true);
+      await api.post(`/aperturas/${turnoAbierto.id}/movimientos`, {
+        tipo: tipoMovimiento,
+        monto: Number(montoMovimiento),
+        motivo: motivoMovimiento.trim(),
+      });
+      notify(`${tipoMovimiento === 'INGRESO' ? 'Ingreso' : 'Egreso'} registrado`);
+      setTipoMovimiento(null);
+      setMontoMovimiento('');
+      setMotivoMovimiento('');
+      setCuadresPagos((actuales) => {
+        const nuevos = { ...actuales };
+        delete nuevos[turnoAbierto.id];
+        return nuevos;
+      });
+      await cargar();
+      if (aperturaPagosAbierta === turnoAbierto.id) {
+        const cuadre = await api.get(`/aperturas/${turnoAbierto.id}/cuadre`);
+        setCuadresPagos((actuales) => ({ ...actuales, [turnoAbierto.id]: cuadre }));
+      }
+    } catch (err) {
+      notify(err.message, 'err');
+    } finally {
+      setGuardandoMovimiento(false);
+    }
+  };
   const fmt = (f) => (f ? new Date(f).toLocaleString() : '—');
   const turnoAbierto = aperturas.find((a) => a.estado === 'ABIERTA') || null;
 
@@ -128,6 +162,8 @@ export default function Caja() {
               <span className="mini" style={{ marginLeft: 8 }}>desde {fmt(turnoAbierto.fechaApertura)}</span>
             </div>
             <div className="row" style={{ gap: 8 }}>
+              <Button variant="success" size="sm" icon="add" onClick={() => setTipoMovimiento('INGRESO')}>Ingreso</Button>
+              <Button variant="danger" size="sm" icon="minus" onClick={() => setTipoMovimiento('EGRESO')}>Egreso</Button>
               {(puede(user, 'facturas.ver') || puede(user, 'factura_venta.ver')) && <Button variant="primary" size="sm" onClick={() => navigate(puede(user, 'facturas.ver') ? '/facturas' : '/cotizaciones')}>Ir a facturar <Icon name="forward" size={14} /></Button>}
               {puedeCerrar && <Button variant="secondary" size="sm" icon="lock" onClick={() => cerrar(turnoAbierto)}>Cerrar caja</Button>}
             </div>
@@ -200,7 +236,23 @@ export default function Caja() {
                           {pagosAgrupados(cuadresPagos[ap.id]?.desglosePagos).map(({ metodo, monto }) => (
                             <span key={metodo}><b>{metodo}:</b> {money(monto)}</span>
                           ))}
+                          <span><b>Ingresos:</b> {money(cuadresPagos[ap.id]?.totalIngresos || 0)}</span>
+                          <span><b>Egresos:</b> {money(cuadresPagos[ap.id]?.totalEgresos || 0)}</span>
                         </div>
+                      )}
+                      {!!cuadresPagos[ap.id]?.movimientos?.length && (
+                        <table style={{ marginTop: 12 }}>
+                          <thead><tr><th>Tipo</th><th style={{ textAlign: 'right' }}>Monto</th><th>Motivo</th><th>Usuario</th><th>Fecha</th></tr></thead>
+                          <tbody>{cuadresPagos[ap.id].movimientos.map((movimiento) => (
+                            <tr key={movimiento.id}>
+                              <td>{movimiento.tipo}</td>
+                              <td style={{ textAlign: 'right' }}>{money(movimiento.monto)}</td>
+                              <td>{movimiento.motivo}</td>
+                              <td>{movimiento.usuario?.usuario || '—'}</td>
+                              <td className="mini">{fmt(movimiento.fecha)}</td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
                       )}
                     </td>
                   </tr>
@@ -229,6 +281,32 @@ export default function Caja() {
             <div className="field">
               <label>Base inicial</label>
               <input type="number" step="any" value={valorInicial} onChange={(e) => setValorInicial(e.target.value)} autoFocus placeholder="0" />
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {tipoMovimiento && (
+        <Modal
+          title={`Registrar ${tipoMovimiento.toLowerCase()}`}
+          subtitle={tipoMovimiento === 'INGRESO' ? 'El valor se sumará al efectivo esperado de la caja.' : 'El valor se restará del efectivo esperado de la caja.'}
+          onClose={() => setTipoMovimiento(null)}
+          size="sm"
+          footer={(
+            <>
+              <Button variant="secondary" onClick={() => setTipoMovimiento(null)}>Cancelar</Button>
+              <Button variant={tipoMovimiento === 'INGRESO' ? 'success' : 'danger'} type="submit" form="movimiento-caja-form" loading={guardandoMovimiento}>Guardar {tipoMovimiento.toLowerCase()}</Button>
+            </>
+          )}
+        >
+          <form id="movimiento-caja-form" onSubmit={registrarMovimiento}>
+            <div className="field">
+              <label htmlFor="movimiento-monto">Monto</label>
+              <input id="movimiento-monto" type="number" min="1" step="any" value={montoMovimiento} onChange={(e) => setMontoMovimiento(e.target.value)} required autoFocus placeholder="0" />
+            </div>
+            <div className="field">
+              <label htmlFor="movimiento-motivo">Motivo</label>
+              <textarea id="movimiento-motivo" maxLength={250} value={motivoMovimiento} onChange={(e) => setMotivoMovimiento(e.target.value)} required rows={3} />
             </div>
           </form>
         </Modal>
