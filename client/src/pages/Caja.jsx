@@ -19,6 +19,7 @@ export default function Caja() {
 
   const [cajas, setCajas] = useState([]);
   const [aperturas, setAperturas] = useState([]);
+  const [cuentasContables, setCuentasContables] = useState([]);
   const [cargando, setCargando] = useState(true);
 
   const [valorInicial, setValorInicial] = useState('');
@@ -28,6 +29,7 @@ export default function Caja() {
   const [tipoMovimiento, setTipoMovimiento] = useState(null);
   const [montoMovimiento, setMontoMovimiento] = useState('');
   const [motivoMovimiento, setMotivoMovimiento] = useState('');
+  const [cuentaContableId, setCuentaContableId] = useState('');
   const [guardandoMovimiento, setGuardandoMovimiento] = useState(false);
   const [aperturaPagosAbierta, setAperturaPagosAbierta] = useState(null);
   const [cuadresPagos, setCuadresPagos] = useState({});
@@ -36,9 +38,10 @@ export default function Caja() {
   const cargar = async () => {
     try {
       setCargando(true);
-      const [cs, aps] = await Promise.all([api.get('/cajas'), api.get('/aperturas')]);
+      const [cs, aps, ctas] = await Promise.all([api.get('/cajas'), api.get('/aperturas'), api.get('/cuentas-contables')]);
       setCajas(cs);
       setAperturas(aps);
+      setCuentasContables(Array.isArray(ctas) ? ctas : []);
     } catch (e) {
       notify(e.message, 'err');
     } finally {
@@ -90,11 +93,13 @@ export default function Caja() {
         tipo: tipoMovimiento,
         monto: Number(montoMovimiento),
         motivo: motivoMovimiento.trim(),
+        cuentaContableId: tipoMovimiento === 'EGRESO' ? cuentaContableId : null,
       });
       notify(`${tipoMovimiento === 'INGRESO' ? 'Ingreso' : 'Egreso'} registrado`);
       setTipoMovimiento(null);
       setMontoMovimiento('');
       setMotivoMovimiento('');
+      setCuentaContableId('');
       setCuadresPagos((actuales) => {
         const nuevos = { ...actuales };
         delete nuevos[turnoAbierto.id];
@@ -162,8 +167,8 @@ export default function Caja() {
               <span className="mini" style={{ marginLeft: 8 }}>desde {fmt(turnoAbierto.fechaApertura)}</span>
             </div>
             <div className="row" style={{ gap: 8 }}>
-              <Button variant="success" size="sm" icon="add" onClick={() => setTipoMovimiento('INGRESO')}>Ingreso</Button>
-              <Button variant="danger" size="sm" icon="minus" onClick={() => setTipoMovimiento('EGRESO')}>Egreso</Button>
+              <Button variant="success" size="sm" icon="add" onClick={() => { setCuentaContableId(''); setTipoMovimiento('INGRESO'); }}>Ingreso</Button>
+              <Button variant="danger" size="sm" icon="minus" onClick={() => { setCuentaContableId(''); setTipoMovimiento('EGRESO'); }}>Egreso</Button>
               {(puede(user, 'facturas.ver') || puede(user, 'factura_venta.ver')) && <Button variant="primary" size="sm" onClick={() => navigate(puede(user, 'facturas.ver') ? '/facturas' : '/cotizaciones')}>Ir a facturar <Icon name="forward" size={14} /></Button>}
               {puedeCerrar && <Button variant="secondary" size="sm" icon="lock" onClick={() => cerrar(turnoAbierto)}>Cerrar caja</Button>}
             </div>
@@ -242,11 +247,12 @@ export default function Caja() {
                       )}
                       {!!cuadresPagos[ap.id]?.movimientos?.length && (
                         <table style={{ marginTop: 12 }}>
-                          <thead><tr><th>Tipo</th><th style={{ textAlign: 'right' }}>Monto</th><th>Motivo</th><th>Usuario</th><th>Fecha</th></tr></thead>
+                          <thead><tr><th>Tipo</th><th style={{ textAlign: 'right' }}>Monto</th><th>Cuenta</th><th>Motivo</th><th>Usuario</th><th>Fecha</th></tr></thead>
                           <tbody>{cuadresPagos[ap.id].movimientos.map((movimiento) => (
                             <tr key={movimiento.id}>
                               <td>{movimiento.tipo}</td>
                               <td style={{ textAlign: 'right' }}>{money(movimiento.monto)}</td>
+                              <td>{movimiento.cuentaContable ? `${movimiento.cuentaContable.codigo} · ${movimiento.cuentaContable.nombre}` : '—'}</td>
                               <td>{movimiento.motivo}</td>
                               <td>{movimiento.usuario?.usuario || '—'}</td>
                               <td className="mini">{fmt(movimiento.fecha)}</td>
@@ -300,6 +306,17 @@ export default function Caja() {
           )}
         >
           <form id="movimiento-caja-form" onSubmit={registrarMovimiento}>
+            {tipoMovimiento === 'EGRESO' && (
+              <div className="field">
+                <label htmlFor="movimiento-cuenta">Cuenta contable</label>
+                <select id="movimiento-cuenta" value={cuentaContableId} onChange={(e) => setCuentaContableId(e.target.value)} required>
+                  <option value="">Seleccionar cuenta…</option>
+                  {cuentasContables
+                    .filter((cuenta) => cuenta.activo && ['GASTO', 'COSTO'].includes(String(cuenta.tipo || '').toUpperCase()))
+                    .map((cuenta) => <option key={cuenta.id} value={cuenta.id}>{cuenta.codigo} · {cuenta.nombre}</option>)}
+                </select>
+              </div>
+            )}
             <div className="field">
               <label htmlFor="movimiento-monto">Monto</label>
               <input id="movimiento-monto" type="number" min="1" step="any" value={montoMovimiento} onChange={(e) => setMontoMovimiento(e.target.value)} required autoFocus placeholder="0" />

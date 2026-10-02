@@ -56,7 +56,10 @@ async function calcularCuadre(apertura) {
   ]);
   const movimientos = await prisma.movimientoCaja.findMany({
     where: { aperturaId: apertura.id },
-    include: { usuario: { select: { usuario: true } } },
+    include: {
+      usuario: { select: { usuario: true } },
+      cuentaContable: { select: { codigo: true, nombre: true } },
+    },
     orderBy: { fecha: 'desc' },
   });
   const todas = [...facturas, ...ventas];
@@ -167,14 +170,26 @@ router.post('/:id/movimientos', wrap(async (req, res) => {
   const tipo = String(req.body?.tipo || '').trim().toUpperCase();
   const monto = Number(req.body?.monto);
   const motivo = String(req.body?.motivo || '').trim();
+  const cuentaContableId = req.body?.cuentaContableId ? String(req.body.cuentaContableId) : null;
   if (!['INGRESO', 'EGRESO'].includes(tipo)) return res.status(400).json({ error: 'Tipo de movimiento inválido' });
   if (!Number.isFinite(monto) || monto <= 0) return res.status(400).json({ error: 'Ingresa un monto mayor que cero' });
   if (!motivo || motivo.length > 250) return res.status(400).json({ error: 'Ingresa un motivo de hasta 250 caracteres' });
+  if (tipo === 'EGRESO' && !cuentaContableId) return res.status(400).json({ error: 'Selecciona una cuenta contable para el egreso' });
+
+  if (cuentaContableId) {
+    const cuenta = await prisma.cuentaContable.findUnique({ where: { id: cuentaContableId } });
+    if (!cuenta || !cuenta.activo || !['GASTO', 'COSTO'].includes(String(cuenta.tipo || '').toUpperCase())) {
+      return res.status(400).json({ error: 'La cuenta seleccionada no es una cuenta activa de gasto o costo' });
+    }
+  }
 
   const usuarioId = req.headers['x-usuario-id'];
   const movimiento = await prisma.movimientoCaja.create({
-    data: { aperturaId: apertura.id, usuarioId: usuarioId || null, tipo, monto, motivo },
-    include: { usuario: { select: { usuario: true } } },
+    data: { aperturaId: apertura.id, usuarioId: usuarioId || null, cuentaContableId, tipo, monto, motivo },
+    include: {
+      usuario: { select: { usuario: true } },
+      cuentaContable: { select: { codigo: true, nombre: true } },
+    },
   });
   await auditar({ req, accion: 'CREAR', entidad: 'movimiento_caja', entidadId: movimiento.id, detalle: `${tipo} ${monto} • ${motivo}` });
   res.status(201).json(movimiento);

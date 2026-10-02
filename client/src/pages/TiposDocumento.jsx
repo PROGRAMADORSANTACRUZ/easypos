@@ -14,6 +14,8 @@ const CLASES = [
   'NOTA CREDITO',
   'NOTA DEBITO',
   'FACTURA DE VENTA (NO ELECTRONICA)',
+  'INGRESO',
+  'EGRESO',
   'OTRO',
 ];
 

@@ -290,6 +290,8 @@ model MovimientoCaja {
   apertura   AperturaCaja @relation(fields: [aperturaId], references: [id], onDelete: Cascade)
   usuarioId  String?      @db.Uuid @map("UsuarioId")
   usuario    Usuario?     @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  cuentaContableId String? @db.Uuid @map("CuentaContableId")
+  cuentaContable   CuentaContable? @relation(fields: [cuentaContableId], references: [id], onDelete: SetNull)
   tipo       String       @db.VarChar(10) @map("Tipo")
   monto      Float        @map("Monto")
   motivo     String       @db.VarChar(250) @map("Motivo")
@@ -940,6 +942,7 @@ model CuentaContable {
   activo    Boolean  @default(true) @map("Activo")
   createdAt DateTime @default(now()) @map("FechaCreacion")
   insumos   InventarioItem[]
+  movimientosCaja MovimientoCaja[]
 
   @@map("CuentasContables")
 }
