@@ -349,6 +349,18 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
   box-shadow: var(--shadow-sm);
 }
 
+.crud-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+.crud-table-scroll::-webkit-scrollbar { height: 14px; }
+.crud-table-scroll::-webkit-scrollbar-track { background: var(--panel-2); }
+.crud-table-scroll::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
+.crud-table-scroll:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.content .crud-table-scroll table { display: table; overflow: visible; }
+
 .mesa {
   cursor: pointer;
   text-align: center;

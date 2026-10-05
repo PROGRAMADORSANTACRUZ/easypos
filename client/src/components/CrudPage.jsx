@@ -139,7 +139,7 @@ export default function CrudPage({ cfg }) {
         )}
       />
 
-      <div className="card">
+      <div className="card crud-table-scroll" role="region" aria-label={`Tabla de ${cfg.titulo}`} tabIndex={0}>
         {cargando ? (
           <TableSkeleton cols={cfg.columnas.length + 1} rows={6} />
         ) : rows.length === 0 ? (
