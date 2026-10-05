@@ -1,0 +1,13 @@
+{
+  "name": "santacruz-pos-documentacion-registro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node generar-documentos.mjs",
+    "check": "node generar-documentos.mjs --check"
+  },
+  "devDependencies": {
+    "marked": "15.0.12",
+    "playwright": "1.56.1"
+  }
+}

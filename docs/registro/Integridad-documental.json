@@ -1,0 +1,78 @@
+{
+  "generadoEn": "2026-10-05T15:08:13.360Z",
+  "revisionCodigoConsultado": "241f2adc03adab2ccd27d725ea76b1df21e11885",
+  "modalidad": "Interfaz real con sesion y respuestas ficticias; sin API, base de datos ni emision DIAN",
+  "advertencia": "Los hashes permiten comprobar integridad; no acreditan autoria ni fecha de creacion de la obra.",
+  "archivos": [
+    {
+      "archivo": "Descripcion-tecnica-SANTACRUZ-POS.md",
+      "bytes": 14899,
+      "sha256": "b3329daf83c80d94574f7b8fac61a7ebb0cb62fdaa7ab5f56a86ec50b544f1db"
+    },
+    {
+      "archivo": "Descripcion-tecnica-SANTACRUZ-POS.html",
+      "bytes": 191643,
+      "sha256": "76f16fc164038645892bfff2a9b29e094796614625abab37a84a6da3457b11c2"
+    },
+    {
+      "archivo": "Descripcion-tecnica-SANTACRUZ-POS.pdf",
+      "bytes": 256626,
+      "sha256": "bd1db9556af2d915e376c0501f6bbaa5cc84d55bb1a801c9056df02a6388a97f"
+    },
+    {
+      "archivo": "Manual-de-usuario-SANTACRUZ-POS.md",
+      "bytes": 22208,
+      "sha256": "970b58c910d528d4c36ddc7bcfda2e8e97bb6b8b1cb58d2a01f0b42d3970695c"
+    },
+    {
+      "archivo": "Manual-de-usuario-SANTACRUZ-POS.html",
+      "bytes": 1685354,
+      "sha256": "7f5eaca2b45f13c43daae7da50e3b4adc155fc6cea232c16ab35e0382fb9d514"
+    },
+    {
+      "archivo": "Manual-de-usuario-SANTACRUZ-POS.pdf",
+      "bytes": 1497062,
+      "sha256": "acab6480e62818b2d1c0285af0f4722c0548feebaf6819f1fffeb82726f2caeb"
+    },
+    {
+      "archivo": "capturas/01-acceso.png",
+      "bytes": 615617,
+      "sha256": "9e6b0cc66be0e9599f003adba5f091fc92a7d925f72c3f355bb92d65f8b79578"
+    },
+    {
+      "archivo": "capturas/02-caja.png",
+      "bytes": 68118,
+      "sha256": "a5be8dbd9feb158cbb28a9b080d8c57fb79d1488054ba5ef3ae39bbc60305f70"
+    },
+    {
+      "archivo": "capturas/03-mesas.png",
+      "bytes": 57806,
+      "sha256": "495b802b1f1f8867abc08abdcc9ac14786d6d31a20502c8b073d35a90ba49463"
+    },
+    {
+      "archivo": "capturas/04-toma-pedido.png",
+      "bytes": 76273,
+      "sha256": "4e302bbf379c6dd4484b28f3c55e5bb189a1831dd5271dd96f9549d093300edc"
+    },
+    {
+      "archivo": "capturas/05-productos.png",
+      "bytes": 57549,
+      "sha256": "f8d19aae4e2206a4fa0ad8e85d6a566709096ecf1134f2cdfcbd6f54d1b0c0cc"
+    },
+    {
+      "archivo": "capturas/06-inventario.png",
+      "bytes": 63885,
+      "sha256": "dee2a30d047736d33a1f1f89a8e1d770f7d795e69587b7212cbc353fb3fa998a"
+    },
+    {
+      "archivo": "capturas/07-facturacion.png",
+      "bytes": 92010,
+      "sha256": "bd03a91ef324f7a29b595461e90af65b098f164f9e0197e18b6402289effefdb"
+    },
+    {
+      "archivo": "capturas/08-reportes.png",
+      "bytes": 81753,
+      "sha256": "a8e050122ed7703cc629e4ad451eccbb243e4ea055ec886f57f9283b8676de40"
+    }
+  ]
+}
