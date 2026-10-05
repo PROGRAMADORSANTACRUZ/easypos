@@ -714,6 +714,18 @@ export default function Facturas({ electronica = true }) {
       const observacion = `VENTAS INTERFAZ ${dia} ${nombresMes[Number(mes) - 1]}`;
       const numeroFactura = numeroDian(factura);
 
+      const esCredito = factura.credito === true || /^cr[eé]dito(?:\s+\d+\s+d[ií]as)?$/i.test(String(factura.metodoPago || '').trim());
+      const totalCredito = redondearPeso(factura.total);
+      if (esCredito && totalCredito > 0) {
+        filas.push([
+          factura.companiaCodigo || '', factura.centroOperacionCodigo || '', 'DVP', '263',
+          '1305050101', documentoTercero, factura.centroOperacionCodigo || '', '001', '', '',
+          Number(factura.total) < 0 ? 0 : totalCredito,
+          Number(factura.total) < 0 ? totalCredito : 0,
+          0, '', '', observacion, numeroFactura,
+        ]);
+      }
+
       for (const grupo of grupos.values()) {
         const iva = redondearPeso(grupo.iva);
         const base = redondearPeso(grupo.base);
