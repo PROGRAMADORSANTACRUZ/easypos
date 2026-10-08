@@ -38,10 +38,6 @@ if (!SECRET) {
 export function firmarToken(usuario, { restauranteId } = {}) {
   const payload = {
     sub: usuario.id,
-    usuario: usuario.usuario,
-    nombre: usuario.nombre,
-    roles: usuario.roles || [],
-    permisos: usuario.permisos || [],
     ...(restauranteId && { restauranteId }),
   };
   return jwt.sign(payload, SECRET, { expiresIn: EXPIRES_IN });
@@ -81,27 +77,44 @@ export function leerPayloadSesion(req) {
   try { return jwt.verify(token, SECRET); } catch { return null; }
 }
 
-// Exige un token valido en cookie o Authorization para clientes API heredados.
+// Exige un token valido y carga los permisos vigentes desde la base de datos.
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = tokenDeCookie(req) || (header.startsWith('Bearer ') ? header.slice(7).trim() : null);
   if (!token) return res.status(401).json({ error: 'No autenticado' });
+  let payload;
   try {
-    const payload = jwt.verify(token, SECRET);
-    req.usuario = {
-      id: payload.sub,
-      usuario: payload.usuario,
-      nombre: payload.nombre,
-      roles: payload.roles || [],
-      permisos: payload.permisos || [],
-    };
-    // Compat: auditoria.js sigue leyendo x-usuario-id; si el cliente no lo envia,
-    // se completa con el id del token verificado (mas confiable que un header libre).
-    if (!req.headers['x-usuario-id']) req.headers['x-usuario-id'] = payload.sub;
-    next();
+    payload = jwt.verify(token, SECRET);
   } catch {
+    res.clearCookie(COOKIE_NAME, opcionesCookie(req));
     return res.status(401).json({ error: 'Sesión inválida o expirada' });
   }
+
+  return prisma.usuario.findUnique({
+    where: { id: payload.sub },
+    select: {
+      id: true,
+      usuario: true,
+      nombre: true,
+      activo: true,
+      modulosFacturacion: true,
+      roles: { include: { rol: { include: { permisos: { include: { permiso: true } } } } } },
+    },
+  }).then((usuario) => {
+    if (!usuario?.activo) {
+      res.clearCookie(COOKIE_NAME, opcionesCookie(req));
+      return res.status(401).json({ error: 'Usuario inactivo o inexistente' });
+    }
+    const roles = usuario.roles.map((asignacion) => asignacion.rol.nombre);
+    const permisos = permisosEfectivos(
+      roles,
+      usuario.modulosFacturacion,
+      usuario.roles.flatMap((asignacion) => asignacion.rol.permisos.map((rolPermiso) => rolPermiso.permiso.codigo)),
+    );
+    req.usuario = { id: usuario.id, usuario: usuario.usuario, nombre: usuario.nombre, roles, permisos };
+    if (!req.headers['x-usuario-id']) req.headers['x-usuario-id'] = usuario.id;
+    next();
+  }).catch(next);
 }
 
 // Autorizacion basica por modulo: GET exige "<modulo>.ver"; escrituras exigen
