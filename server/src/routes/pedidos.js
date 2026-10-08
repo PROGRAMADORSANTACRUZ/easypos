@@ -162,7 +162,16 @@ router.post('/', wrap(async (req, res) => {
   let pedido;
   try {
     pedido = await prisma.$transaction(async (tx) => {
-      const mesa = await tx.mesa.findUnique({ where: { id: Number(mesaId) }, select: { id: true, numero: true, estado: true } });
+      const mesa = await tx.mesa.findUnique({
+        where: { id: Number(mesaId) },
+        select: {
+          id: true,
+          numero: true,
+          estado: true,
+          reservaClienteId: true,
+          reservaCliente: { select: { nombre: true, razonSocial: true } },
+        },
+      });
       if (!mesa) throw Object.assign(new Error('Mesa no encontrada'), { status: 404 });
       if (mesa.estado === 'OCUPADA') throw Object.assign(new Error(`La mesa ${mesa.numero} ya está ocupada`), { status: 409 });
       const pedidoAbierto = await tx.pedido.findFirst({ where: { mesaId: Number(mesaId), estado: 'ABIERTO' }, select: { id: true } });
@@ -172,6 +181,8 @@ router.post('/', wrap(async (req, res) => {
         data: {
           mesaId: Number(mesaId),
           meseraId: Number(meseraId),
+          clienteId: mesa.reservaClienteId,
+          cliente: mesa.reservaCliente?.razonSocial || mesa.reservaCliente?.nombre || null,
           observaciones: observaciones ? String(observaciones).trim() || null : null,
           items: {
             create: items.map((i) => ({
@@ -194,6 +205,7 @@ router.post('/', wrap(async (req, res) => {
           reservaPersonas: null,
           reservaNotas: null,
           reservaItems: null,
+          reservaClienteId: null,
         },
       });
       await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${nuevo.id}` });

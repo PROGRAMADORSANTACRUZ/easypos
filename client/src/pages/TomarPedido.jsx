@@ -6,9 +6,21 @@ import { useToast } from '../App.jsx';
 import { LoadingState, overlayCierre, Modal, Button } from '../components/ui/index.jsx';
 import { LOGO_RECIBO } from '../logoRecibo.js';
 import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir } from '../print.js';
+import { municipiosColombia } from '../municipiosColombia.js';
 
 // Escapa texto libre antes de insertarlo en el HTML del ticket (evita inyeccion via nombres/observaciones).
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+const fechaHoraLocalInput = (valor) => {
+  if (!valor) return '';
+  const fecha = new Date(valor);
+  return new Date(fecha.getTime() - fecha.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
+const CLIENTE_RESERVA_VACIO = {
+  tipoCliente: 'NATURAL', tipoDocumento: 'CC', numeroDocumento: '', razonSocial: '', documento: '',
+  nombres: '', apellidos: '', telefono: '', direccion: '', barrio: '', ciudad: '', email: '',
+  municipioCodigo: '', responsableIVA: false, porcentajeEmpleado: '', porcentajeCliente: '',
+  condicionPago: 'CONTADO', creditoDias: '', creditoCupo: '',
+};
 
 // Abre una ventana de impresión con la comanda en el formato configurado (Parámetros > Empresa)
 function imprimirComanda(pedido, opts = {}) {
@@ -172,7 +184,11 @@ export default function TomarPedido() {
   const [confirmandoCancelar, setConfirmandoCancelar] = useState(false);
   const [mostrarReserva, setMostrarReserva] = useState(false);
   const [guardandoReserva, setGuardandoReserva] = useState(false);
-  const [datosReserva, setDatosReserva] = useState({ nombre: '', telefono: '', fechaHora: '', personas: 2, notas: '' });
+  const [datosReserva, setDatosReserva] = useState(CLIENTE_RESERVA_VACIO);
+  const [departamentoReserva, setDepartamentoReserva] = useState('');
+  const [fechaReserva, setFechaReserva] = useState('');
+  const [personasReserva, setPersonasReserva] = useState(2);
+  const [notaReserva, setNotaReserva] = useState('');
 
   const cargar = async () => {
     try {
@@ -204,8 +220,23 @@ export default function TomarPedido() {
           notify('Algunos productos del prepedido ya no están disponibles en el menú.', 'err');
         }
         if (m?.estado === 'RESERVADA') {
-          setDatosReserva({ nombre: m.reservaNombre || '', telefono: m.reservaTelefono || '', fechaHora: '', personas: m.reservaPersonas || Math.min(2, m.capacidad), notas: m.reservaNotas || '' });
+          const clienteReserva = m.reservaCliente || {};
+          setDatosReserva({
+            ...CLIENTE_RESERVA_VACIO,
+            ...clienteReserva,
+            documento: clienteReserva.documento || clienteReserva.numeroDocumento || '',
+            numeroDocumento: clienteReserva.numeroDocumento || '',
+          });
+          setDepartamentoReserva(municipiosColombia.find((d) => d.ciudades.some((ciudad) => ciudad.nombre === clienteReserva.ciudad))?.departamento || '');
+          setFechaReserva(fechaHoraLocalInput(m.reservaFechaHora));
+          setPersonasReserva(m.reservaPersonas || Math.min(2, m.capacidad));
+          setNotaReserva(m.reservaNotas || '');
         } else {
+          setDatosReserva(CLIENTE_RESERVA_VACIO);
+          setDepartamentoReserva('');
+          setFechaReserva('');
+          setPersonasReserva(Math.min(2, m?.capacidad || 2));
+          setNotaReserva('');
           setMeseraId('');
         }
       }
@@ -330,13 +361,37 @@ export default function TomarPedido() {
   const reservarMesa = async (e) => {
     e.preventDefault();
     if (!mesa || mesa.estado !== 'LIBRE') return notify('Esta mesa ya no está disponible para reservar.', 'err');
+    if (!datosReserva.nombres.trim() && !datosReserva.razonSocial.trim()) return notify('Indica los nombres o la razón social.', 'err');
+    if (datosReserva.condicionPago === 'CREDITO' && !String(datosReserva.creditoDias).trim()) {
+      return notify('Indica a cuántos días es el crédito.', 'err');
+    }
     setGuardandoReserva(true);
     try {
-      await api.post(`/mesas/${mesa.id}/reservar`, {
+      const datosCliente = {
         ...datosReserva,
-        fechaHora: new Date(datosReserva.fechaHora).toISOString(),
+        numeroDocumento: datosReserva.numeroDocumento.trim() || null,
+        documento: datosReserva.numeroDocumento.trim() || null,
+      };
+      let clienteExistente = null;
+      if (datosCliente.numeroDocumento) {
+        const coincidencias = await api.get(`/clientes?q=${encodeURIComponent(datosCliente.numeroDocumento)}`);
+        clienteExistente = coincidencias.find((cliente) =>
+          cliente.numeroDocumento === datosCliente.numeroDocumento || cliente.documento === datosCliente.documento);
+      }
+      const clienteGuardado = clienteExistente
+        ? await api.put(`/clientes/${clienteExistente.id}`, datosCliente)
+        : await api.post('/clientes', datosCliente);
+      const nombreReserva = clienteGuardado.razonSocial
+        || [clienteGuardado.nombres, clienteGuardado.apellidos].filter(Boolean).join(' ')
+        || clienteGuardado.nombre;
+      await api.post(`/mesas/${mesa.id}/reservar`, {
+        nombre: nombreReserva,
+        telefono: clienteGuardado.telefono,
+        fechaHora: new Date(fechaReserva).toISOString(),
+        personas: personasReserva,
+        clienteId: clienteGuardado.id,
         items: carrito.map((item) => ({ productoId: item.producto.id, cantidad: item.cantidad, notas: item.notas || null })),
-        notas: datosReserva.notas.trim() || observaciones.trim() || '',
+        notas: notaReserva.trim() || observaciones.trim() || '',
       });
       notify(`Reserva creada para la mesa ${mesa.numero}`);
       setMostrarReserva(false);
@@ -571,7 +626,11 @@ export default function TomarPedido() {
               <>
                 {mesa.estado === 'LIBRE' && (
                   <button className="btn" style={{ flex: 1 }} disabled={procesando} onClick={() => {
-                    setDatosReserva({ nombre: '', telefono: '', fechaHora: '', personas: Math.min(2, mesa.capacidad), notas: observaciones });
+                    setDatosReserva(CLIENTE_RESERVA_VACIO);
+                    setDepartamentoReserva('');
+                    setFechaReserva('');
+                    setPersonasReserva(Math.min(2, mesa.capacidad));
+                    setNotaReserva(observaciones);
                     setMostrarReserva(true);
                   }}>
                     <Icon name="clientes" size={16} /> Reservar mesa
@@ -629,8 +688,8 @@ export default function TomarPedido() {
       {mostrarReserva && (
         <Modal
           title={`Reservar mesa ${mesa.numero}`}
-          subtitle={`Se guardará el prepedido de ${carrito.length} producto(s); no se descuenta inventario hasta enviarlo.`}
-          size="sm"
+          subtitle={`Se guardará el cliente y el prepedido de ${carrito.length} producto(s); no se descuenta inventario hasta enviarlo.`}
+          size="lg"
           onClose={() => setMostrarReserva(false)}
           footer={(
             <>
@@ -642,27 +701,147 @@ export default function TomarPedido() {
           )}
         >
           <form id="tomar-reserva-form" onSubmit={reservarMesa}>
-            <div className="field">
-              <label>Nombre</label>
-              <input autoFocus required maxLength={150} value={datosReserva.nombre} onChange={(e) => setDatosReserva({ ...datosReserva, nombre: e.target.value })} />
-            </div>
-            <div className="grid form-2col" style={{ gap: 12 }}>
+            <div className="grid form-3col" style={{ gap: 12 }}>
+              <div className="field">
+                <label>Tipo de cliente</label>
+                <select value={datosReserva.tipoCliente} onChange={(e) => setDatosReserva({ ...datosReserva, tipoCliente: e.target.value })}>
+                  <option value="NATURAL">Persona Natural</option>
+                  <option value="JURIDICA">Persona Jurídica</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Tipo de documento</label>
+                <select value={datosReserva.tipoDocumento} onChange={(e) => setDatosReserva({ ...datosReserva, tipoDocumento: e.target.value })}>
+                  <option value="RC">Registro civil</option>
+                  <option value="TI">Tarjeta de identidad</option>
+                  <option value="CC">Cédula de ciudadanía</option>
+                  <option value="TE">Tarjeta de extranjería</option>
+                  <option value="CE">Cédula de extranjería</option>
+                  <option value="NIT">NIT</option>
+                  <option value="PAS">Pasaporte</option>
+                  <option value="DIE">Documento de identificación extranjero</option>
+                  <option value="PEP">PEP - Permiso especial de permanencia</option>
+                  <option value="NUIP">NUIP</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Número de documento</label>
+                <input value={datosReserva.numeroDocumento} onChange={(e) => setDatosReserva({ ...datosReserva, numeroDocumento: e.target.value })} placeholder="Número / NIT" />
+              </div>
+              <div className="field">
+                <label>Razón social</label>
+                <input value={datosReserva.razonSocial} onChange={(e) => setDatosReserva({ ...datosReserva, razonSocial: e.target.value.toUpperCase() })} placeholder="Razón social (empresas)" />
+              </div>
+              <div className="field">
+                <label>Nombres</label>
+                <input autoFocus value={datosReserva.nombres} onChange={(e) => setDatosReserva({ ...datosReserva, nombres: e.target.value.toUpperCase() })} placeholder="Nombres" />
+              </div>
+              <div className="field">
+                <label>Apellidos</label>
+                <input value={datosReserva.apellidos} onChange={(e) => setDatosReserva({ ...datosReserva, apellidos: e.target.value.toUpperCase() })} placeholder="Apellidos" />
+              </div>
               <div className="field">
                 <label>Teléfono</label>
-                <input maxLength={50} value={datosReserva.telefono} onChange={(e) => setDatosReserva({ ...datosReserva, telefono: e.target.value })} />
+                <input maxLength={50} value={datosReserva.telefono} onChange={(e) => setDatosReserva({ ...datosReserva, telefono: e.target.value })} placeholder="Número de teléfono" />
               </div>
               <div className="field">
-                <label>Personas</label>
-                <input type="number" required min="1" max={mesa.capacidad} value={datosReserva.personas} onChange={(e) => setDatosReserva({ ...datosReserva, personas: e.target.value })} />
+                <label>Correo</label>
+                <input type="email" value={datosReserva.email} onChange={(e) => setDatosReserva({ ...datosReserva, email: e.target.value })} placeholder="correo@ejemplo.com" />
               </div>
-            </div>
-            <div className="field">
-              <label>Fecha y hora</label>
-              <input type="datetime-local" required min={fechaLocalMinima()} value={datosReserva.fechaHora} onChange={(e) => setDatosReserva({ ...datosReserva, fechaHora: e.target.value })} />
-            </div>
-            <div className="field">
-              <label>Nota de reserva</label>
-              <textarea rows="2" maxLength={500} value={datosReserva.notas} onChange={(e) => setDatosReserva({ ...datosReserva, notas: e.target.value })} />
+              <div className="field">
+                <label>Municipio</label>
+                <select value={departamentoReserva} onChange={(e) => { setDepartamentoReserva(e.target.value); setDatosReserva({ ...datosReserva, ciudad: '', municipioCodigo: '' }); }}>
+                  <option value="">Selecciona un municipio…</option>
+                  {municipiosColombia.map((d) => <option key={d.departamento} value={d.departamento}>{d.departamento}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label>Ciudad</label>
+                <select
+                  disabled={!departamentoReserva}
+                  value={datosReserva.ciudad}
+                  onChange={(e) => {
+                    const ciudad = municipiosColombia.find((d) => d.departamento === departamentoReserva)?.ciudades.find((c) => c.nombre === e.target.value);
+                    setDatosReserva({ ...datosReserva, ciudad: ciudad?.nombre || '', municipioCodigo: ciudad?.codigo || '' });
+                  }}
+                >
+                  <option value="">{departamentoReserva ? 'Selecciona una ciudad…' : 'Primero elige el municipio'}</option>
+                  {(municipiosColombia.find((d) => d.departamento === departamentoReserva)?.ciudades || []).map((ciudad) => (
+                    <option key={ciudad.codigo} value={ciudad.nombre}>{ciudad.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Barrio</label>
+                <input value={datosReserva.barrio} onChange={(e) => setDatosReserva({ ...datosReserva, barrio: e.target.value.toUpperCase() })} placeholder="Barrio" />
+              </div>
+              <div className="field">
+                <label>Dirección</label>
+                <input value={datosReserva.direccion} onChange={(e) => setDatosReserva({ ...datosReserva, direccion: e.target.value.toUpperCase() })} placeholder="Dirección" />
+              </div>
+              <div className="field">
+                <label>Código de municipio</label>
+                <input value={datosReserva.municipioCodigo} readOnly disabled placeholder="Se llena al elegir la ciudad" />
+              </div>
+              <div className="field" style={{ justifyContent: 'flex-end' }}>
+                <label className="mini" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="checkbox" checked={datosReserva.responsableIVA} onChange={(e) => setDatosReserva({ ...datosReserva, responsableIVA: e.target.checked })} />
+                  Responsable de IVA
+                </label>
+              </div>
+              <div className="field">
+                <label>% Empleado / % Cliente</label>
+                <div className="grid" style={{ gap: 6, gridTemplateColumns: '1fr 1fr' }}>
+                  <input type="number" min="0" max="100" step="0.01" value={datosReserva.porcentajeEmpleado} onChange={(e) => setDatosReserva({ ...datosReserva, porcentajeEmpleado: e.target.value })} placeholder="Empleado" />
+                  <input type="number" min="0" max="100" step="0.01" value={datosReserva.porcentajeCliente} onChange={(e) => setDatosReserva({ ...datosReserva, porcentajeCliente: e.target.value })} placeholder="Cliente" />
+                </div>
+              </div>
+              <div className="field">
+                <label>Condición de pago</label>
+                <div className="mesera-grid">
+                  {['CONTADO', 'CREDITO'].map((condicion) => (
+                    <button
+                      key={condicion}
+                      type="button"
+                      className={`mesera-card ${datosReserva.condicionPago === condicion ? 'sel' : ''}`}
+                      onClick={() => setDatosReserva({ ...datosReserva, condicionPago: condicion })}
+                    >
+                      <div className="mesera-nombre">{condicion === 'CONTADO' ? 'Contado' : 'Crédito'}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {datosReserva.condicionPago === 'CREDITO' ? (
+                <>
+                  <div className="field">
+                    <label>Días de crédito *</label>
+                    <input type="number" min="0" required value={datosReserva.creditoDias} onChange={(e) => setDatosReserva({ ...datosReserva, creditoDias: e.target.value })} placeholder="Ej. 30" />
+                  </div>
+                  <div className="field">
+                    <label>Cupo máximo</label>
+                    <input type="number" min="0" value={datosReserva.creditoCupo} onChange={(e) => setDatosReserva({ ...datosReserva, creditoCupo: e.target.value })} placeholder="Ej. 500000" />
+                  </div>
+                </>
+              ) : (
+                <div className="field">
+                  <label>Personas</label>
+                  <input type="number" required min="1" max={mesa.capacidad} value={personasReserva} onChange={(e) => setPersonasReserva(e.target.value)} />
+                </div>
+              )}
+              <div className="field">
+                <label>Fecha y hora</label>
+                <input type="datetime-local" required min={fechaLocalMinima()} value={fechaReserva} onChange={(e) => setFechaReserva(e.target.value)} />
+              </div>
+              {datosReserva.condicionPago === 'CREDITO' && (
+                <div className="field">
+                  <label>Personas</label>
+                  <input type="number" required min="1" max={mesa.capacidad} value={personasReserva} onChange={(e) => setPersonasReserva(e.target.value)} />
+                </div>
+              )}
+              <div className="field">
+                <label>Nota de reserva</label>
+                <textarea rows="2" maxLength={500} value={notaReserva} onChange={(e) => setNotaReserva(e.target.value)} />
+              </div>
             </div>
             {carrito.length > 0 && (
               <div className="reserva-prepedido">

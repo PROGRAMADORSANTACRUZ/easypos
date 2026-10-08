@@ -142,6 +142,7 @@ model Cliente {
   facturasVenta FacturaVenta[]
   remisiones Remision[]
   cortesias Cortesia[]
+  reservasMesa Mesa[] @relation("ClienteReservaMesa")
   createdAt DateTime @default(now()) @map("FechaCreacion")
 }
 
@@ -157,6 +158,8 @@ model Mesa {
   reservaPersonas Int?
   reservaNotas String?
   reservaItems Json?
+  reservaClienteId String? @db.Uuid
+  reservaCliente Cliente? @relation("ClienteReservaMesa", fields: [reservaClienteId], references: [id], onDelete: SetNull)
   pedidos   Pedido[]
   pedidosMesa PedidoMesa[]
   preparaciones PreparacionCocina[]

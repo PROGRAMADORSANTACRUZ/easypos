@@ -160,10 +160,16 @@ export default function Mesas() {
           )}
         >
           <div className="reserva-detalle">
-            <strong>{detalleReserva.reservaNombre}</strong>
+            <strong>{detalleReserva.reservaCliente?.razonSocial || detalleReserva.reservaNombre}</strong>
+            {detalleReserva.reservaCliente?.nombres && <span>{[detalleReserva.reservaCliente.nombres, detalleReserva.reservaCliente.apellidos].filter(Boolean).join(' ')}</span>}
+            {(detalleReserva.reservaCliente?.tipoDocumento || detalleReserva.reservaCliente?.numeroDocumento) && (
+              <span>{[detalleReserva.reservaCliente.tipoDocumento, detalleReserva.reservaCliente.numeroDocumento].filter(Boolean).join(' · ')}</span>
+            )}
             <span>{new Date(detalleReserva.reservaFechaHora).toLocaleString('es-CO')}</span>
             <span>{detalleReserva.reservaPersonas} personas</span>
-            {detalleReserva.reservaTelefono && <span>{detalleReserva.reservaTelefono}</span>}
+            {(detalleReserva.reservaCliente?.telefono || detalleReserva.reservaTelefono) && <span>{detalleReserva.reservaCliente?.telefono || detalleReserva.reservaTelefono}</span>}
+            {detalleReserva.reservaCliente?.email && <span>{detalleReserva.reservaCliente.email}</span>}
+            {detalleReserva.reservaCliente?.direccion && <span>{[detalleReserva.reservaCliente.direccion, detalleReserva.reservaCliente.barrio, detalleReserva.reservaCliente.ciudad].filter(Boolean).join(' · ')}</span>}
             {detalleReserva.reservaNotas && <p>{detalleReserva.reservaNotas}</p>}
             {detalleReserva.reservaItems?.length > 0 && (
               <div className="reserva-prepedido">
