@@ -7,6 +7,7 @@ import { LoadingState, Modal, Button } from '../components/ui/index.jsx';
 
 export default function Mesas() {
   const [mesas, setMesas] = useState([]);
+  const [filtroEstado, setFiltroEstado] = useState('TOTAL');
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [nueva, setNueva] = useState({ numero: '', capacidad: 4, password: '' });
@@ -54,6 +55,7 @@ export default function Mesas() {
     { etiqueta: 'Ocupadas', estado: 'OCUPADA', cantidad: mesas.filter((mesa) => mesa.estado === 'OCUPADA').length },
     { etiqueta: 'Reservadas', estado: 'RESERVADA', cantidad: mesas.filter((mesa) => mesa.estado === 'RESERVADA').length },
   ];
+  const mesasFiltradas = filtroEstado === 'TOTAL' ? mesas : mesas.filter((mesa) => mesa.estado === filtroEstado);
 
   return (
     <div>
@@ -73,10 +75,16 @@ export default function Mesas() {
       {!cargando && mesas.length > 0 && (
         <section className="mesa-resumen" aria-label="Resumen de mesas">
           {resumenMesas.map((dato) => (
-            <div key={dato.estado} className={`mesa-resumen__item mesa-resumen__item--${dato.estado.toLowerCase()}`}>
+            <button
+              key={dato.estado}
+              type="button"
+              className={`mesa-resumen__item mesa-resumen__item--${dato.estado.toLowerCase()}${filtroEstado === dato.estado ? ' is-active' : ''}`}
+              aria-pressed={filtroEstado === dato.estado}
+              onClick={() => setFiltroEstado(dato.estado)}
+            >
               <span>{dato.etiqueta}</span>
               <strong>{dato.cantidad}</strong>
-            </div>
+            </button>
           ))}
         </section>
       )}
@@ -131,9 +139,11 @@ export default function Mesas() {
         <LoadingState />
       ) : mesas.length === 0 ? (
         <p className="empty">No hay mesas. Ejecuta el seed para cargar datos de ejemplo.</p>
+      ) : mesasFiltradas.length === 0 ? (
+        <p className="empty">No hay mesas {filtroEstado.toLowerCase()}.</p>
       ) : (
         <div className="grid grid-mesas">
-          {mesas.map((mesa) => {
+          {mesasFiltradas.map((mesa) => {
             const pedido = mesa.pedidos?.[0];
             const listo = !!pedido?.preparacion?.listo;
             return (

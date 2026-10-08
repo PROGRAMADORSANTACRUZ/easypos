@@ -422,11 +422,19 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--panel);
+  color: inherit;
+  font: inherit;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: filter .15s, box-shadow .15s, transform .15s;
 }
+.mesa-resumen__item:hover { filter: brightness(1.12); }
+.mesa-resumen__item:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.mesa-resumen__item.is-active { box-shadow: inset 0 0 0 1px currentColor; transform: translateY(-1px); }
 .mesa-resumen__item span {
   color: var(--muted);
   font-size: 13px;
