@@ -170,6 +170,9 @@ export default function TomarPedido() {
   const [filtroCat, setFiltroCat] = useState('');       // filtro por categoría en el menú
   const [observaciones, setObservaciones] = useState(''); // nota general del pedido (ej. "sin cebolla")
   const [confirmandoCancelar, setConfirmandoCancelar] = useState(false);
+  const [mostrarReserva, setMostrarReserva] = useState(false);
+  const [guardandoReserva, setGuardandoReserva] = useState(false);
+  const [datosReserva, setDatosReserva] = useState({ nombre: '', telefono: '', fechaHora: '', personas: 2, notas: '' });
 
   const cargar = async () => {
     try {
@@ -191,7 +194,20 @@ export default function TomarPedido() {
         setMeseraId(String(abierto.meseraId));
         setObservaciones(abierto.observaciones || '');
       } else {
-        setObservaciones('');
+        const prepedido = (m?.reservaItems || []).map((linea) => {
+          const producto = ps.find((productoCatalogo) => productoCatalogo.id === linea.productoId);
+          return producto ? { producto, cantidad: Number(linea.cantidad) || 1, notas: linea.notas || '' } : null;
+        }).filter(Boolean);
+        setCarrito(prepedido);
+        setObservaciones(m?.reservaNotas || '');
+        if ((m?.reservaItems || []).length > prepedido.length) {
+          notify('Algunos productos del prepedido ya no están disponibles en el menú.', 'err');
+        }
+        if (m?.estado === 'RESERVADA') {
+          setDatosReserva({ nombre: m.reservaNombre || '', telefono: m.reservaTelefono || '', fechaHora: '', personas: m.reservaPersonas || Math.min(2, m.capacidad), notas: m.reservaNotas || '' });
+        } else {
+          setMeseraId('');
+        }
       }
     } catch (e) {
       notify(e.message, 'err');
@@ -226,6 +242,7 @@ export default function TomarPedido() {
       nombre: c.producto.nombre,
       cantidad: c.cantidad,
       precioUnit: c.producto.precio,
+      notas: c.notas || '',
     }));
   }, [pedido, carrito]);
 
@@ -295,7 +312,7 @@ export default function TomarPedido() {
       const nuevo = await api.post('/pedidos', {
         mesaId: Number(mesaId),
         meseraId: Number(meseraId),
-        items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad })),
+        items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad, notas: c.notas || null })),
         observaciones: observaciones.trim() || null,
       });
       setPedido(nuevo);
@@ -308,6 +325,32 @@ export default function TomarPedido() {
     } finally {
       setProcesando(false);
     }
+  };
+
+  const reservarMesa = async (e) => {
+    e.preventDefault();
+    if (!mesa || mesa.estado !== 'LIBRE') return notify('Esta mesa ya no está disponible para reservar.', 'err');
+    setGuardandoReserva(true);
+    try {
+      await api.post(`/mesas/${mesa.id}/reservar`, {
+        ...datosReserva,
+        fechaHora: new Date(datosReserva.fechaHora).toISOString(),
+        items: carrito.map((item) => ({ productoId: item.producto.id, cantidad: item.cantidad, notas: item.notas || null })),
+        notas: datosReserva.notas.trim() || observaciones.trim() || '',
+      });
+      notify(`Reserva creada para la mesa ${mesa.numero}`);
+      setMostrarReserva(false);
+      navigate('/mesas');
+    } catch (error) {
+      notify(error.message, 'err');
+    } finally {
+      setGuardandoReserva(false);
+    }
+  };
+
+  const fechaLocalMinima = () => {
+    const ahora = new Date();
+    return new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   };
 
   // Entra en modo edición y guarda una foto de los items actuales para el diff
@@ -390,7 +433,11 @@ export default function TomarPedido() {
         <div>
           <h1>Mesa {mesa.numero}</h1>
           <p className="subtitle">
-            {pedido ? <span className="badge orange">Pedido abierto — {editando ? 'editando' : 'guardado'}</span> : 'Nuevo pedido'}
+            {pedido
+              ? <span className="badge orange">Pedido abierto — {editando ? 'editando' : 'guardado'}</span>
+              : mesa.estado === 'RESERVADA'
+                ? <span className="badge orange">Reserva de {mesa.reservaNombre} — prepedido</span>
+                : 'Nuevo pedido'}
           </p>
         </div>
         <div className="row" style={{ gap: 8 }}>
@@ -478,6 +525,7 @@ export default function TomarPedido() {
                     <td>
                       <div style={{ fontWeight: 600, textTransform: 'uppercase' }}>{it.nombre}</div>
                       <div className="mini">{money(it.precioUnit)} c/u</div>
+                      {it.notas && <div className="mini">{it.notas}</div>}
                     </td>
                     <td>
                       {puedeEditar ? (
@@ -520,9 +568,19 @@ export default function TomarPedido() {
 
           <div className="row" style={{ marginTop: 14 }}>
             {!pedido ? (
-              <button className="btn btn-primary" style={{ flex: 1 }} disabled={procesando} onClick={enviarPedido}>
-                Enviar pedido
-              </button>
+              <>
+                {mesa.estado === 'LIBRE' && (
+                  <button className="btn" style={{ flex: 1 }} disabled={procesando} onClick={() => {
+                    setDatosReserva({ nombre: '', telefono: '', fechaHora: '', personas: Math.min(2, mesa.capacidad), notas: observaciones });
+                    setMostrarReserva(true);
+                  }}>
+                    <Icon name="clientes" size={16} /> Reservar mesa
+                  </button>
+                )}
+                <button className="btn btn-primary" style={{ flex: 1 }} disabled={procesando} onClick={enviarPedido}>
+                  Enviar pedido
+                </button>
+              </>
             ) : editando ? (
               <button className="btn btn-green" style={{ flex: 1 }} disabled={procesando} onClick={reenviarPedido}>
                 <Icon name="reload" size={16} /> Reenviar pedido
@@ -566,6 +624,60 @@ export default function TomarPedido() {
             )}
           </div>
         </div>
+      )}
+
+      {mostrarReserva && (
+        <Modal
+          title={`Reservar mesa ${mesa.numero}`}
+          subtitle={`Se guardará el prepedido de ${carrito.length} producto(s); no se descuenta inventario hasta enviarlo.`}
+          size="sm"
+          onClose={() => setMostrarReserva(false)}
+          footer={(
+            <>
+              <Button variant="secondary" onClick={() => setMostrarReserva(false)}>Volver</Button>
+              <Button variant="primary" type="submit" form="tomar-reserva-form" disabled={guardandoReserva}>
+                {guardandoReserva ? 'Guardando…' : 'Confirmar reserva'}
+              </Button>
+            </>
+          )}
+        >
+          <form id="tomar-reserva-form" onSubmit={reservarMesa}>
+            <div className="field">
+              <label>Nombre</label>
+              <input autoFocus required maxLength={150} value={datosReserva.nombre} onChange={(e) => setDatosReserva({ ...datosReserva, nombre: e.target.value })} />
+            </div>
+            <div className="grid form-2col" style={{ gap: 12 }}>
+              <div className="field">
+                <label>Teléfono</label>
+                <input maxLength={50} value={datosReserva.telefono} onChange={(e) => setDatosReserva({ ...datosReserva, telefono: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>Personas</label>
+                <input type="number" required min="1" max={mesa.capacidad} value={datosReserva.personas} onChange={(e) => setDatosReserva({ ...datosReserva, personas: e.target.value })} />
+              </div>
+            </div>
+            <div className="field">
+              <label>Fecha y hora</label>
+              <input type="datetime-local" required min={fechaLocalMinima()} value={datosReserva.fechaHora} onChange={(e) => setDatosReserva({ ...datosReserva, fechaHora: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>Nota de reserva</label>
+              <textarea rows="2" maxLength={500} value={datosReserva.notas} onChange={(e) => setDatosReserva({ ...datosReserva, notas: e.target.value })} />
+            </div>
+            {carrito.length > 0 && (
+              <div className="reserva-prepedido">
+                <strong>Prepedido</strong>
+                {carrito.map((item) => (
+                  <div key={item.producto.id}>
+                    <span>{item.cantidad}× {item.producto.nombre}</span>
+                    <span>{money(item.producto.precio * item.cantidad)}</span>
+                  </div>
+                ))}
+                <div className="total-line"><span>Subtotal estimado</span><strong>{money(subtotal)}</strong></div>
+              </div>
+            )}
+          </form>
+        </Modal>
       )}
 
       {confirmandoCancelar && (

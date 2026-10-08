@@ -156,6 +156,7 @@ model Mesa {
   reservaFechaHora DateTime?
   reservaPersonas Int?
   reservaNotas String?
+  reservaItems Json?
   pedidos   Pedido[]
   pedidosMesa PedidoMesa[]
   preparaciones PreparacionCocina[]

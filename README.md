@@ -145,5 +145,8 @@ reciben el esquema actualizado al crearse.
 
 Para habilitar las reservas de mesas en restaurantes existentes, aplica con
 respaldo previo `server/prisma/migrations/20261008200000_reservas_mesas/migration.sql`
-en la base del restaurante. Añade los datos de la reserva a la tabla `Mesa`.
+en la base del restaurante y después
+`server/prisma/migrations/20261008203000_reserva_prepedido/migration.sql` para
+guardar el prepedido asociado a la reserva. Añaden campos a `Mesa`; no modifican
+las reservas ya existentes.
 ```

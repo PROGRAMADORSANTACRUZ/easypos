@@ -193,6 +193,7 @@ router.post('/', wrap(async (req, res) => {
           reservaFechaHora: null,
           reservaPersonas: null,
           reservaNotas: null,
+          reservaItems: null,
         },
       });
       await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${nuevo.id}` });

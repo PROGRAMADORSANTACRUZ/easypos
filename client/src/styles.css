@@ -410,12 +410,13 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 .mesa.LIBRE .estado { color: var(--green); }
 .mesa.OCUPADA .estado { color: var(--red); }
 .mesa.RESERVADA .estado { color: var(--orange, #f59e0b); }
-.mesa-reservar-btn { height: 28px; min-height: 28px; margin-top: 7px; padding: 0 10px; font-size: 11px; }
 .reserva-resumen { margin-top: 4px; line-height: 1.35; }
 .reserva-detalle { display: grid; gap: 8px; }
 .reserva-detalle strong { font-size: 18px; }
 .reserva-detalle span { color: var(--muted); }
 .reserva-detalle p { margin: 2px 0 0; padding-top: 8px; border-top: 1px solid var(--border); }
+.reserva-prepedido { display: grid; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.reserva-prepedido > div { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
 
 .mesa-resumen {
   display: grid;

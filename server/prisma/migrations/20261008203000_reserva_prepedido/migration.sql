@@ -1,0 +1,2 @@
+ALTER TABLE "Mesa"
+ADD COLUMN IF NOT EXISTS "reservaItems" JSONB;

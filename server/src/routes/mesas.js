@@ -46,6 +46,7 @@ router.post('/:id/reservar', wrap(async (req, res) => {
   const fechaHora = new Date(req.body?.fechaHora);
   const personas = Number(req.body?.personas);
   const notas = String(req.body?.notas || '').trim();
+  const itemsReserva = req.body?.items ?? [];
   if (!nombre) return res.status(400).json({ error: 'Escribe el nombre de la reserva' });
   if (!Number.isFinite(fechaHora.getTime()) || fechaHora <= new Date()) {
     return res.status(400).json({ error: 'La fecha y hora deben ser futuras' });
@@ -57,6 +58,22 @@ router.post('/:id/reservar', wrap(async (req, res) => {
   if (!Number.isInteger(personas) || personas < 1 || personas > mesa.capacidad) {
     return res.status(400).json({ error: `La cantidad de personas debe estar entre 1 y ${mesa.capacidad}` });
   }
+  if (!Array.isArray(itemsReserva) || itemsReserva.length > 100
+    || itemsReserva.some((item) => !item?.productoId || !Number.isInteger(Number(item.cantidad)) || Number(item.cantidad) < 1)) {
+    return res.status(400).json({ error: 'El prepedido de la reserva no es válido' });
+  }
+  const productosReserva = itemsReserva.length
+    ? await prisma.producto.findMany({ where: { id: { in: [...new Set(itemsReserva.map((item) => String(item.productoId)))] } } })
+    : [];
+  if (productosReserva.length !== new Set(itemsReserva.map((item) => String(item.productoId))).size) {
+    return res.status(400).json({ error: 'Uno o más productos de la reserva ya no existen' });
+  }
+  const reservaItems = itemsReserva.map((item) => ({
+    productoId: String(item.productoId),
+    productoNombre: productosReserva.find((producto) => producto.id === String(item.productoId)).nombre,
+    cantidad: Number(item.cantidad),
+    notas: String(item.notas || '').trim() || null,
+  }));
 
   const ocupada = await prisma.pedido.findFirst({ where: { mesaId: id, estado: 'ABIERTO' }, select: { id: true } });
   if (ocupada) return res.status(409).json({ error: 'La mesa tiene un pedido abierto' });
@@ -70,6 +87,7 @@ router.post('/:id/reservar', wrap(async (req, res) => {
       reservaFechaHora: fechaHora,
       reservaPersonas: personas,
       reservaNotas: notas || null,
+      reservaItems,
     },
   });
   if (!actualizada.count) return res.status(409).json({ error: 'La mesa dejó de estar disponible' });
@@ -87,6 +105,7 @@ router.post('/:id/cancelar-reserva', wrap(async (req, res) => {
       reservaFechaHora: null,
       reservaPersonas: null,
       reservaNotas: null,
+      reservaItems: null,
     },
   });
   if (!actualizada.count) return res.status(404).json({ error: 'La mesa no tiene una reserva activa' });
@@ -111,6 +130,7 @@ router.put('/:id', wrap(async (req, res) => {
         reservaFechaHora: null,
         reservaPersonas: null,
         reservaNotas: null,
+        reservaItems: null,
       }),
     },
   });
