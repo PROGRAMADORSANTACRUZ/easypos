@@ -142,4 +142,8 @@ y `server/prisma/migrations/20261008193000_division_cuenta_facturas_pagadas/migr
 en ese orden. La primera permite varias facturas por pedido; la segunda crea el
 registro de división y el detalle de formas de pago. Los restaurantes nuevos
 reciben el esquema actualizado al crearse.
+
+Para habilitar las reservas de mesas en restaurantes existentes, aplica con
+respaldo previo `server/prisma/migrations/20261008200000_reservas_mesas/migration.sql`
+en la base del restaurante. Añade los datos de la reserva a la tabla `Mesa`.
 ```

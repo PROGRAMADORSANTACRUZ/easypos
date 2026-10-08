@@ -162,6 +162,11 @@ router.post('/', wrap(async (req, res) => {
   let pedido;
   try {
     pedido = await prisma.$transaction(async (tx) => {
+      const mesa = await tx.mesa.findUnique({ where: { id: Number(mesaId) }, select: { id: true, numero: true, estado: true } });
+      if (!mesa) throw Object.assign(new Error('Mesa no encontrada'), { status: 404 });
+      if (mesa.estado === 'OCUPADA') throw Object.assign(new Error(`La mesa ${mesa.numero} ya está ocupada`), { status: 409 });
+      const pedidoAbierto = await tx.pedido.findFirst({ where: { mesaId: Number(mesaId), estado: 'ABIERTO' }, select: { id: true } });
+      if (pedidoAbierto) throw Object.assign(new Error(`La mesa ${mesa.numero} ya tiene un pedido abierto`), { status: 409 });
       await validarStockSuficiente(tx, requeridos);
       const nuevo = await tx.pedido.create({
         data: {
@@ -179,13 +184,23 @@ router.post('/', wrap(async (req, res) => {
         },
         include: pedidoInclude,
       });
-      await tx.mesa.update({ where: { id: Number(mesaId) }, data: { estado: 'OCUPADA' } });
+      await tx.mesa.update({
+        where: { id: Number(mesaId) },
+        data: {
+          estado: 'OCUPADA',
+          reservaNombre: null,
+          reservaTelefono: null,
+          reservaFechaHora: null,
+          reservaPersonas: null,
+          reservaNotas: null,
+        },
+      });
       await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${nuevo.id}` });
       await sincronizarCocina(tx, nuevo.id);
       return nuevo;
     }, { timeout: 15000 });
   } catch (e) {
-    return res.status(409).json({ error: e.message });
+    return res.status(e.status || 409).json({ error: e.message });
   }
 
   imprimirComandaPorEstacion(pedido, pedido.items).catch(() => {});
@@ -498,6 +513,7 @@ router.post('/:id/cambiar-mesa', wrap(async (req, res) => {
 
   const destino = await prisma.mesa.findUnique({ where: { id: nuevaMesaId } });
   if (!destino) return res.status(404).json({ error: 'Mesa destino no encontrada' });
+  if (destino.estado === 'RESERVADA') return res.status(409).json({ error: `La mesa ${destino.numero} está reservada` });
 
   const ocupada = await prisma.pedido.findFirst({ where: { mesaId: nuevaMesaId, estado: 'ABIERTO' } });
   if (ocupada) return res.status(409).json({ error: `La mesa ${destino.numero} ya tiene un pedido abierto` });

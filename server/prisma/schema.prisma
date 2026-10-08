@@ -147,10 +147,15 @@ model Cliente {
 
 // Mesas del local
 model Mesa {
-  id        Int      @id @default(autoincrement())
-  numero    Int      @unique
-  capacidad Int      @default(4)
-  estado    String   @default("LIBRE") // LIBRE | OCUPADA
+  id        Int       @id @default(autoincrement())
+  numero    Int       @unique
+  capacidad Int       @default(4)
+  estado    String    @default("LIBRE") // LIBRE | OCUPADA | RESERVADA
+  reservaNombre String? @db.VarChar(150)
+  reservaTelefono String? @db.VarChar(50)
+  reservaFechaHora DateTime?
+  reservaPersonas Int?
+  reservaNotas String?
   pedidos   Pedido[]
   pedidosMesa PedidoMesa[]
   preparaciones PreparacionCocina[]
