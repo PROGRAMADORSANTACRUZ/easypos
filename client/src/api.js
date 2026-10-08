@@ -26,12 +26,6 @@ function usuarioIdActual() {
   return usuarioSesion?.id ?? null;
 }
 
-// Token de sesion (JWT) devuelto por /usuarios/login. Sin este token, el backend
-// rechaza la solicitud con 401 (no hay acceso anonimo a la API).
-function tokenActual() {
-  return usuarioSesion?.token ?? null;
-}
-
 // Restaurante (tenant) en sesion: cada request queda asociado a su base de datos
 export function tenantActual() {
   return tenantSesion;
@@ -53,17 +47,17 @@ export function limpiarSesionActual() {
 async function request(path, options = {}) {
   const uid = usuarioIdActual();
   const tenant = tenantActual();
-  const token = tokenActual();
   const res = await fetch(BASE + path, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(uid != null && { 'x-usuario-id': String(uid) }),
       ...(tenant && { 'x-tenant-id': tenant }),
-      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(path === '/usuarios/login' && { 'x-easypos-session': 'cookie' }),
     },
     ...options,
   });
-  if (res.status === 401 && !path.startsWith('/usuarios/login')) {
+  if (res.status === 401 && !['/usuarios/login', '/usuarios/sesion', '/usuarios/logout'].includes(path)) {
     // Sesion vencida o token invalido: se limpia y se vuelve a pedir login.
     limpiarSesionActual();
     window.location.reload();

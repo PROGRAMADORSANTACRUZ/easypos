@@ -3,8 +3,7 @@
 // Flujo:
 // 1) POST /api/usuarios/login valida usuario/contrasena y firma un token con
 //    firmarToken(usuario) que incluye el id, usuario, roles y permisos efectivos.
-// 2) El cliente guarda el token y lo envia en cada request como
-//    "Authorization: Bearer <token>".
+// 2) El servidor lo guarda en una cookie HttpOnly; el cliente no puede leerlo.
 // 3) requireAuth valida el token, lo decodifica y expone req.usuario con
 //    { id, usuario, roles, permisos }. Si no hay token valido, responde 401.
 // 4) permisoPorMetodo(modulo) es una autorizacion basica: exige el permiso
@@ -28,6 +27,7 @@ export function permisosEfectivos(roles, asignados, permisosRol) {
 
 const SECRET = process.env.JWT_SECRET;
 const EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h';
+const COOKIE_NAME = 'easypos_session';
 
 if (!SECRET) {
   // Sin secreto no hay forma segura de firmar/verificar tokens: mejor fallar rapido al arrancar.
@@ -35,21 +35,56 @@ if (!SECRET) {
 }
 
 // Firma un token de sesion a partir del usuario ya autenticado (con roles/permisos resueltos).
-export function firmarToken(usuario) {
+export function firmarToken(usuario, { restauranteId } = {}) {
   const payload = {
     sub: usuario.id,
     usuario: usuario.usuario,
     nombre: usuario.nombre,
     roles: usuario.roles || [],
     permisos: usuario.permisos || [],
+    ...(restauranteId && { restauranteId }),
   };
   return jwt.sign(payload, SECRET, { expiresIn: EXPIRES_IN });
 }
 
-// Exige un token valido en el header Authorization. Adjunta req.usuario si es correcto.
+function tokenDeCookie(req) {
+  const cookie = req.headers.cookie?.split(';').map((parte) => parte.trim())
+    .find((parte) => parte.startsWith(`${COOKIE_NAME}=`));
+  if (!cookie) return null;
+  try { return decodeURIComponent(cookie.slice(COOKIE_NAME.length + 1)); } catch { return null; }
+}
+
+function opcionesCookie(req) {
+  const protoProxy = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production' || req.secure || protoProxy === 'https',
+    sameSite: 'lax',
+    path: '/api',
+  };
+}
+
+export function establecerCookieSesion(req, res, token) {
+  const expira = jwt.decode(token)?.exp;
+  const maxAge = expira ? Math.max(0, expira * 1000 - Date.now()) : 12 * 60 * 60 * 1000;
+  res.cookie(COOKIE_NAME, token, { ...opcionesCookie(req), maxAge });
+}
+
+export function limpiarCookieSesion(req, res) {
+  res.clearCookie(COOKIE_NAME, opcionesCookie(req));
+}
+
+export function leerPayloadSesion(req) {
+  const header = req.headers.authorization || '';
+  const token = tokenDeCookie(req) || (header.startsWith('Bearer ') ? header.slice(7).trim() : null);
+  if (!token) return null;
+  try { return jwt.verify(token, SECRET); } catch { return null; }
+}
+
+// Exige un token valido en cookie o Authorization para clientes API heredados.
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : null;
+  const token = tokenDeCookie(req) || (header.startsWith('Bearer ') ? header.slice(7).trim() : null);
   if (!token) return res.status(401).json({ error: 'No autenticado' });
   try {
     const payload = jwt.verify(token, SECRET);

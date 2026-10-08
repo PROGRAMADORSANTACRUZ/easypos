@@ -4,9 +4,16 @@
 import { platformPrisma } from '../platformPrisma.js';
 import { getTenantPrisma } from '../tenantManager.js';
 import { tenantStorage } from '../prisma.js';
+import { leerPayloadSesion } from './auth.js';
 
 export async function resolverTenant(req, res, next) {
-  const tenantId = req.header('x-tenant-id');
+  const payload = leerPayloadSesion(req);
+  const tenantHeader = req.header('x-tenant-id');
+  const esLogin = req.path === '/api/usuarios/login';
+  if (payload?.restauranteId && tenantHeader && tenantHeader !== payload.restauranteId && !esLogin) {
+    return res.status(403).json({ error: 'El restaurante de la sesión no coincide' });
+  }
+  const tenantId = esLogin ? tenantHeader || payload?.restauranteId : payload?.restauranteId || tenantHeader;
   if (!tenantId) return next();
 
   try {

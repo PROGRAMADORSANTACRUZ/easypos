@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
-import { firmarToken, requireAuth, MODULOS_FACTURACION, permisosEfectivos } from '../middleware/auth.js';
+import { firmarToken, establecerCookieSesion, limpiarCookieSesion, requireAuth, MODULOS_FACTURACION, permisosEfectivos } from '../middleware/auth.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -75,12 +75,26 @@ router.post('/login', wrap(async (req, res) => {
   // Si el request trajo un restaurante resuelto (header x-tenant-id), lo devolvemos
   // para que el frontend confirme con cual restaurante quedo la sesion.
   if (req.tenant) datos.restaurante = { id: req.tenant.id, slug: req.tenant.slug, nombre: req.tenant.nombre };
-  datos.token = firmarToken(datos);
+  const token = firmarToken(datos, { restauranteId: req.tenant?.id });
+  establecerCookieSesion(req, res, token);
+  if (req.get('x-easypos-session') !== 'cookie') datos.token = token;
   res.json(datos);
 }));
 
 // A partir de aqui todas las rutas de usuarios requieren sesion valida.
 router.use(requireAuth);
+
+router.get('/sesion', (req, res) => {
+  res.json({
+    ...req.usuario,
+    ...(req.tenant && { restaurante: { id: req.tenant.id, slug: req.tenant.slug, nombre: req.tenant.nombre } }),
+  });
+});
+
+router.post('/logout', (req, res) => {
+  limpiarCookieSesion(req, res);
+  res.status(204).end();
+});
 
 const soloAdmin = wrap(async (req, res, next) => {
   const asignacion = await prisma.usuarioRol.findFirst({

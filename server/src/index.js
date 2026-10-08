@@ -65,7 +65,22 @@ import { mayusculas } from './middleware/mayusculas.js';
 import { requireAuth, permisoPorMetodo, permisoModuloFacturacion, permisoSegunFactura } from './middleware/auth.js';
 
 const app = express();
-app.use(cors());
+const corsOrigins = new Set([
+  'https://easypos.grupo-santacruz.com',
+  ...(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
+]);
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    let origenLocal = false;
+    try {
+      const url = new URL(origin);
+      origenLocal = url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname);
+    } catch { /* origen no valido */ }
+    callback(null, corsOrigins.has(origin) || origenLocal ? origin : false);
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '5mb' }));
 app.use(mayusculas);
 app.use(resolverTenant);

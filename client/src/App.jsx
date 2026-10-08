@@ -36,8 +36,8 @@ import Reportes from './pages/Reportes.jsx';
 import Clientes from './pages/Clientes.jsx';
 import Login from './pages/Login.jsx';
 import { Icon } from './icons.jsx';
-import { Logo } from './components/ui/index.jsx';
-import { limpiarSesionActual, setUsuarioActual } from './api.js';
+import { LoadingState, Logo } from './components/ui/index.jsx';
+import { api, limpiarSesionActual, setTenantActual, setUsuarioActual } from './api.js';
 
 const ToastCtx = createContext(() => {});
 export const useToast = () => useContext(ToastCtx);
@@ -163,6 +163,7 @@ export default function App() {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [colapsado, setColapsado] = useState(false);
   const [user, setUser] = useState(() => DEV_BYPASS ? DEV_USER : null);
+  const [restaurandoSesion, setRestaurandoSesion] = useState(!DEV_BYPASS);
   const [tema, setTema] = useState('dark');
   const navigate = useNavigate();
   const location = useLocation();
@@ -170,6 +171,20 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = tema;
   }, [tema]);
+
+  useEffect(() => {
+    if (DEV_BYPASS) return;
+    let activo = true;
+    api.get('/usuarios/sesion')
+      .then((sesion) => {
+        if (!activo) return;
+        setTenantActual(sesion.restaurante?.id || null);
+        setUser(sesion);
+      })
+      .catch(() => {})
+      .finally(() => { if (activo) setRestaurandoSesion(false); });
+    return () => { activo = false; };
+  }, []);
 
   // Cierra el menú lateral al navegar (relevante en móvil/tablet)
   useEffect(() => {
@@ -236,7 +251,8 @@ export default function App() {
     navigate(rutaInicial(u));
   }, [navigate]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try { await api.post('/usuarios/logout', {}); } catch { /* limpiar la interfaz aunque falle la red */ }
     limpiarSesionActual();
     setUser(null);
   }, []);
@@ -249,6 +265,7 @@ export default function App() {
   };
 
   if (!user) {
+    if (restaurandoSesion) return <LoadingState label="Verificando sesión..." />;
     return (
       <ToastCtx.Provider value={notify}>
         <Login onLogin={login} />
