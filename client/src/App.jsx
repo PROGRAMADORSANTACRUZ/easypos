@@ -37,6 +37,7 @@ import Clientes from './pages/Clientes.jsx';
 import Login from './pages/Login.jsx';
 import { Icon } from './icons.jsx';
 import { Logo } from './components/ui/index.jsx';
+import { limpiarSesionActual, setUsuarioActual } from './api.js';
 
 const ToastCtx = createContext(() => {});
 export const useToast = () => useContext(ToastCtx);
@@ -160,22 +161,14 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [grupoAbierto, setGrupoAbierto] = useState(null);
   const [menuAbierto, setMenuAbierto] = useState(false);
-  const [colapsado, setColapsado] = useState(() => localStorage.getItem('easypos_sidebar') === 'colapsado');
-  const [user, setUser] = useState(() => {
-    try {
-      const u = JSON.parse(localStorage.getItem('easypos_user'));
-      if (u && !Array.isArray(u.permisos)) return null; // sesión antigua sin permisos: forzar login
-      if (u) return u;
-    } catch { /* sin sesión válida */ }
-    return DEV_BYPASS ? DEV_USER : null;
-  });
-  const [tema, setTema] = useState(() => localStorage.getItem('easypos_tema') || 'dark');
+  const [colapsado, setColapsado] = useState(false);
+  const [user, setUser] = useState(() => DEV_BYPASS ? DEV_USER : null);
+  const [tema, setTema] = useState('dark');
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     document.documentElement.dataset.theme = tema;
-    localStorage.setItem('easypos_tema', tema);
   }, [tema]);
 
   // Cierra el menú lateral al navegar (relevante en móvil/tablet)
@@ -197,7 +190,6 @@ export default function App() {
 
   const alternarColapso = () => setColapsado((c) => {
     const nuevo = !c;
-    localStorage.setItem('easypos_sidebar', nuevo ? 'colapsado' : 'expandido');
     return nuevo;
   });
 
@@ -239,13 +231,13 @@ export default function App() {
   }, []);
 
   const login = useCallback((u) => {
-    localStorage.setItem('easypos_user', JSON.stringify(u));
+    setUsuarioActual(u);
     setUser(u);
     navigate(rutaInicial(u));
   }, [navigate]);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('easypos_user');
+    limpiarSesionActual();
     setUser(null);
   }, []);
 

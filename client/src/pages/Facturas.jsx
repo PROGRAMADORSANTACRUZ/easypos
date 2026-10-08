@@ -569,7 +569,6 @@ function ClientePicker({ clientes, value, onChange, onCreated }) {
 export default function Facturas({ electronica = true }) {
   const claseDocumento = electronica ? 'FACTURA ELECTRONICA DE VENTA' : 'FACTURA DE VENTA (NO ELECTRONICA)';
   const formatoRecibo = electronica ? 'formatoFactura' : 'formatoFacturaVenta';
-  const claveCongeladas = electronica ? 'easypos_congeladas' : 'easypos_congeladas_venta';
   const [facturas, setFacturas] = useState([]);
   const [pendientes, setPendientes] = useState([]);
   const [pagos, setPagos] = useState({}); // metodo de pago por pedidoId
@@ -595,9 +594,7 @@ export default function Facturas({ electronica = true }) {
   const [pago2MontoDirecta, setPago2MontoDirecta] = useState(''); // valor de la segunda forma en venta directa
   const [propinaDirecta, setPropinaDirecta] = useState(''); // propina en venta directa ('' = sugerir 10%)
   const [facturandoDirecta, setFacturandoDirecta] = useState(false);
-  const [congeladas, setCongeladas] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(claveCongeladas) || '[]'); } catch { return []; }
-  });
+  const [congeladas, setCongeladas] = useState([]);
   const [apertura, setApertura] = useState(null); // caja abierta actual (null = cerrada)
   const [tipoFactura, setTipoFactura] = useState(null);
   const [cerrandoCaja, setCerrandoCaja] = useState(false); // muestra el modal de cierre
@@ -988,7 +985,6 @@ export default function Facturas({ electronica = true }) {
   // --- Ventas congeladas (se guardan sin facturar para atender a otro cliente) ---
   const guardarCongeladas = (lista) => {
     setCongeladas(lista);
-    try { localStorage.setItem(claveCongeladas, JSON.stringify(lista)); } catch { /* ignorar */ }
   };
 
   const congelarDirecta = () => {

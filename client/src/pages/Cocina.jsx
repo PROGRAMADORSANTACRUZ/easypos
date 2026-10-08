@@ -10,7 +10,7 @@ export default function Cocina() {
   const [pedidos, setPedidos] = useState([]);
   const [preparaciones, setPreparaciones] = useState({}); // pedidoId -> preparacion
   const [cocineros, setCocineros] = useState([]);
-  const [cocineroId, setCocineroId] = useState(() => localStorage.getItem('easypos_cocinero') || '');
+  const [cocineroId, setCocineroId] = useState('');
   const [cargando, setCargando] = useState(true);
   const [marcando, setMarcando] = useState(null);
   const [confirmarId, setConfirmarId] = useState(null); // pedidoId pendiente de confirmar como "listo"
@@ -42,8 +42,6 @@ export default function Cocina() {
 
   const elegirCocinero = (id) => {
     setCocineroId(id);
-    if (id) localStorage.setItem('easypos_cocinero', id);
-    else localStorage.removeItem('easypos_cocinero');
   };
 
   const marcarListo = async (pedidoId) => {

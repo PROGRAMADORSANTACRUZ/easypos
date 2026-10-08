@@ -5,32 +5,49 @@
 // absoluta inyectada en window.EASYPOS_API_URL.
 const BASE = (typeof window !== 'undefined' && window.EASYPOS_API_URL) || '/api';
 
+let usuarioSesion = null;
+let tenantSesion = null;
+
+function limpiarPersistenciaLocalAnterior() {
+  try {
+    for (let indice = localStorage.length - 1; indice >= 0; indice -= 1) {
+      const clave = localStorage.key(indice);
+      if (clave?.startsWith('easypos_')) localStorage.removeItem(clave);
+    }
+  } catch {
+    // El almacenamiento local no es necesario para el funcionamiento de la app.
+  }
+}
+
+if (typeof window !== 'undefined') limpiarPersistenciaLocalAnterior();
+
 // Id del usuario en sesion, para que el backend registre la auditoria
 function usuarioIdActual() {
-  try {
-    return JSON.parse(localStorage.getItem('easypos_user'))?.id ?? null;
-  } catch {
-    return null;
-  }
+  return usuarioSesion?.id ?? null;
 }
 
 // Token de sesion (JWT) devuelto por /usuarios/login. Sin este token, el backend
 // rechaza la solicitud con 401 (no hay acceso anonimo a la API).
 function tokenActual() {
-  try {
-    return JSON.parse(localStorage.getItem('easypos_user'))?.token ?? null;
-  } catch {
-    return null;
-  }
+  return usuarioSesion?.token ?? null;
 }
 
 // Restaurante (tenant) en sesion: cada request queda asociado a su base de datos
 export function tenantActual() {
-  return localStorage.getItem('easypos_tenant') || null;
+  return tenantSesion;
 }
+
 export function setTenantActual(slugOId) {
-  if (slugOId) localStorage.setItem('easypos_tenant', slugOId);
-  else localStorage.removeItem('easypos_tenant');
+  tenantSesion = slugOId || null;
+}
+
+export function setUsuarioActual(usuario) {
+  usuarioSesion = usuario || null;
+}
+
+export function limpiarSesionActual() {
+  usuarioSesion = null;
+  tenantSesion = null;
 }
 
 async function request(path, options = {}) {
@@ -48,7 +65,7 @@ async function request(path, options = {}) {
   });
   if (res.status === 401 && !path.startsWith('/usuarios/login')) {
     // Sesion vencida o token invalido: se limpia y se vuelve a pedir login.
-    localStorage.removeItem('easypos_user');
+    limpiarSesionActual();
     window.location.reload();
     throw new Error('Sesión expirada');
   }

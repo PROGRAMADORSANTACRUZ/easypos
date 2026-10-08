@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { api, setTenantActual, tenantActual } from '../api.js';
+import { api, setTenantActual } from '../api.js';
 
 export default function Login({ onLogin }) {
   const [restaurantes, setRestaurantes] = useState([]);
-  const [restauranteId, setRestauranteId] = useState(tenantActual() || '');
+  const [restauranteId, setRestauranteId] = useState('');
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

@@ -16,8 +16,6 @@ const TIPOS_ID = [
   { value: 'TI', label: 'Tarjeta de identidad' },
 ];
 
-const ULTIMO_KEY = 'easypos_ultimo_domicilio';
-
 const norm = (s) => String(s || '').toLowerCase().trim();
 
 // Buscador de clientes ya registrados: al elegir uno, rellena los datos del pedido.
@@ -109,9 +107,7 @@ export default function Pedidos() {
   const [ubicando, setUbicando] = useState(false);
   const [pedidoCreado, setPedidoCreado] = useState(null); // { id, token }
   const [seguimientoAbierto, setSeguimientoAbierto] = useState(false);
-  const [ultimo, setUltimo] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(ULTIMO_KEY)); } catch { return null; }
-  });
+  const [ultimo, setUltimo] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -256,7 +252,6 @@ export default function Pedidos() {
       const ref = { id: creado.id, token: creado.seguimientoToken };
       setPedidoCreado(ref);
       setUltimo(ref);
-      try { localStorage.setItem(ULTIMO_KEY, JSON.stringify(ref)); } catch { /* almacenamiento no disponible */ }
       setCarrito([]);
       setCliente(CLIENTE_VACIO);
       setMetodoPago('');
