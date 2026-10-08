@@ -576,6 +576,15 @@ export default function Facturas({ electronica = true }) {
   const [mixto, setMixto] = useState({}); // pago en 2 formas por pedidoId
   const [pago2, setPago2] = useState({}); // segunda forma de pago por pedidoId
   const [pago2Monto, setPago2Monto] = useState({}); // valor de la segunda forma por pedidoId
+  const [dividirCuenta, setDividirCuenta] = useState(false);
+  const [modoDivision, setModoDivision] = useState('IGUALES');
+  const [cantidadPartes, setCantidadPartes] = useState(2);
+  const [emisionDivision, setEmisionDivision] = useState('SEPARADAS');
+  const [asignacionesDivision, setAsignacionesDivision] = useState({});
+  const [pagosDivision, setPagosDivision] = useState([
+    { formaPago: 'EFECTIVO', monto: '' },
+    { formaPago: 'TARJETA', monto: '' },
+  ]);
   const [propinas, setPropinas] = useState({}); // propina por pedidoId (undefined = sugerir 10%)
   const [propinaOn, setPropinaOn] = useState({}); // ¿se cobra propina? por pedidoId (undefined = sí)
   const [cobrando, setCobrando] = useState(null); // pedido en proceso de cobro (abre el modal POS)
@@ -905,6 +914,63 @@ export default function Facturas({ electronica = true }) {
     }
   };
 
+  const facturarDividido = async (pedido) => {
+    if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
+    if (!apertura) return notify('Abre la caja antes de facturar', 'err');
+    const clienteId = (clientesSel[pedido.id] ?? idDefault) || null;
+    const clienteSeleccionado = clienteDe(clienteId);
+    if (clienteSeleccionado?.condicionPago === 'CREDITO') return notify('La división de cuenta no está disponible para ventas a crédito.', 'err');
+    const nPartes = Number(cantidadPartes);
+    if (!Number.isInteger(nPartes) || nPartes < 2 || nPartes > 12) return notify('Divide la cuenta entre 2 y 12 personas.', 'err');
+
+    const asignaciones = pedido.items.map((item) => ({
+      pedidoItemId: item.id,
+      cantidades: modoDivision === 'IGUALES'
+        ? Array.from({ length: nPartes }, () => 0)
+        : (asignacionesDivision[item.id] || [item.cantidad, ...Array.from({ length: nPartes - 1 }, () => 0)]),
+    }));
+    if (modoDivision === 'PRODUCTOS' && asignaciones.some((asignacion, indice) =>
+      asignacion.cantidades.length !== nPartes || asignacion.cantidades.reduce((suma, cantidad) => suma + Number(cantidad || 0), 0) !== pedido.items[indice].cantidad)) {
+      return notify('Asigna todas las unidades de cada producto antes de continuar.', 'err');
+    }
+
+    const cobrarPropina = electronica && propinaOn[pedido.id] !== false;
+    const propina = cobrarPropina
+      ? (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(totalPedido(pedido)))
+      : 0;
+    const ventanaCount = emisionDivision === 'UNA' ? 1 : nPartes;
+    const ventanas = Array.from({ length: ventanaCount }, () => abrirVentanaVacia());
+    setProcesando(pedido.id);
+    try {
+      const resultado = await api.post('/facturas/dividir', {
+        pedidoId: pedido.id,
+        electronica,
+        modo: modoDivision,
+        cantidadPartes: nPartes,
+        asignaciones,
+        emision: emisionDivision,
+        pagos: pagosDivision,
+        clienteId,
+        propina,
+      });
+      const facturasNuevas = resultado.facturas || [];
+      notify(facturasNuevas.length === 1
+        ? `Cuenta dividida y facturada: ${money(facturasNuevas[0].total + facturasNuevas[0].propina)}`
+        : `Cuenta dividida en ${facturasNuevas.length} facturas`);
+      if (facturasNuevas[0]) setSel({ ...facturasNuevas[0], _recibido: null });
+      setCobrando(null);
+      for (const [indice, factura] of facturasNuevas.entries()) {
+        await imprimirGenerada(factura, null, ventanas[indice]);
+      }
+      await cargar();
+    } catch (error) {
+      ventanas.forEach((ventana) => ventana?.close());
+      notify(error.message, 'err');
+    } finally {
+      setProcesando(null);
+    }
+  };
+
   // Abre el modal POS de cobro para un pedido, precargando el método de pago del domicilio.
   const abrirCobro = (pedido) => {
     if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
@@ -918,6 +984,12 @@ export default function Facturas({ electronica = true }) {
     if (pedido.clienteId && clientesSel[pedido.id] === undefined) {
       setClientesSel((prev) => ({ ...prev, [pedido.id]: pedido.clienteId }));
     }
+    setDividirCuenta(false);
+    setModoDivision('IGUALES');
+    setCantidadPartes(2);
+    setEmisionDivision('SEPARADAS');
+    setAsignacionesDivision({});
+    setPagosDivision([{ formaPago: 'EFECTIVO', monto: '' }, { formaPago: 'TARJETA', monto: '' }]);
     setCobrando(pedido);
   };
 
@@ -1278,6 +1350,39 @@ export default function Facturas({ electronica = true }) {
           : (propinas[p.id] !== undefined ? Math.max(0, Number(propinas[p.id]) || 0) : sugPropina(totalP));
         const totalPagarP = totalP + propP;
         const nombreCli = p.clienteRel?.nombre || p.cliente || 'Consumidor Final';
+        const nPartes = Math.max(2, Math.min(12, Number(cantidadPartes) || 2));
+        const importesLineas = p.items.map((item) => {
+          const bruto = item.precioUnit * item.cantidad;
+          const impuesto = electronica ? Math.round(bruto * (Number(item.producto?.iva) || 0) / 100 * 100) / 100 : 0;
+          return bruto + impuesto;
+        });
+        const totalBruto = importesLineas.reduce((suma, valor) => suma + valor, 0);
+        const asignacionesVisibles = p.items.map((item) => ({
+          item,
+          cantidades: (asignacionesDivision[item.id]?.length === nPartes
+            ? asignacionesDivision[item.id]
+            : [item.cantidad, ...Array.from({ length: nPartes - 1 }, () => 0)]).map(Number),
+        }));
+        const totalesAntesPropina = modoDivision === 'IGUALES'
+          ? Array.from({ length: nPartes }, (_, indice) => indice === nPartes - 1
+            ? Math.round((totalBruto - Math.round(totalBruto / nPartes * 100) / 100 * (nPartes - 1)) * 100) / 100
+            : Math.round(totalBruto / nPartes * 100) / 100)
+          : Array.from({ length: nPartes }, (_, indice) => Math.round(asignacionesVisibles.reduce((suma, linea) => {
+            const bruto = linea.item.precioUnit * linea.cantidades[indice];
+            const iva = electronica ? Math.round(bruto * (Number(linea.item.producto?.iva) || 0) / 100 * 100) / 100 : 0;
+            return suma + bruto + iva;
+          }, 0) * 100) / 100);
+        const basePropinaPartes = totalesAntesPropina.reduce((suma, valor) => suma + valor, 0);
+        const propinaPartes = totalesAntesPropina.map((valor, indice) => indice === nPartes - 1
+          ? Math.round((propP - totalesAntesPropina.slice(0, -1).reduce((suma, base) => suma + (basePropinaPartes ? Math.round(propP * base / basePropinaPartes * 100) / 100 : 0), 0)) * 100) / 100
+          : (basePropinaPartes ? Math.round(propP * valor / basePropinaPartes * 100) / 100 : Math.round(propP / nPartes * 100) / 100));
+        const totalesPartes = totalesAntesPropina.map((total, indice) => total + propinaPartes[indice]);
+        const pagosDivididosTotal = pagosDivision.reduce((suma, pago) => suma + (Number(pago.monto) || 0), 0);
+        const asignacionesCompletas = modoDivision !== 'PRODUCTOS' || asignacionesVisibles.every(({ item, cantidades }) =>
+          cantidades.length === nPartes && cantidades.every((cantidad) => Number.isInteger(cantidad) && cantidad >= 0)
+          && cantidades.reduce((suma, cantidad) => suma + cantidad, 0) === item.cantidad)
+          && (modoDivision !== 'PRODUCTOS' || Array.from({ length: nPartes }, (_, indice) =>
+            asignacionesVisibles.some(({ cantidades }) => cantidades[indice] > 0)).every(Boolean));
         return (
           <div className="modal-overlay" {...overlayCierre(() => setCobrando(null))}>
             <div className="modal cobro-modal" onClick={(e) => e.stopPropagation()}>
@@ -1323,7 +1428,136 @@ export default function Facturas({ electronica = true }) {
                       onCreated={cargar}
                     />
                   </div>
-                  {credito ? (
+                  {!credito && (
+                    <button
+                      type="button"
+                      className={`btn btn-sm cobro-dividir-toggle${dividirCuenta ? ' is-active' : ''}`}
+                      onClick={() => setDividirCuenta((actual) => !actual)}
+                    >
+                      <Icon name="shuffle" size={16} /> {dividirCuenta ? 'Volver a cobro normal' : 'Dividir cuenta'}
+                    </button>
+                  )}
+                  {dividirCuenta ? (
+                    <>
+                      <div className="field">
+                        <label>Forma de división</label>
+                        <div className="split-segmented">
+                          <button type="button" className={modoDivision === 'IGUALES' ? 'is-active' : ''} onClick={() => setModoDivision('IGUALES')}>Partes iguales</button>
+                          <button type="button" className={modoDivision === 'PRODUCTOS' ? 'is-active' : ''} onClick={() => setModoDivision('PRODUCTOS')}>Por productos</button>
+                        </div>
+                      </div>
+                      <div className="field">
+                        <label>Personas</label>
+                        <select
+                          value={cantidadPartes}
+                          onChange={(e) => {
+                            const nuevaCantidad = Number(e.target.value);
+                            setCantidadPartes(nuevaCantidad);
+                            setAsignacionesDivision({});
+                            setPagosDivision(Array.from({ length: nuevaCantidad }, (_, indice) => ({
+                              formaPago: indice === 0 ? 'EFECTIVO' : 'TARJETA',
+                              monto: '',
+                            })));
+                          }}
+                        >
+                          {Array.from({ length: 11 }, (_, indice) => indice + 2).map((cantidad) => (
+                            <option key={cantidad} value={cantidad}>{cantidad} personas</option>
+                          ))}
+                        </select>
+                      </div>
+                      {modoDivision === 'PRODUCTOS' && (
+                        <div className="divide-productos">
+                          <div className="fc-sec-title">Asigna las unidades de cada producto</div>
+                          {asignacionesVisibles.map(({ item, cantidades }) => (
+                            <div className="divide-producto" key={item.id}>
+                              <div className="divide-producto__titulo">{item.producto?.nombre} <span>({item.cantidad})</span></div>
+                              <div className="divide-cantidades">
+                                {cantidades.map((cantidad, indice) => (
+                                  <label key={`${item.id}-${indice}`}>
+                                    <span>Parte {indice + 1}</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={item.cantidad}
+                                      step="1"
+                                      value={cantidad}
+                                      onChange={(e) => {
+                                        const siguiente = [...cantidades];
+                                        siguiente[indice] = Math.max(0, Math.min(item.cantidad, Number(e.target.value) || 0));
+                                        setAsignacionesDivision((actuales) => ({ ...actuales, [item.id]: siguiente }));
+                                      }}
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          {!asignacionesCompletas && <div className="mini" style={{ color: 'var(--red)' }}>Asigna todas las unidades y deja al menos un producto en cada parte.</div>}
+                        </div>
+                      )}
+                      <div className="divide-preview">
+                        {totalesPartes.map((totalParte, indice) => (
+                          <div className="total-line" key={indice}><span>Parte {indice + 1}</span><strong>{money(totalParte)}</strong></div>
+                        ))}
+                      </div>
+                      <div className="field">
+                        <label>Documentos</label>
+                        <select
+                          value={emisionDivision}
+                          onChange={(e) => {
+                            const emision = e.target.value;
+                            setEmisionDivision(emision);
+                            setPagosDivision(totalesPartes.map((monto, indice) => ({
+                              formaPago: indice === 0 ? 'EFECTIVO' : 'TARJETA',
+                              monto: monto.toFixed(2),
+                            })));
+                          }}
+                        >
+                          <option value="SEPARADAS">Una factura por parte</option>
+                          <option value="UNA">Una factura con pagos separados</option>
+                        </select>
+                      </div>
+                      <div className="divide-pagos">
+                        <div className="fc-sec-title">{emisionDivision === 'UNA' ? 'Pagos por persona' : 'Pago de cada factura'}</div>
+                        {Array.from({ length: nPartes }, (_, indice) => {
+                          const pago = pagosDivision[indice] || { formaPago: 'EFECTIVO', monto: '' };
+                          return (
+                            <div className="divide-pago" key={indice}>
+                              <span>Parte {indice + 1}</span>
+                              <select
+                                value={pago.formaPago}
+                                onChange={(e) => setPagosDivision((anteriores) => anteriores.map((actual, i) => i === indice ? { ...actual, formaPago: e.target.value } : actual))}
+                              >
+                                <option value="EFECTIVO">Efectivo</option>
+                                <option value="TARJETA">Tarjeta</option>
+                                <option value="TRANSFERENCIA">Transferencia</option>
+                              </select>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                aria-label={`Monto pagado de parte ${indice + 1}`}
+                                value={pago.monto}
+                                onChange={(e) => setPagosDivision((anteriores) => anteriores.map((actual, i) => i === indice ? { ...actual, monto: e.target.value } : actual))}
+                              />
+                            </div>
+                          );
+                        })}
+                        <div className="total-line"><span>Pagos</span><strong>{money(pagosDivididosTotal)}</strong></div>
+                        <div className="mini">{emisionDivision === 'UNA' ? 'Los pagos deben cubrir el total de la factura.' : 'Cada pago debe cubrir el total de su factura.'}</div>
+                      </div>
+                      <button
+                        className="btn btn-green cobro-btn"
+                        disabled={procesando === p.id || !asignacionesCompletas || pagosDivision.length !== nPartes || pagosDivision.some((pago, indice) => {
+                          const esperado = totalesPartes[indice];
+                          return Math.abs((Number(pago.monto) || 0) - esperado) > 0.01;
+                        })}
+                        onClick={() => facturarDividido(p)}
+                      >
+                        <Icon name="cash" size={17} /> Dividir y facturar {money(totalesPartes.reduce((suma, valor) => suma + valor, 0))}
+                      </button>
+                    </>
+                  ) : credito ? (
                     <>
                       <div className="field">
                         <span className="badge blue">

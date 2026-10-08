@@ -134,4 +134,12 @@ domicilios, aplica una sola vez `server/prisma/migrations/20261008180000_ventas_
 en cada base de restaurante ya existente. Haz una copia de seguridad antes de
 aplicar cambios al esquema. Los restaurantes nuevos reciben estos campos y la
 tabla al crear su base de datos.
+
+Antes de desplegar la división de cuenta, aplica en la base de cada restaurante
+existente y con respaldo previo las migraciones
+`server/prisma/migrations/20261008190000_facturas_divididas_pedido/migration.sql`
+y `server/prisma/migrations/20261008193000_division_cuenta_facturas_pagadas/migration.sql`,
+en ese orden. La primera permite varias facturas por pedido; la segunda crea el
+registro de división y el detalle de formas de pago. Los restaurantes nuevos
+reciben el esquema actualizado al crearse.
 ```

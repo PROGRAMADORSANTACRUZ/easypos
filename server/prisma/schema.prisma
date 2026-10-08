@@ -118,7 +118,7 @@ model Cliente {
   id              String   @id @default(uuid()) @db.Uuid @map("Id")
   tipoCliente     String   @default("NATURAL") @db.VarChar(20) @map("TipoCliente") // NATURAL | JURIDICA
   tipoDocumento   String?  @db.VarChar(10) @map("TipoDocumento")
-  numeroDocumento String?  @db.VarChar(20) @map("NumeroDocumento")
+    numeroDocumento String?  @db.VarChar(20) @map("NumeroDocumento")
   razonSocial     String?  @db.VarChar(200) @map("RazonSocial")
   documento String?  @unique // NIT o cedula (compatibilidad con captura rapida)
   nombre    String   // nombres y apellidos (valor combinado para recibos/facturas)
@@ -432,10 +432,11 @@ model Pedido {
   ubicacionActualizada DateTime? // momento del ultimo reporte de ubicacion
   seguimientoToken     String?   // token para que el cliente consulte su pedido
   items     PedidoItem[]
-  factura   Factura?
-  facturaVenta FacturaVenta?
+  facturas  Factura[]
+  facturasVenta FacturaVenta[]
   pedidosMesa PedidoMesa[]
   preparacion PreparacionCocina?
+  divisionesCuenta DivisionCuenta[]
   createdAt DateTime     @default(now())
 
   @@index([usuarioId, tipo, createdAt])
@@ -509,8 +510,10 @@ model Factura {
   id            String    @id @default(uuid()) @db.Uuid @map("Id")
   numeroFactura String?   @db.VarChar(50) @map("NumeroFactura")
   prefijo       String?   @db.VarChar(20) @map("Prefijo")
-  pedidoId      Int       @unique
+  pedidoId      Int
   pedido        Pedido    @relation(fields: [pedidoId], references: [id])
+  divisionCuentaId String? @db.Uuid @map("DivisionCuentaId")
+  divisionCuenta DivisionCuenta? @relation(fields: [divisionCuentaId], references: [id], onDelete: SetNull)
   clienteId     String?   @db.Uuid @map("ClienteId")
   cliente       Cliente?  @relation(fields: [clienteId], references: [id])
   subtotal      Float     @map("Subtotal")
@@ -546,6 +549,8 @@ model Factura {
   comisiones    ComisionVendedor[]
   eventosDIAN   EventoDIAN[]
   createdAt     DateTime  @default(now()) @map("Fecha")
+
+  @@index([pedidoId])
 }
 
 model FacturaVenta {
@@ -553,8 +558,10 @@ model FacturaVenta {
   numeroFactura String?   @db.VarChar(50) @map("Numero")
   prefijo       String?   @db.VarChar(20) @map("Prefijo")
   estado        String    @default("FACTURADA") @db.VarChar(20) @map("Estado")
-  pedidoId      Int       @unique @map("PedidoId")
+  pedidoId      Int       @map("PedidoId")
   pedido        Pedido    @relation(fields: [pedidoId], references: [id])
+  divisionCuentaId String? @db.Uuid @map("DivisionCuentaId")
+  divisionCuenta DivisionCuenta? @relation(fields: [divisionCuentaId], references: [id], onDelete: SetNull)
   clienteId     String?   @db.Uuid @map("ClienteId")
   cliente       Cliente?  @relation(fields: [clienteId], references: [id])
   subtotal      Float     @map("Subtotal")
@@ -587,6 +594,7 @@ model FacturaVenta {
   comisiones    ComisionVendedor[]
   createdAt     DateTime  @default(now()) @map("Fecha")
 
+  @@index([pedidoId])
   @@map("FacturaVenta")
 }
 
@@ -918,11 +926,26 @@ model Pago {
   facturaVenta FacturaVenta? @relation(fields: [facturaVentaId], references: [id], onDelete: SetNull)
   metodoPagoId String?     @db.Uuid @map("MetodoPagoId")
   metodoPago   MetodoPago? @relation(fields: [metodoPagoId], references: [id], onDelete: SetNull)
+  formaPago    String?     @db.VarChar(30) @map("FormaPago")
   monto        Float       @default(0) @map("Monto")
   referencia   String?     @db.VarChar(100) @map("Referencia")
   fecha        DateTime    @default(now()) @map("Fecha")
 
   @@map("Pagos")
+}
+
+model DivisionCuenta {
+  id        String         @id @default(uuid()) @db.Uuid
+  pedidoId  Int
+  pedido    Pedido         @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  modo      String         @db.VarChar(20)
+  emision   String         @db.VarChar(20)
+  partes    Json
+  facturas  Factura[]
+  ventas    FacturaVenta[]
+  createdAt DateTime       @default(now())
+
+  @@index([pedidoId, createdAt])
 }
 
 // Terceros (clientes, proveedores, empleados) para contabilidad/DIAN

@@ -894,6 +894,27 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .pago-mixto-check input { width: 16px; height: 16px; accent-color: var(--accent, #f59e0b); }
 
+.cobro-dividir-toggle { width: 100%; margin: 2px 0 12px; }
+.cobro-dividir-toggle.is-active { border-color: var(--primary); color: var(--primary); }
+.split-segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-2); }
+.split-segmented button { min-height: 36px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.split-segmented button.is-active { background: var(--panel); color: var(--text); box-shadow: var(--shadow-sm); }
+.divide-productos, .divide-pagos { display: grid; gap: 10px; }
+.divide-producto { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.divide-producto__titulo { margin-bottom: 8px; font-size: 13px; font-weight: 700; }
+.divide-producto__titulo span { color: var(--muted); font-weight: 500; }
+.divide-cantidades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.divide-cantidades label { display: grid; grid-template-columns: 1fr 64px; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+.divide-cantidades input { min-width: 0; width: 100%; }
+.divide-preview { padding: 8px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.divide-pago { display: grid; grid-template-columns: 56px minmax(100px, 1fr) minmax(92px, 1fr); gap: 6px; align-items: center; }
+.divide-pago > span { color: var(--muted); font-size: 12px; }
+.divide-pago select, .divide-pago input { min-width: 0; width: 100%; }
+@media (max-width: 520px) {
+  .divide-pago { grid-template-columns: 48px 1fr; }
+  .divide-pago input { grid-column: 2; }
+}
+
 /* ===== Login split-screen ===== */
 .login-split {
   min-height: 100vh;

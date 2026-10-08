@@ -117,15 +117,32 @@ function mapearItemsFactus(detalle) {
 export async function crearFacturaFactus(factura) {
   const referenceCode = `${factura.prefijo || 'FEV'}${factura.numeroFactura}`;
   const esCredito = !!factura.credito;
+  const pagosRegistrados = (factura.pagos || []).filter((pago) => Number(pago.monto) > 0);
+  let paymentDetails = [{
+    payment_form: esCredito ? '2' : '1',
+    payment_method_code: PAGO_DIAN[factura.metodoPago] || '10',
+    amount: Number(factura.total).toFixed(2),
+    ...(esCredito && factura.vence ? { due_date: new Date(factura.vence).toISOString().slice(0, 10) } : {}),
+  }];
+  if (!esCredito && pagosRegistrados.length) {
+    const sumaPagos = pagosRegistrados.reduce((suma, pago) => suma + Number(pago.monto), 0);
+    let asignado = 0;
+    paymentDetails = pagosRegistrados.map((pago, indice) => {
+      const monto = indice === pagosRegistrados.length - 1
+        ? Number(factura.total) - asignado
+        : Math.round(Number(factura.total) * Number(pago.monto) / sumaPagos * 100) / 100;
+      asignado += monto;
+      return {
+        payment_form: '1',
+        payment_method_code: PAGO_DIAN[pago.formaPago] || '10',
+        amount: monto.toFixed(2),
+      };
+    });
+  }
   const payload = {
     reference_code: referenceCode,
     numbering_range_id: Number(process.env.FACTUS_NUMBERING_RANGE_FACTURA) || undefined,
-    payment_details: [{
-      payment_form: esCredito ? '2' : '1',
-      payment_method_code: PAGO_DIAN[factura.metodoPago] || '10',
-      amount: Number(factura.total).toFixed(2),
-      ...(esCredito && factura.vence ? { due_date: new Date(factura.vence).toISOString().slice(0, 10) } : {}),
-    }],
+    payment_details: paymentDetails,
     customer: mapearClienteFactus(factura.cliente),
     items: mapearItemsFactus(factura.detalle || []),
   };

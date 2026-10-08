@@ -21,8 +21,8 @@ const pedidoInclude = {
   mesera: true,
   clienteRel: true,
   items: { include: { producto: { include: { categoria: true, componentes: { include: { item: true } } } } } },
-  factura: true,
-  facturaVenta: true,
+  facturas: true,
+  facturasVenta: true,
 };
 
 const limpiar = (v) => {
