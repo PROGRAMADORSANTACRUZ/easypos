@@ -48,6 +48,13 @@ export default function Mesas() {
     return p.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0);
   };
 
+  const resumenMesas = [
+    { etiqueta: 'Total', estado: 'TOTAL', cantidad: mesas.length },
+    { etiqueta: 'Disponibles', estado: 'LIBRE', cantidad: mesas.filter((mesa) => mesa.estado === 'LIBRE').length },
+    { etiqueta: 'Ocupadas', estado: 'OCUPADA', cantidad: mesas.filter((mesa) => mesa.estado === 'OCUPADA').length },
+    { etiqueta: 'Reservadas', estado: 'RESERVADA', cantidad: mesas.filter((mesa) => mesa.estado === 'RESERVADA').length },
+  ];
+
   return (
     <div>
       <div className="page-header">
@@ -62,6 +69,17 @@ export default function Mesas() {
           <Button variant="primary" icon="add" onClick={() => setMostrarForm(true)} title="Agregar mesa" />
         </div>
       </div>
+
+      {!cargando && mesas.length > 0 && (
+        <section className="mesa-resumen" aria-label="Resumen de mesas">
+          {resumenMesas.map((dato) => (
+            <div key={dato.estado} className={`mesa-resumen__item mesa-resumen__item--${dato.estado.toLowerCase()}`}>
+              <span>{dato.etiqueta}</span>
+              <strong>{dato.cantidad}</strong>
+            </div>
+          ))}
+        </section>
+      )}
 
       {mostrarForm && (
         <Modal
