@@ -126,6 +126,16 @@ router.get('/', wrap(async (req, res) => {
   res.json(pedidos);
 }));
 
+router.get('/ultimo-domicilio', wrap(async (req, res) => {
+  const pedido = await prisma.pedido.findFirst({
+    where: { usuarioId: req.usuario.id, tipo: 'DOMICILIO' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, seguimientoToken: true },
+  });
+  if (!pedido?.seguimientoToken) return res.json(null);
+  res.json({ id: pedido.id, token: pedido.seguimientoToken });
+}));
+
 router.get('/:id', wrap(async (req, res) => {
   const pedido = await prisma.pedido.findUnique({
     where: { id: Number(req.params.id) },
@@ -251,6 +261,7 @@ router.post('/online', wrap(async (req, res) => {
     const nuevo = await tx.pedido.create({
       data: {
         tipo: 'DOMICILIO',
+        usuarioId: req.usuario.id,
         metodoPago: limpiar(metodoPago),
         cliente: nombreCompleto,
         clienteId: clienteRow.id,

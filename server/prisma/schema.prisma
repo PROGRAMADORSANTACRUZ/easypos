@@ -48,6 +48,8 @@ model Usuario {
   facturas      Factura[]
   facturasVenta FacturaVenta[]
   comisiones    ComisionVendedor[]
+  pedidosDomicilio Pedido[]
+  ventasCongeladas VentaCongelada[]
 
   @@map("Usuarios")
 }
@@ -405,6 +407,8 @@ model KitComponente {
 // Pedido tomado por mesa/mesera
 model Pedido {
   id        Int          @id @default(autoincrement())
+  usuarioId String?      @db.Uuid
+  usuario   Usuario?     @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   mesaId    Int?
   mesa      Mesa?        @relation(fields: [mesaId], references: [id])
   meseraId  Int?
@@ -433,6 +437,21 @@ model Pedido {
   pedidosMesa PedidoMesa[]
   preparacion PreparacionCocina?
   createdAt DateTime     @default(now())
+
+  @@index([usuarioId, tipo, createdAt])
+}
+
+model VentaCongelada {
+  id         String   @id @default(uuid()) @db.Uuid
+  usuarioId  String   @db.Uuid
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  electronica Boolean @default(true)
+  cliente    String?
+  pago       String   @default("EFECTIVO")
+  items      Json
+  createdAt  DateTime @default(now())
+
+  @@index([usuarioId, electronica, createdAt])
 }
 
 model PedidoItem {

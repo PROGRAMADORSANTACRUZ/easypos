@@ -128,4 +128,10 @@ y acciones para todos los usuarios de cada rol. Aplica también la migración
 Factura de venta. Cada usuario debe volver a iniciar sesión para actualizar su
 menú. Cada submódulo exige su tipo de documento activo, con prefijo y rango
 propio, antes de registrar comprobantes.
+
+Antes de desplegar la persistencia en nube de ventas congeladas y seguimiento de
+domicilios, aplica una sola vez `server/prisma/migrations/20261008180000_ventas_congeladas_seguimiento_usuario/migration.sql`
+en cada base de restaurante ya existente. Haz una copia de seguridad antes de
+aplicar cambios al esquema. Los restaurantes nuevos reciben estos campos y la
+tabla al crear su base de datos.
 ```

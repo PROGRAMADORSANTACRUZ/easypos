@@ -609,13 +609,14 @@ export default function Facturas({ electronica = true }) {
 
   const cargar = async () => {
     try {
-      const [abiertos, facs, prods, clis, empresa, ap] = await Promise.all([
+      const [abiertos, facs, prods, clis, empresa, ap, ventasCongeladas] = await Promise.all([
         electronica ? api.get('/pedidos?estado=ABIERTO') : api.get('/pedidos?estado=ABIERTO').catch(() => []),
         api.get(electronica ? '/facturas' : '/facturas?electronica=false'),
         api.get('/productos'),
         electronica ? api.get('/clientes') : api.get('/clientes').catch(() => []),
         api.get('/empresa').catch(() => null),
         api.get('/aperturas/activa').catch(() => null),
+        api.get(`/ventas-congeladas?electronica=${electronica}`),
       ]);
       empresaRecibo = empresa;
       try {
@@ -628,6 +629,7 @@ export default function Facturas({ electronica = true }) {
       setProductos(prods.filter((p) => p.activo !== false && p.precio > 0));
       setClientes(clis);
       setApertura(ap);
+      setCongeladas(ventasCongeladas);
     } catch (e) {
       notify(e.message, 'err');
     }
@@ -983,35 +985,39 @@ export default function Facturas({ electronica = true }) {
   const cupoExcedidoDirecta = creditoDirecta && cliDirecta.creditoCupo != null && subtotalDirecta > cliDirecta.creditoCupo;
 
   // --- Ventas congeladas (se guardan sin facturar para atender a otro cliente) ---
-  const guardarCongeladas = (lista) => {
-    setCongeladas(lista);
-  };
-
-  const congelarDirecta = () => {
+  const congelarDirecta = async () => {
     if (carrito.length === 0) return notify('Agrega al menos un producto', 'err');
-    const nueva = {
-      id: Date.now(),
-      cliente,
-      pago: pagoDirecta,
-      items: carrito,
-      createdAt: new Date().toISOString(),
-    };
-    guardarCongeladas([nueva, ...congeladas]);
-    setDirectaAbierta(false);
-    notify('Venta congelada');
+    try {
+      const nueva = await api.post('/ventas-congeladas', { electronica, cliente, pago: pagoDirecta, items: carrito });
+      setCongeladas((actuales) => [nueva, ...actuales]);
+      setDirectaAbierta(false);
+      notify('Venta congelada');
+    } catch (e) {
+      notify(e.message, 'err');
+    }
   };
 
-  const reanudarCongelada = (c) => {
-    setCarrito(c.items);
-    setCliente(c.cliente || idDefault);
-    setPagoDirecta(c.pago || 'EFECTIVO');
-    guardarCongeladas(congeladas.filter((x) => x.id !== c.id));
-    setDirectaAbierta(true);
+  const reanudarCongelada = async (c) => {
+    try {
+      await api.del(`/ventas-congeladas/${c.id}?electronica=${electronica}`);
+      setCarrito(c.items);
+      setCliente(c.cliente || idDefault);
+      setPagoDirecta(c.pago || 'EFECTIVO');
+      setCongeladas((actuales) => actuales.filter((x) => x.id !== c.id));
+      setDirectaAbierta(true);
+    } catch (e) {
+      notify(e.message, 'err');
+    }
   };
 
-  const eliminarCongelada = (c) => {
+  const eliminarCongelada = async (c) => {
     if (!confirm('¿Eliminar esta venta congelada?')) return;
-    guardarCongeladas(congeladas.filter((x) => x.id !== c.id));
+    try {
+      await api.del(`/ventas-congeladas/${c.id}?electronica=${electronica}`);
+      setCongeladas((actuales) => actuales.filter((x) => x.id !== c.id));
+    } catch (e) {
+      notify(e.message, 'err');
+    }
   };
 
   const facturarDirecta = async () => {

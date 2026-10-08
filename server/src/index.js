@@ -49,6 +49,7 @@ import eventosDianRouter from './routes/eventosDian.js';
 import logsIntegracionesRouter from './routes/logsIntegraciones.js';
 import factusRouter from './routes/factus.js';
 import pedidosRouter from './routes/pedidos.js';
+import ventasCongeladasRouter from './routes/ventasCongeladas.js';
 import facturasRouter from './routes/facturas.js';
 import cortesiasRouter from './routes/cortesias.js';
 import usuariosRouter from './routes/usuarios.js';
@@ -121,6 +122,7 @@ app.use('/api/eventos-dian', requireAuth, permisoPorMetodo('eventos_dian'), even
 app.use('/api/logs-integraciones', requireAuth, permisoPorMetodo('logs_integraciones'), logsIntegracionesRouter);
 app.use('/api/factus', requireAuth, permisoPorMetodo('empresa'), factusRouter);
 app.use('/api/pedidos', requireAuth, permisoPorMetodo('pedidos'), pedidosRouter);
+app.use('/api/ventas-congeladas', requireAuth, ventasCongeladasRouter);
 app.use('/api/facturas', requireAuth, permisoSegunFactura, facturasRouter);
 app.use('/api/cortesias', requireAuth, permisoModuloFacturacion('cortesias'), cortesiasRouter);
 app.use('/api/usuarios', usuariosRouter);

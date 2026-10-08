@@ -112,12 +112,14 @@ export default function Pedidos() {
   useEffect(() => {
     (async () => {
       try {
-        const [prods, clis] = await Promise.all([
+        const [prods, clis, ultimoPedido] = await Promise.all([
           api.get('/productos'),
           api.get('/clientes').catch(() => []),
+          api.get('/pedidos/ultimo-domicilio'),
         ]);
         setProductos(prods);
         setClientes(Array.isArray(clis) ? clis : []);
+        setUltimo(ultimoPedido);
       } catch (e) {
         notify(e.message, 'err');
       } finally {
