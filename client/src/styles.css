@@ -305,6 +305,7 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 
 .grid { display: grid; gap: 16px; }
 .grid-mesas { grid-template-columns: repeat(10, 110px); justify-content: start; gap: 12px; }
+.modal .grid-mesas { grid-template-columns: repeat(auto-fill, 110px); }
 .grid-2 { grid-template-columns: 1.4fr 1fr; align-items: start; }
 
 /* Utilidades de layout responsivas */
