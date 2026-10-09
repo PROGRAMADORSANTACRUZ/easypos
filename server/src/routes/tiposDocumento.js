@@ -62,7 +62,11 @@ async function validarAsociacion({ companiaCodigo, centroOperacionCodigo }) {
 
 router.get('/', wrap(async (_req, res) => {
   res.json(await prisma.tipoDocumento.findMany({
-    include: { _count: { select: { facturas: true, facturasVenta: true } } },
+    include: {
+      compania: { select: { codigo: true, razonSocial: true } },
+      centroOperacion: { select: { codigo: true, descripcion: true } },
+      _count: { select: { facturas: true, facturasVenta: true } },
+    },
     orderBy: [{ clase: 'asc' }, { codigo: 'asc' }],
   }));
 }));

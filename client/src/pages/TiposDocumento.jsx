@@ -168,6 +168,8 @@ export default function TiposDocumento() {
               <tr>
                 <th>Automático</th>
                 <th>Electrónico</th>
+                <th>Razón social</th>
+                <th>Centro de operaciones</th>
                 <th>C.O</th>
                 <th>Cons inicial</th>
                 <th>Cons final</th>
@@ -189,7 +191,7 @@ export default function TiposDocumento() {
                   <Fragment key={r.id}>
                     {esNuevaClase && (
                       <tr className="fila-grupo">
-                        <td colSpan={14} style={{ fontWeight: 700, background: 'var(--panel-2, #f2f4f8)' }}>{r.clase}</td>
+                        <td colSpan={16} style={{ fontWeight: 700, background: 'var(--panel-2, #f2f4f8)' }}>{r.clase}</td>
                       </tr>
                     )}
                     <tr>
@@ -199,6 +201,8 @@ export default function TiposDocumento() {
                           {r.esElectronico !== false ? 'Electrónico' : 'No electrónico'}
                         </span>
                       </td>
+                      <td>{r.compania ? `${r.compania.codigo} · ${r.compania.razonSocial}` : 'Sin compañía'}</td>
+                      <td>{r.centroOperacion ? `${r.centroOperacion.codigo} · ${r.centroOperacion.descripcion}` : 'Sin centro'}</td>
                       <td style={{ fontWeight: 600 }}>{r.codigo}</td>
                       <td>{r.consInicial ?? ''}</td>
                       <td>{r.consFinal?.toLocaleString?.('es-CO') ?? ''}</td>
@@ -218,7 +222,7 @@ export default function TiposDocumento() {
                   </Fragment>
                 );
               })}
-              {!rows.length && <tr><td colSpan={14}><EmptyState icon="resoluciones" title="Sin tipos de documento" description="Crea el primer tipo de documento (ej. 01F - FACTURA ELECTRONICA DE VENTA)." /></td></tr>}
+              {!rows.length && <tr><td colSpan={16}><EmptyState icon="resoluciones" title="Sin tipos de documento" description="Crea el primer tipo de documento (ej. 01F - FACTURA ELECTRONICA DE VENTA)." /></td></tr>}
             </tbody>
           </table>
         </div>
