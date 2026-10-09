@@ -63,6 +63,7 @@ import restaurantesRouter from './routes/restaurantes.js';
 import { resolverTenant } from './middleware/tenant.js';
 import { mayusculas } from './middleware/mayusculas.js';
 import { requireAuth, permisoPorMetodo, permisoModuloFacturacion, permisoSegunFactura } from './middleware/auth.js';
+import { restringirModuloRestaurante } from './modulosRestaurante.js';
 
 const app = express();
 const corsOrigins = new Set([
@@ -84,6 +85,7 @@ app.use(cors({
 app.use(express.json({ limit: '5mb' }));
 app.use(mayusculas);
 app.use(resolverTenant);
+app.use(restringirModuloRestaurante);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, servicio: 'EASYPOS API' }));
 

@@ -74,7 +74,7 @@ router.post('/login', wrap(async (req, res) => {
   const datos = await conRolesYPermisos(u);
   // Si el request trajo un restaurante resuelto (header x-tenant-id), lo devolvemos
   // para que el frontend confirme con cual restaurante quedo la sesion.
-  if (req.tenant) datos.restaurante = { id: req.tenant.id, slug: req.tenant.slug, nombre: req.tenant.nombre };
+  if (req.tenant) datos.restaurante = { id: req.tenant.id, slug: req.tenant.slug, nombre: req.tenant.nombre, modulos: req.tenant.modulos };
   const token = firmarToken(datos, { restauranteId: req.tenant?.id });
   establecerCookieSesion(req, res, token);
   if (req.get('x-easypos-session') !== 'cookie') datos.token = token;
@@ -87,7 +87,7 @@ router.use(requireAuth);
 router.get('/sesion', (req, res) => {
   res.json({
     ...req.usuario,
-    ...(req.tenant && { restaurante: { id: req.tenant.id, slug: req.tenant.slug, nombre: req.tenant.nombre } }),
+    ...(req.tenant && { restaurante: { id: req.tenant.id, slug: req.tenant.slug, nombre: req.tenant.nombre, modulos: req.tenant.modulos } }),
   });
 });
 

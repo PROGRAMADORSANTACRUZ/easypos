@@ -25,6 +25,7 @@ model Restaurante {
   dbUrl           String   // cadena de conexion completa a la base del restaurante
   estado          String   @default("ACTIVO") // ACTIVO | SUSPENDIDO
   plan            String?  @default("basico")
+  modulos         String[] @default(["ventas", "inventario", "dian", "parametros", "admin", "reportes", "maestros"])
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

@@ -7,6 +7,7 @@ import { platformPrisma } from '../platformPrisma.js';
 import { getTenantPrisma, construirDbUrl, crearBaseDeDatos } from '../tenantManager.js';
 import { sembrarRolesYPermisos } from '../tenantSeed.js';
 import { requireAuth, permisoPorMetodo } from '../middleware/auth.js';
+import { MODULOS_RESTAURANTE_DEFAULT, validarModulosRestaurante } from '../modulosRestaurante.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -39,6 +40,7 @@ const aVista = (r) => (r && {
   dbNombre: r.dbNombre,
   estado: r.estado,
   plan: r.plan,
+  modulos: r.modulos,
   createdAt: r.createdAt,
 });
 
@@ -164,6 +166,7 @@ router.post('/', wrap(async (req, res) => {
       correo: limpiar(req.body?.correo),
       dbNombre,
       dbUrl,
+      modulos: MODULOS_RESTAURANTE_DEFAULT,
     },
   });
 
@@ -268,6 +271,18 @@ router.put('/:id/estado', wrap(async (req, res) => {
     return res.status(400).json({ error: 'Estado inválido (ACTIVO o SUSPENDIDO)' });
   }
   const restaurante = await platformPrisma.restaurante.update({ where: { id: req.params.id }, data: { estado } });
+  res.json(aVista(restaurante));
+}));
+
+router.put('/:id/modulos', wrap(async (req, res) => {
+  const { modulos } = req.body || {};
+  if (!validarModulosRestaurante(modulos)) {
+    return res.status(400).json({ error: 'Selecciona al menos un módulo válido y sin duplicados' });
+  }
+  const restaurante = await platformPrisma.restaurante.update({
+    where: { id: req.params.id },
+    data: { modulos },
+  });
   res.json(aVista(restaurante));
 }));
 

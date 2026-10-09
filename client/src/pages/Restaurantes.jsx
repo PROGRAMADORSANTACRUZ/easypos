@@ -17,6 +17,17 @@ const RESOLUCION_VACIA = {
   prefijo: '', numeroResolucion: '', rangoInicial: '', rangoFinal: '', siguienteNumero: '', fechaInicio: '', fechaFin: '',
 };
 
+const MODULOS_RESTAURANTE = [
+  { id: 'ventas', label: 'Ventas' },
+  { id: 'inventario', label: 'Inventario y Compras' },
+  { id: 'dian', label: 'Facturación DIAN' },
+  { id: 'parametros', label: 'Parámetros' },
+  { id: 'reportes', label: 'Reportes' },
+  { id: 'maestros', label: 'Maestros / DIAN' },
+  { id: 'admin', label: 'Administración' },
+];
+const MODULOS_TODOS = MODULOS_RESTAURANTE.map(({ id }) => id);
+
 const aDia = (f) => (f ? new Date(f).toISOString().slice(0, 10) : '');
 
 // Panel de plataforma: administra los restaurantes (cada uno con su propia base de datos),
@@ -37,6 +48,8 @@ export default function Restaurantes() {
 
   const [empresaForm, setEmpresaForm] = useState(EMPRESA_VACIA);
   const [guardandoEmpresa, setGuardandoEmpresa] = useState(false);
+  const [modulosForm, setModulosForm] = useState(MODULOS_TODOS);
+  const [guardandoModulos, setGuardandoModulos] = useState(false);
 
   const [resModalAbierto, setResModalAbierto] = useState(false);
   const [resForm, setResForm] = useState(RESOLUCION_VACIA);
@@ -59,6 +72,7 @@ export default function Restaurantes() {
     try {
       const d = await api.get(`/plataforma/restaurantes/${id}/detalle`);
       setDetalle(d);
+      setModulosForm(d.restaurante?.modulos || MODULOS_TODOS);
       setEmpresaForm({
         nit: d.empresa?.nit || '',
         razonSocial: d.empresa?.razonSocial || '',
@@ -72,6 +86,21 @@ export default function Restaurantes() {
       notify(e.message, 'err');
     } finally {
       setCargandoDetalle(false);
+    }
+  };
+
+  const guardarModulos = async () => {
+    if (!selId) return;
+    setGuardandoModulos(true);
+    try {
+      const restaurante = await api.put(`/plataforma/restaurantes/${selId}/modulos`, { modulos: modulosForm });
+      setDetalle((d) => ({ ...d, restaurante }));
+      setRestaurantes((lista) => lista.map((r) => (r.id === restaurante.id ? restaurante : r)));
+      notify('Módulos del restaurante actualizados');
+    } catch (e) {
+      notify(e.message, 'err');
+    } finally {
+      setGuardandoModulos(false);
     }
   };
 
@@ -240,6 +269,27 @@ export default function Restaurantes() {
                   <Icon name="save" size={15} /> {guardandoEmpresa ? 'Guardando...' : 'Guardar información'}
                 </button>
               </form>
+
+              <div style={{ marginTop: 18 }}>
+                <h4 style={{ marginBottom: 8 }}>Módulos habilitados</h4>
+                <div className="grid grid-2" style={{ gap: 8 }}>
+                  {MODULOS_RESTAURANTE.map(({ id, label }) => (
+                    <label key={id} className="row" style={{ gap: 8, justifyContent: 'flex-start' }}>
+                      <input
+                        type="checkbox"
+                        checked={modulosForm.includes(id)}
+                        onChange={(e) => setModulosForm((actual) => (
+                          e.target.checked ? [...actual, id] : actual.filter((modulo) => modulo !== id)
+                        ))}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <button className="btn btn-primary" style={{ marginTop: 10 }} disabled={guardandoModulos || modulosForm.length === 0} onClick={guardarModulos}>
+                  <Icon name="save" size={15} /> {guardandoModulos ? 'Guardando...' : 'Guardar módulos'}
+                </button>
+              </div>
 
               <div className="row between" style={{ marginTop: 18, marginBottom: 8 }}>
                 <h4 style={{ margin: 0 }}>Resoluciones / documentos DIAN</h4>

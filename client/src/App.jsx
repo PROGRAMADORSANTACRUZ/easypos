@@ -50,8 +50,28 @@ export const useAuth = () => useContext(AuthCtx);
 export const DEV_BYPASS = false;
 const DEV_USER = { id: 0, nombre: 'Vista previa', roles: ['Dev'], permisos: [], __dev: true };
 
+const GRUPO_POR_MODULO = {
+  mesas: 'ventas', cocina: 'ventas', factura_venta: 'ventas', cortesias: 'ventas', pedidos: 'ventas',
+  cuentas: 'ventas', clientes: 'ventas', caja: 'ventas',
+  productos: 'inventario', inventario: 'inventario', bodegas: 'inventario', movimientos: 'inventario', compras: 'inventario', proveedores: 'inventario',
+  facturas: 'dian', resoluciones: 'dian', notas_credito: 'dian', notas_debito: 'dian', retenciones: 'dian', eventos_dian: 'dian', logs_integraciones: 'dian',
+  empresa: 'parametros', companias: 'parametros', centros_operaciones: 'parametros', asignacion_cajas: 'parametros', tipos_documentos: 'parametros',
+  reportes: 'reportes',
+  sucursales: 'maestros', listas_precios: 'maestros', promociones: 'maestros', comisiones: 'maestros', remisiones: 'maestros', metodos_pago: 'maestros', pagos: 'maestros', terceros: 'maestros', centros_costo: 'maestros', cuentas_contables: 'maestros', impuestos: 'maestros', unidades_medida: 'maestros',
+  usuarios: 'admin', roles: 'admin', auditoria: 'admin', permisos: 'admin', restaurantes: 'plataforma',
+};
+
+const moduloHabilitado = (user, grupo) => (
+  user?.__dev === true || grupo === 'plataforma' || !Array.isArray(user?.restaurante?.modulos) || user.restaurante.modulos.includes(grupo)
+);
+
 // Devuelve true si el usuario tiene el permiso indicado (ej: 'facturas.ver')
-const puede = (user, codigo) => user?.__dev === true || (user?.permisos || []).includes(codigo);
+const puede = (user, codigo) => {
+  if (codigo === 'restaurantes.ver') return user?.__dev === true || (user?.permisos || []).includes('empresa.ver');
+  if (user?.__dev === true || !(user?.permisos || []).includes(codigo)) return user?.__dev === true;
+  const grupo = GRUPO_POR_MODULO[codigo.split('.')[0]];
+  return !grupo || moduloHabilitado(user, grupo);
+};
 
 // Primera ruta permitida, usada como destino tras login y como "/"
 const ORDEN_INICIO = [
@@ -132,7 +152,12 @@ export const NAV_GRUPOS = [
       { permiso: 'empresa.ver', ruta: '/parametros/centros-operaciones', label: 'Centros de operaciones', icon: 'sucursales' },
       { permiso: 'empresa.ver', ruta: '/parametros/asignacion-cajas', label: 'Asignación de cajas', icon: 'caja' },
       { permiso: 'empresa.ver', ruta: '/parametros/tipos-documentos', label: 'Tipos de documentos', icon: 'resoluciones' },
-      { permiso: 'empresa.ver', ruta: '/plataforma/restaurantes', label: 'Restaurantes', icon: 'empresa' },
+    ],
+  },
+  {
+    id: 'plataforma', label: 'Administración central', icon: 'empresa',
+    items: [
+      { permiso: 'restaurantes.ver', ruta: '/plataforma/restaurantes', label: 'Restaurantes', icon: 'empresa' },
     ],
   },
   {
@@ -210,6 +235,7 @@ export default function App() {
 
   // Renderiza una categoría colapsable con sus módulos visibles según permisos
   const renderGrupo = (grupo) => {
+    if (!moduloHabilitado(user, grupo.id)) return null;
     const visibles = grupo.items.filter((it) => puede(user, it.permiso));
     if (visibles.length === 0) return null;
     const abierto = grupoAbierto === grupo.id;
@@ -434,7 +460,7 @@ export default function App() {
               {puede(user, 'empresa.ver') && <Route path="/parametros/asignacion-cajas" element={<AsignacionCajas />} />}
               {puede(user, 'empresa.ver') && <Route path="/parametros/tipos-documentos" element={<TiposDocumento />} />}
               {puede(user, 'empresa.ver') && <Route path="/parametros/medios-pago" element={<MediosPago />} />}
-              {puede(user, 'empresa.ver') && <Route path="/plataforma/restaurantes" element={<Restaurantes />} />}
+              {puede(user, 'restaurantes.ver') && <Route path="/plataforma/restaurantes" element={<Restaurantes />} />}
               {CRUD_ENTIDADES.filter((e) => puede(user, `${e.modulo}.ver`)).map((e) => (
                 <Route key={e.ruta} path={e.ruta} element={e.ruta === '/listas-precios' ? <ListasPrecios /> : <CrudPage cfg={e.cfg} />} />
               ))}
