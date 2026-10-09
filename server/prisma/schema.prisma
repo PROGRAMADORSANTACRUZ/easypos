@@ -516,6 +516,10 @@ model PreparacionCocina {
 
 // Factura / recibo generado al cerrar el pedido (estructura DIAN)
 model Factura {
+  companiaCodigo String?  @db.VarChar(3) @map("CompaniaCodigo")
+  compania      Compania? @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
+  centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
+  centroOperacion CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
   id            String    @id @default(uuid()) @db.Uuid @map("Id")
   numeroFactura String?   @db.VarChar(50) @map("NumeroFactura")
   prefijo       String?   @db.VarChar(20) @map("Prefijo")
@@ -541,10 +545,6 @@ model Factura {
   estadoDIAN    String?   @db.VarChar(50) @map("EstadoDIAN")
   tipoDocumentoId String?  @db.Uuid @map("TipoDocumentoId")
   tipoDocumento TipoDocumento? @relation(fields: [tipoDocumentoId], references: [id], onDelete: SetNull)
-  companiaCodigo String?  @db.VarChar(3) @map("CompaniaCodigo")
-  compania      Compania? @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
-  centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
-  centroOperacion CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
   usuarioId     String?   @db.Uuid @map("UsuarioId")
   usuario       Usuario?  @relation(fields: [usuarioId], references: [id])
   aperturaId    String?   @db.Uuid @map("AperturaId")
@@ -563,6 +563,10 @@ model Factura {
 }
 
 model FacturaVenta {
+  companiaCodigo String?  @db.VarChar(3) @map("CompaniaCodigo")
+  compania      Compania? @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
+  centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
+  centroOperacion CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
   id            String    @id @default(uuid()) @db.Uuid @map("Id")
   numeroFactura String?   @db.VarChar(50) @map("Numero")
   prefijo       String?   @db.VarChar(20) @map("Prefijo")
@@ -589,10 +593,6 @@ model FacturaVenta {
   estadoDIAN    String?   @db.VarChar(50) @map("EstadoDIAN")
   tipoDocumentoId String?  @db.Uuid @map("TipoDocumentoId")
   tipoDocumento TipoDocumento? @relation(fields: [tipoDocumentoId], references: [id], onDelete: SetNull)
-  companiaCodigo String?  @db.VarChar(3) @map("CompaniaCodigo")
-  compania      Compania? @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
-  centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
-  centroOperacion CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
   usuarioId     String?   @db.Uuid @map("UsuarioId")
   usuario       Usuario?  @relation(fields: [usuarioId], references: [id])
   aperturaId    String?   @db.Uuid @map("AperturaId")
