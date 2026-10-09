@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
+import { centroPermitido } from '../centrosUsuario.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -60,8 +61,21 @@ async function validarAsociacion({ companiaCodigo, centroOperacionCodigo }) {
   return centro ? null : 'El centro de operaciones no pertenece a la compañía seleccionada';
 }
 
-router.get('/', wrap(async (_req, res) => {
+router.get('/', wrap(async (req, res) => {
+  const companiaCodigo = req.query.companiaCodigo ? String(req.query.companiaCodigo) : null;
+  const centroOperacionCodigo = req.query.centroOperacionCodigo ? String(req.query.centroOperacionCodigo) : null;
+  if (companiaCodigo || centroOperacionCodigo) {
+    if (!companiaCodigo || !centroOperacionCodigo) {
+      return res.status(400).json({ error: 'Selecciona compañía y centro de operaciones' });
+    }
+    if (!centroPermitido(req.usuario?.centrosOperacion, companiaCodigo, centroOperacionCodigo)) {
+      return res.status(403).json({ error: 'No tienes asignado este centro de operaciones' });
+    }
+  } else if (!(req.usuario?.permisos || []).includes('empresa.ver')) {
+    return res.status(403).json({ error: 'Selecciona un centro de operaciones asignado para consultar documentos' });
+  }
   res.json(await prisma.tipoDocumento.findMany({
+    where: companiaCodigo && centroOperacionCodigo ? { companiaCodigo, centroOperacionCodigo } : undefined,
     include: {
       compania: { select: { codigo: true, razonSocial: true } },
       centroOperacion: { select: { codigo: true, descripcion: true } },

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { firmarToken, establecerCookieSesion, limpiarCookieSesion, requireAuth, MODULOS_FACTURACION, permisosEfectivos } from '../middleware/auth.js';
+import { centrosUnicos } from '../centrosUsuario.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -42,13 +43,19 @@ const sinHash = ({ passwordHash, ...rest }) => rest;
 
 // Calcula roles y permisos efectivos de un usuario (RBAC)
 async function conRolesYPermisos(u) {
-  const asignaciones = await prisma.usuarioRol.findMany({
-    where: { usuarioId: u.id },
-    include: { rol: { include: { permisos: { include: { permiso: true } } } } },
-  });
+  const [asignaciones, centros] = await Promise.all([
+    prisma.usuarioRol.findMany({
+      where: { usuarioId: u.id },
+      include: { rol: { include: { permisos: { include: { permiso: true } } } } },
+    }),
+    prisma.usuarioCentroOperacion.findMany({
+      where: { usuarioId: u.id },
+      include: { centroOperacion: { include: { compania: true } } },
+    }),
+  ]);
   const roles = asignaciones.map((a) => a.rol.nombre);
   const permisos = permisosEfectivos(roles, u.modulosFacturacion, asignaciones.flatMap((a) => a.rol.permisos.map((rp) => rp.permiso.codigo)));
-  return { ...sinHash(u), roles, permisos };
+  return { ...sinHash(u), roles, permisos, centrosOperacion: centros.map(({ centroOperacion }) => centroOperacion) };
 }
 
 // Inicio de sesión: valida usuario/contraseña, devuelve roles/permisos y un token de sesion (JWT)
@@ -108,57 +115,100 @@ const validarModulos = (modulos) => Array.isArray(modulos) && modulos.every((mod
 router.get('/', wrap(async (_req, res) => {
   const usuarios = await prisma.usuario.findMany({
     orderBy: { nombre: 'asc' },
-    include: { roles: { include: { rol: true } } },
+    include: {
+      roles: { include: { rol: true } },
+      centrosOperacion: { include: { centroOperacion: { include: { compania: true } } } },
+    },
   });
   res.json(
     usuarios.map((u) => ({
       ...sinHash(u),
       roles: u.roles.map((ur) => ur.rol.nombre),
+      centrosOperacion: u.centrosOperacion.map(({ centroOperacion }) => centroOperacion),
     }))
   );
 }));
 
+async function validarCentrosOperacion(codigos, { obligatorio = false } = {}) {
+  const centros = centrosUnicos(codigos);
+  if (obligatorio && centros.length === 0) return { error: 'Asigna al menos un centro de operaciones al usuario' };
+  if (!Array.isArray(codigos)) return { centros, error: null };
+  const encontrados = await prisma.centroOperacion.findMany({
+    where: {
+      codigo: { in: centros },
+      estado: 'Activo',
+      companiaCodigo: { in: ['004', '006'] },
+    },
+    select: { codigo: true },
+  });
+  if (encontrados.length !== centros.length) {
+    return { error: 'Selecciona centros activos pertenecientes a las compañías 004 o 006' };
+  }
+  return { centros, error: null };
+}
+
 router.post('/', soloAdmin, wrap(async (req, res) => {
-  const { nombre, usuario, correo, password, roles, modulosFacturacion = [] } = req.body;
+  const { nombre, usuario, correo, password, roles, modulosFacturacion = [], centrosOperacionCodigos } = req.body;
   if (!nombre || !usuario || !password) {
     return res.status(400).json({ error: 'nombre, usuario y contraseña son requeridos' });
   }
   const errorPass = validarPassword(password);
   if (errorPass) return res.status(400).json({ error: errorPass });
   if (!validarModulos(modulosFacturacion)) return res.status(400).json({ error: 'Módulos de facturación inválidos' });
+  const validacionCentros = await validarCentrosOperacion(centrosOperacionCodigos, { obligatorio: true });
+  if (validacionCentros.error) return res.status(400).json({ error: validacionCentros.error });
   const existe = await prisma.usuario.findUnique({ where: { usuario } });
   if (existe) return res.status(409).json({ error: 'Ese usuario ya existe' });
-  const creado = await prisma.usuario.create({
-    data: { nombre, usuario, correo: correo || null, passwordHash: bcrypt.hashSync(password, 10), modulosFacturacion },
+  const creado = await prisma.$transaction(async (tx) => {
+    const nuevoUsuario = await tx.usuario.create({
+      data: { nombre, usuario, correo: correo || null, passwordHash: bcrypt.hashSync(password, 10), modulosFacturacion },
+    });
+    await asignarRoles(nuevoUsuario.id, roles, tx);
+    await tx.usuarioCentroOperacion.createMany({
+      data: validacionCentros.centros.map((centroOperacionCodigo) => ({ usuarioId: nuevoUsuario.id, centroOperacionCodigo })),
+    });
+    return nuevoUsuario;
   });
-  await asignarRoles(creado.id, roles);
   await auditar({ req, accion: 'CREAR', entidad: 'Usuario', entidadId: creado.id, detalle: usuario });
   res.status(201).json(sinHash(creado));
 }));
 
 router.put('/:id', soloAdmin, wrap(async (req, res) => {
   const id = req.params.id;
-  const { nombre, usuario, correo, password, activo, roles, modulosFacturacion } = req.body;
+  const { nombre, usuario, correo, password, activo, roles, modulosFacturacion, centrosOperacionCodigos } = req.body;
   if (modulosFacturacion !== undefined && !validarModulos(modulosFacturacion)) return res.status(400).json({ error: 'Módulos de facturación inválidos' });
+  const validacionCentros = centrosOperacionCodigos === undefined
+    ? { centros: undefined, error: null }
+    : await validarCentrosOperacion(centrosOperacionCodigos, { obligatorio: true });
+  if (validacionCentros.error) return res.status(400).json({ error: validacionCentros.error });
   if (password !== undefined && password !== '') {
     const errorPass = validarPassword(password);
     if (errorPass) return res.status(400).json({ error: errorPass });
   }
-  const actualizado = await prisma.usuario.update({
-    where: { id },
-    data: {
-      ...(nombre !== undefined && { nombre }),
-      ...(usuario !== undefined && { usuario }),
-      ...(correo !== undefined && { correo }),
-      ...(password !== undefined && password !== '' && { passwordHash: bcrypt.hashSync(password, 10) }),
-      ...(activo !== undefined && { activo }),
-      ...(modulosFacturacion !== undefined && { modulosFacturacion }),
-    },
+  const actualizado = await prisma.$transaction(async (tx) => {
+    const usuarioActualizado = await tx.usuario.update({
+      where: { id },
+      data: {
+        ...(nombre !== undefined && { nombre }),
+        ...(usuario !== undefined && { usuario }),
+        ...(correo !== undefined && { correo }),
+        ...(password !== undefined && password !== '' && { passwordHash: bcrypt.hashSync(password, 10) }),
+        ...(activo !== undefined && { activo }),
+        ...(modulosFacturacion !== undefined && { modulosFacturacion }),
+      },
+    });
+    if (Array.isArray(roles)) {
+      await tx.usuarioRol.deleteMany({ where: { usuarioId: id } });
+      await asignarRoles(id, roles, tx);
+    }
+    if (validacionCentros.centros) {
+      await tx.usuarioCentroOperacion.deleteMany({ where: { usuarioId: id } });
+      await tx.usuarioCentroOperacion.createMany({
+        data: validacionCentros.centros.map((centroOperacionCodigo) => ({ usuarioId: id, centroOperacionCodigo })),
+      });
+    }
+    return usuarioActualizado;
   });
-  if (Array.isArray(roles)) {
-    await prisma.usuarioRol.deleteMany({ where: { usuarioId: id } });
-    await asignarRoles(id, roles);
-  }
   await auditar({ req, accion: 'EDITAR', entidad: 'Usuario', entidadId: id, detalle: actualizado.usuario });
   res.json(sinHash(actualizado));
 }));
@@ -171,11 +221,11 @@ router.delete('/:id', soloAdmin, wrap(async (req, res) => {
 }));
 
 // Vincula una lista de nombres de rol a un usuario
-async function asignarRoles(usuarioId, nombresRol) {
+async function asignarRoles(usuarioId, nombresRol, db = prisma) {
   if (!Array.isArray(nombresRol) || nombresRol.length === 0) return;
-  const roles = await prisma.rol.findMany({ where: { nombre: { in: nombresRol } } });
+  const roles = await db.rol.findMany({ where: { nombre: { in: nombresRol } } });
   if (roles.length === 0) return;
-  await prisma.usuarioRol.createMany({
+  await db.usuarioRol.createMany({
     data: roles.map((r) => ({ usuarioId, rolId: r.id })),
     skipDuplicates: true,
   });

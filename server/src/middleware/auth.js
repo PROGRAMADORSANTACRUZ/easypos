@@ -99,6 +99,19 @@ export function requireAuth(req, res, next) {
       activo: true,
       modulosFacturacion: true,
       roles: { include: { rol: { include: { permisos: { include: { permiso: true } } } } } },
+      centrosOperacion: {
+        include: {
+          centroOperacion: {
+            select: {
+              codigo: true,
+              descripcion: true,
+              estado: true,
+              companiaCodigo: true,
+              compania: { select: { razonSocial: true } },
+            },
+          },
+        },
+      },
     },
   }).then((usuario) => {
     if (!usuario?.activo) {
@@ -111,7 +124,14 @@ export function requireAuth(req, res, next) {
       usuario.modulosFacturacion,
       usuario.roles.flatMap((asignacion) => asignacion.rol.permisos.map((rolPermiso) => rolPermiso.permiso.codigo)),
     );
-    req.usuario = { id: usuario.id, usuario: usuario.usuario, nombre: usuario.nombre, roles, permisos };
+    req.usuario = {
+      id: usuario.id,
+      usuario: usuario.usuario,
+      nombre: usuario.nombre,
+      roles,
+      permisos,
+      centrosOperacion: usuario.centrosOperacion.map(({ centroOperacion }) => centroOperacion),
+    };
     if (!req.headers['x-usuario-id']) req.headers['x-usuario-id'] = usuario.id;
     next();
   }).catch(next);

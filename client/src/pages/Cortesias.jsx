@@ -7,6 +7,7 @@ import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir } from '.
 import { tipoDocumentoListo } from '../tipoDocumentoListo.js';
 
 const puede = (user, codigo) => (user?.permisos || []).includes(codigo);
+const CENTROS_VACIOS = [];
 
 // Selector de cliente con búsqueda (evita listar cientos de clientes en un <select>).
 function ClienteBuscador({ clientes, value, onChange }) {
@@ -172,6 +173,13 @@ function ProductoBuscador({ productos, value, onChange }) {
 
 export default function Cortesias() {
   const { user } = useAuth();
+  const centrosAsignados = (user?.centrosOperacion || CENTROS_VACIOS).filter((centro) => centro.estado === 'Activo');
+  const [centroOperacionCodigo, setCentroOperacionCodigo] = useState(() => centrosAsignados[0]?.codigo || '');
+  const centroFacturacion = centrosAsignados.find((centro) => centro.codigo === centroOperacionCodigo) || null;
+  const contextoDocumento = {
+    companiaCodigo: centroFacturacion?.companiaCodigo,
+    centroOperacionCodigo: centroFacturacion?.codigo,
+  };
   const notify = useToast();
   const puedeCrear = puede(user, 'cortesias.crear');
 
@@ -193,11 +201,14 @@ export default function Cortesias() {
 
   const cargar = async () => {
     try {
+      const query = centroFacturacion
+        ? `?companiaCodigo=${encodeURIComponent(centroFacturacion.companiaCodigo)}&centroOperacionCodigo=${encodeURIComponent(centroFacturacion.codigo)}`
+        : '';
       const [cs, ps, cls, tipos] = await Promise.all([
         api.get('/cortesias'),
         api.get('/productos'),
         api.get('/clientes').catch(() => []),
-        api.get('/tipos-documento').catch(() => []),
+        centroFacturacion ? api.get(`/tipos-documento${query}`).catch(() => []) : Promise.resolve([]),
       ]);
       setCortesias(cs);
       setProductos(ps.filter((p) => p.activo !== false && p.precio > 0));
@@ -210,7 +221,7 @@ export default function Cortesias() {
     }
   };
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => { cargar(); }, [centroOperacionCodigo]);
 
   const total = useMemo(
     () => carrito.reduce((s, l) => s + l.producto.precio * l.cantidad, 0),
@@ -247,12 +258,14 @@ export default function Cortesias() {
     setCantidad(1);
   };
   const abrirNuevo = () => {
+    if (!centroFacturacion) return notify('No tienes un centro de operaciones asignado. Contacta al administrador.', 'err');
     if (!tipoCortesia) return notify('Configura el tipo de documento CORTESIA antes de registrar.', 'err');
     limpiar(); setModalAbierto(true);
   };
   const cerrarModal = () => { setModalAbierto(false); limpiar(); };
 
   const registrar = async () => {
+    if (!centroFacturacion) return notify('No tienes un centro de operaciones asignado. Contacta al administrador.', 'err');
     if (!tipoCortesia) return notify('Configura el tipo de documento CORTESIA.', 'err');
     if (carrito.length === 0) { notify('Agrega al menos un producto', 'err'); return; }
     setProcesando(true);
@@ -262,6 +275,7 @@ export default function Cortesias() {
         clienteId: clienteId || null,
         motivo: motivo || null,
         observaciones: observaciones || null,
+        ...contextoDocumento,
       });
       notify(`Cortesía ${creada.numero} registrada`);
       setModalAbierto(false);
@@ -282,10 +296,23 @@ export default function Cortesias() {
       <PageHeader
         title="Cortesías"
         subtitle="Entregas sin costo a clientes. Genera un comprobante interno (no es factura)."
-        actions={puedeCrear && <Button variant="primary" icon="add" disabled={!tipoCortesia} onClick={abrirNuevo} title={tipoCortesia ? 'Nueva cortesía' : 'Configura el tipo de documento de Cortesía'} />}
+        actions={puedeCrear && <Button variant="primary" icon="add" disabled={!tipoCortesia || !centroFacturacion} onClick={abrirNuevo} title={tipoCortesia ? 'Nueva cortesía' : 'Configura el tipo de documento de Cortesía'} />}
       />
 
-      {!tipoCortesia && <p className="mini" role="alert">Configura el tipo de documento CORTESIA y su rango para registrar entregas.</p>}
+      {centrosAsignados.length > 0 && (
+        <div className="field" style={{ maxWidth: 560 }}>
+          <label>Compañía y centro de operaciones</label>
+          <select value={centroOperacionCodigo} onChange={(e) => setCentroOperacionCodigo(e.target.value)}>
+            {centrosAsignados.map((centro) => (
+              <option key={centro.codigo} value={centro.codigo}>
+                {centro.companiaCodigo} · {centro.compania?.razonSocial || ''} · {centro.codigo} · {centro.descripcion}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {!centrosAsignados.length && <p className="mini" role="alert">No tienes compañías o centros de operaciones asignados. Contacta al administrador.</p>}
+      {centroFacturacion && !tipoCortesia && <p className="mini" role="alert">La compañía {centroFacturacion.companiaCodigo} y el centro {centroFacturacion.codigo} no tienen configurado un tipo de documento CORTESIA.</p>}
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Historial</h3>

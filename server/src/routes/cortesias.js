@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
+import { centroPermitido } from '../centrosUsuario.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -9,8 +10,8 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 const redondear = (n) => Math.round(n * 100) / 100;
 
 // Asigna el siguiente consecutivo propio de cortesias (independiente de la numeracion DIAN).
-async function siguienteConsecutivo(tx) {
-  const { prefijo, consecutivo } = await reservarNumeroDocumento(tx, 'CORTESIA');
+async function siguienteConsecutivo(tx, companiaCodigo, centroOperacionCodigo) {
+  const { prefijo, consecutivo } = await reservarNumeroDocumento(tx, 'CORTESIA', { companiaCodigo, centroOperacionCodigo });
   const numero = `${prefijo}${String(consecutivo).padStart(6, '0')}`;
   return { consecutivo, numero };
 }
@@ -36,7 +37,14 @@ router.get('/:id', wrap(async (req, res) => {
 // y asigna un consecutivo propio. No genera factura DIAN.
 // body: { items: [{ productoId, cantidad }], clienteId?, motivo?, observaciones? }
 router.post('/', wrap(async (req, res) => {
-  const { items, clienteId, motivo, observaciones } = req.body;
+  const { items, clienteId, motivo, observaciones, companiaCodigo, centroOperacionCodigo } = req.body;
+
+  if (!companiaCodigo || !centroOperacionCodigo) {
+    return res.status(400).json({ error: 'Selecciona compañía y centro de operaciones antes de registrar la cortesía' });
+  }
+  if (!centroPermitido(req.usuario?.centrosOperacion, companiaCodigo, centroOperacionCodigo)) {
+    return res.status(403).json({ error: 'No tienes asignado este centro de operaciones' });
+  }
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Agrega al menos un producto a la cortesia' });
@@ -83,7 +91,7 @@ router.post('/', wrap(async (req, res) => {
   const cli = clienteId ? await prisma.cliente.findUnique({ where: { id: String(clienteId) } }) : null;
 
   const cortesia = await prisma.$transaction(async (tx) => {
-    const { consecutivo, numero } = await siguienteConsecutivo(tx);
+    const { consecutivo, numero } = await siguienteConsecutivo(tx, companiaCodigo, centroOperacionCodigo);
 
     // Descontar insumos y dejar trazabilidad como movimiento de inventario (SALIDA)
     for (const [itemId, cantidad] of requeridos.entries()) {

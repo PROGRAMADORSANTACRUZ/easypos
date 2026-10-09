@@ -1,9 +1,15 @@
-export async function reservarNumeroDocumento(tx, clase) {
+export async function reservarNumeroDocumento(tx, clase, { companiaCodigo, centroOperacionCodigo } = {}) {
+  if (!companiaCodigo || !centroOperacionCodigo) {
+    throw Object.assign(new Error('Selecciona compañía y centro de operaciones antes de facturar.'), { status: 400 });
+  }
   const esElectronico = clase === 'FACTURA ELECTRONICA DE VENTA';
   for (let intento = 0; intento < 3; intento++) {
-    const tipo = await tx.tipoDocumento.findFirst({ where: { clase, esElectronico, activo: true }, orderBy: { createdAt: 'asc' } });
+    const tipo = await tx.tipoDocumento.findFirst({
+      where: { clase, esElectronico, activo: true, companiaCodigo, centroOperacionCodigo },
+      orderBy: { createdAt: 'asc' },
+    });
     if (!tipo || !tipo.prefijo || tipo.consInicial == null || tipo.consFinal == null) {
-      throw Object.assign(new Error(`Configura el tipo de documento ${clase} y su rango antes de continuar.`), { status: 409 });
+      throw Object.assign(new Error(`La compañía ${companiaCodigo} y el centro ${centroOperacionCodigo} no tienen configurado el tipo de documento ${clase} con rango.`), { status: 409 });
     }
     const consecutivo = tipo.consProximo ?? tipo.consInicial;
     if (consecutivo < tipo.consInicial || consecutivo > tipo.consFinal) {

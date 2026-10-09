@@ -25,6 +25,7 @@ const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>':
 
 // Propina sugerida: 10% del total (editable por el cajero/cliente).
 export const sugPropina = (total) => Math.round((total || 0) * 0.1);
+const CENTROS_VACIOS = [];
 
 // Permite a otras pantallas (ej. Cotizaciones/Factura de venta) compartir los datos
 // del emisor y del Tipo de documento activo para poder imprimir el mismo ticket legal.
@@ -569,6 +570,14 @@ function ClientePicker({ clientes, value, onChange, onCreated }) {
 export default function Facturas({ electronica = true }) {
   const claseDocumento = electronica ? 'FACTURA ELECTRONICA DE VENTA' : 'FACTURA DE VENTA (NO ELECTRONICA)';
   const formatoRecibo = electronica ? 'formatoFactura' : 'formatoFacturaVenta';
+  const { user } = useAuth();
+  const centrosAsignados = (user?.centrosOperacion || CENTROS_VACIOS).filter((centro) => centro.estado === 'Activo');
+  const [centroOperacionCodigo, setCentroOperacionCodigo] = useState(() => centrosAsignados[0]?.codigo || '');
+  const centroFacturacion = centrosAsignados.find((centro) => centro.codigo === centroOperacionCodigo) || null;
+  const contextoDocumento = {
+    companiaCodigo: centroFacturacion?.companiaCodigo,
+    centroOperacionCodigo: centroFacturacion?.codigo,
+  };
   const [facturas, setFacturas] = useState([]);
   const [pendientes, setPendientes] = useState([]);
   const [pagos, setPagos] = useState({}); // metodo de pago por pedidoId
@@ -609,7 +618,6 @@ export default function Facturas({ electronica = true }) {
   const [cerrandoCaja, setCerrandoCaja] = useState(false); // muestra el modal de cierre
   const [filtroCat, setFiltroCat] = useState(''); // categoría seleccionada en el menú directo ('' = todas)
   const [busquedaProd, setBusquedaProd] = useState(''); // buscador de producto en el menú directo
-  const { user } = useAuth();
   const notify = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -629,7 +637,10 @@ export default function Facturas({ electronica = true }) {
       ]);
       empresaRecibo = empresa;
       try {
-        const tipos = await api.get('/tipos-documento');
+        const query = centroFacturacion
+          ? `?companiaCodigo=${encodeURIComponent(centroFacturacion.companiaCodigo)}&centroOperacionCodigo=${encodeURIComponent(centroFacturacion.codigo)}`
+          : '';
+        const tipos = centroFacturacion ? await api.get(`/tipos-documento${query}`) : [];
         tipoFacturaRecibo = tipoDocumentoListo(tipos || [], 'FACTURA ELECTRONICA DE VENTA') || null;
         setTipoFactura(tipoDocumentoListo(tipos || [], claseDocumento) || null);
       } catch { tipoFacturaRecibo = null; setTipoFactura(null); }
@@ -644,7 +655,7 @@ export default function Facturas({ electronica = true }) {
     }
   };
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => { cargar(); }, [centroOperacionCodigo]);
 
   const [reenviando, setReenviando] = useState(null); // id de factura en proceso de reenvio a DIAN
 
@@ -837,6 +848,7 @@ export default function Facturas({ electronica = true }) {
   };
 
   const facturar = async (pedido) => {
+    if (!centroFacturacion) return notify('No tienes un centro de operaciones asignado para facturar. Contacta al administrador.', 'err');
     if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     const total = totalPedido(pedido);
@@ -854,6 +866,7 @@ export default function Facturas({ electronica = true }) {
         const factura = await api.post('/facturas', {
           pedidoId: pedido.id,
           electronica,
+          ...contextoDocumento,
           metodoPago: etiquetaCredito(cli),
           clienteId: cliId,
           credito: true,
@@ -896,6 +909,7 @@ export default function Facturas({ electronica = true }) {
       const factura = await api.post('/facturas', {
         pedidoId: pedido.id,
         electronica,
+        ...contextoDocumento,
         metodoPago: labelPago(esMixto, metodo, metodo2, monto2, total),
         clienteId: cliId,
         propina: prop,
@@ -915,6 +929,7 @@ export default function Facturas({ electronica = true }) {
   };
 
   const facturarDividido = async (pedido) => {
+    if (!centroFacturacion) return notify('No tienes un centro de operaciones asignado para facturar. Contacta al administrador.', 'err');
     if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     const clienteId = (clientesSel[pedido.id] ?? idDefault) || null;
@@ -945,6 +960,7 @@ export default function Facturas({ electronica = true }) {
       const resultado = await api.post('/facturas/dividir', {
         pedidoId: pedido.id,
         electronica,
+        ...contextoDocumento,
         modo: modoDivision,
         cantidadPartes: nPartes,
         asignaciones,
@@ -1093,6 +1109,7 @@ export default function Facturas({ electronica = true }) {
   };
 
   const facturarDirecta = async () => {
+    if (!centroFacturacion) return notify('No tienes un centro de operaciones asignado para facturar. Contacta al administrador.', 'err');
     if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     if (carrito.length === 0) return notify('Agrega al menos un producto', 'err');
@@ -1109,6 +1126,7 @@ export default function Facturas({ electronica = true }) {
         const factura = await api.post('/facturas/directa', {
           items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad })),
           electronica,
+          ...contextoDocumento,
           metodoPago: etiquetaCredito(cli),
           clienteId: cliente || null,
           credito: true,
@@ -1144,6 +1162,7 @@ export default function Facturas({ electronica = true }) {
       const factura = await api.post('/facturas/directa', {
         items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad })),
         electronica,
+        ...contextoDocumento,
         metodoPago: labelPago(mixtoDirecta, pagoDirecta, pago2Directa, pago2MontoDirecta, subtotalDirecta),
         clienteId: (cliente ?? idDefault) || null,
         propina: propDirecta,
@@ -1169,9 +1188,22 @@ export default function Facturas({ electronica = true }) {
           <h1>{electronica ? 'Facturación' : 'Factura de venta'}</h1>
           <p className="subtitle">Cobra los pedidos abiertos y consulta el historial de ventas.</p>
         </div>
-        <button className="btn btn-primary" disabled={!tipoFactura} title={tipoFactura ? 'Factura directa' : `Configura el tipo de documento ${claseDocumento}`} onClick={abrirDirecta}><Icon name="cart" size={16} /> Factura directa</button>
+        {centrosAsignados.length > 0 && (
+          <div className="field" style={{ minWidth: 280, maxWidth: 520, flex: '1 1 280px', marginBottom: 0 }}>
+            <label>Compañía y centro para facturar</label>
+            <select value={centroOperacionCodigo} onChange={(e) => setCentroOperacionCodigo(e.target.value)}>
+              {centrosAsignados.map((centro) => (
+                <option key={centro.codigo} value={centro.codigo}>
+                  {centro.companiaCodigo} · {centro.compania?.razonSocial || ''} · {centro.codigo} · {centro.descripcion}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <button className="btn btn-primary" disabled={!tipoFactura || !centroFacturacion} title={tipoFactura ? 'Factura directa' : `Configura el tipo de documento ${claseDocumento}`} onClick={abrirDirecta}><Icon name="cart" size={16} /> Factura directa</button>
       </div>
-      {!tipoFactura && <p className="mini" role="alert">Configura el tipo de documento {claseDocumento} y su rango antes de facturar.</p>}
+      {!centrosAsignados.length && <p className="mini" role="alert">No tienes compañías o centros de operaciones asignados. Contacta al administrador.</p>}
+      {centroFacturacion && !tipoFactura && <p className="mini" role="alert">La compañía {centroFacturacion.companiaCodigo} y el centro {centroFacturacion.codigo} no tienen configurado un tipo de documento {claseDocumento} con rango disponible.</p>}
 
       {/* Caja: para facturar debe haber una apertura con base (para dar vueltos) */}
       {apertura ? (

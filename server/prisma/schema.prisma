@@ -42,6 +42,7 @@ model Usuario {
   modulosFacturacion String[] @default([]) @map("ModulosFacturacion")
   fechaCreacion DateTime     @default(now()) @map("FechaCreacion")
   roles         UsuarioRol[]
+  centrosOperacion UsuarioCentroOperacion[]
   auditorias    Auditoria[]
   aperturasCaja AperturaCaja[]
   movimientosCaja MovimientoCaja[]
@@ -763,6 +764,7 @@ model CentroOperacion {
   nombre      String   @db.VarChar(100) @map("Nombre")
   companiaCodigo String @default("004") @db.VarChar(3) @map("CompaniaCodigo")
   compania    Compania @relation(fields: [companiaCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
+  usuarios    UsuarioCentroOperacion[]
   tiposDocumento TipoDocumento[]
   facturas    Factura[]
   facturasVenta FacturaVenta[]
@@ -770,6 +772,17 @@ model CentroOperacion {
   facturaVentaDetalles FacturaVentaDetalle[]
 
   @@map("CentrosOperaciones")
+}
+
+model UsuarioCentroOperacion {
+  usuarioId            String @db.Uuid @map("UsuarioId")
+  centroOperacionCodigo String @db.VarChar(10) @map("CentroOperacionCodigo")
+  usuario              Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  centroOperacion      CentroOperacion @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([usuarioId, centroOperacionCodigo])
+  @@index([centroOperacionCodigo])
+  @@map("UsuarioCentrosOperaciones")
 }
 
 // Compras a proveedores (encabezado de la factura de compra)

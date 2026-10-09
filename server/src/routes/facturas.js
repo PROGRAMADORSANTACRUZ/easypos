@@ -3,6 +3,7 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { crearFacturaFactus } from '../factus.js';
 import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
+import { centroPermitido } from '../centrosUsuario.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -21,10 +22,30 @@ const calcularVence = (dias) => {
 };
 
 // Reserva el consecutivo del submodulo en la misma transaccion que crea la factura.
-async function asignarNumeracion(tx, electronica = true) {
+async function asignarNumeracion(tx, electronica = true, companiaCodigo, centroOperacionCodigo) {
   const clase = electronica ? 'FACTURA ELECTRONICA DE VENTA' : 'FACTURA DE VENTA (NO ELECTRONICA)';
-  const reserva = await reservarNumeroDocumento(tx, clase);
+  const reserva = await reservarNumeroDocumento(tx, clase, { companiaCodigo, centroOperacionCodigo });
   return { ...reserva, numeroFactura: String(reserva.consecutivo) };
+}
+
+function validarCentroFacturacion(req, res, companiaCodigo, centroOperacionCodigo) {
+  if (!companiaCodigo || !centroOperacionCodigo) {
+    res.status(400).json({ error: 'Selecciona compañía y centro de operaciones antes de facturar' });
+    return false;
+  }
+  if (!centroPermitido(req.usuario?.centrosOperacion, companiaCodigo, centroOperacionCodigo)) {
+    res.status(403).json({ error: 'No tienes asignado este centro de operaciones' });
+    return false;
+  }
+  return true;
+}
+
+function filtroCentrosUsuario(usuario) {
+  const centros = (usuario?.centrosOperacion || []).filter((centro) => centro.estado === 'Activo');
+  return {
+    companiaCodigo: { in: [...new Set(centros.map((centro) => centro.companiaCodigo))] },
+    centroOperacionCodigo: { in: [...new Set(centros.map((centro) => centro.codigo))] },
+  };
 }
 
 // Resuelve el cliente de una factura. Por defecto "Consumidor Final".
@@ -208,7 +229,7 @@ router.get('/', wrap(async (req, res) => {
   };
   if (soloNoElectronicas) {
     const ventas = await prisma.facturaVenta.findMany({
-      where: { estadoDIAN: 'NO_APLICA' },
+      where: { estadoDIAN: 'NO_APLICA', ...filtroCentrosUsuario(req.usuario) },
       orderBy: { createdAt: 'desc' },
       include,
     });
@@ -217,7 +238,7 @@ router.get('/', wrap(async (req, res) => {
   // OJO: en SQL, "columna <> 'X'" NO incluye filas NULL — hay que pedirlas aparte con OR,
   // si no, las facturas antiguas (sin estadoDIAN) quedan invisibles en el historial.
   const facturas = await prisma.factura.findMany({
-    where: { OR: [{ estadoDIAN: { not: 'NO_APLICA' } }, { estadoDIAN: null }] },
+    where: { ...filtroCentrosUsuario(req.usuario), OR: [{ estadoDIAN: { not: 'NO_APLICA' } }, { estadoDIAN: null }] },
     orderBy: { createdAt: 'desc' },
     include: {
       ...include,
@@ -240,8 +261,9 @@ router.get('/:id', wrap(async (req, res) => {
     compania: true,
     centroOperacion: true,
   };
-  const factura = await prisma.factura.findUnique({
-    where: { id: String(req.params.id) },
+  const filtroCentros = filtroCentrosUsuario(req.usuario);
+  const factura = await prisma.factura.findFirst({
+    where: { id: String(req.params.id), ...filtroCentros },
     include: {
       ...include,
       notasCredito: true,
@@ -250,8 +272,8 @@ router.get('/:id', wrap(async (req, res) => {
     },
   });
   if (factura) return res.json(factura);
-  const venta = await prisma.facturaVenta.findUnique({
-    where: { id: String(req.params.id) },
+  const venta = await prisma.facturaVenta.findFirst({
+    where: { id: String(req.params.id), ...filtroCentros },
     include,
   });
   if (venta) return res.json({ ...venta, notasCredito: [], notasDebito: [], retenciones: [] });
@@ -261,7 +283,7 @@ router.get('/:id', wrap(async (req, res) => {
 // Reintenta el envío a Factus (DIAN) de una factura que quedó con estadoDIAN = 'ERROR' o sin reportar.
 router.post('/:id/reenviar-dian', wrap(async (req, res) => {
   const factura = await prisma.factura.findUnique({
-    where: { id: String(req.params.id) },
+    where: { id: String(req.params.id), ...filtroCentrosUsuario(req.usuario) },
     include: { cliente: true, detalle: { include: { producto: true } } },
   });
   if (!factura) return res.status(404).json({ error: 'Factura no encontrada' });
@@ -275,7 +297,9 @@ router.post('/dividir', wrap(async (req, res) => {
   const {
     pedidoId, electronica = true, modo, cantidadPartes, asignaciones,
     emision = 'SEPARADAS', pagos = [], metodoPago = 'EFECTIVO', clienteId, propina = 0,
+    companiaCodigo, centroOperacionCodigo,
   } = req.body;
+  if (!validarCentroFacturacion(req, res, companiaCodigo, centroOperacionCodigo)) return;
   const id = Number(pedidoId);
   const partesN = Number(cantidadPartes);
   if (!Number.isInteger(partesN) || partesN < 2 || partesN > 12) {
@@ -357,7 +381,7 @@ router.post('/dividir', wrap(async (req, res) => {
     });
     const resultados = [];
     for (const parte of partesFactura) {
-      const numero = await asignarNumeracion(tx, electronica);
+      const numero = await asignarNumeracion(tx, electronica, companiaCodigo, centroOperacionCodigo);
       const modelo = electronica ? tx.factura : tx.facturaVenta;
       const pagosFactura = emision === 'UNA' ? pagos : [pagos[parte.numero - 1]];
       const basePago = pagosFactura.map((pago, indice) => ({
@@ -422,7 +446,8 @@ router.post('/dividir', wrap(async (req, res) => {
 // Facturar un pedido: el inventario ya se descontó al crear el pedido (cocina); aquí solo se cierra y cobra.
 // body: { pedidoId, metodoPago?, clienteId?, credito?, creditoDias?, propina? }
 router.post('/', wrap(async (req, res) => {
-  const { pedidoId, metodoPago, clienteId, credito, creditoDias, propina, electronica } = req.body;
+  const { pedidoId, metodoPago, clienteId, credito, creditoDias, propina, electronica, companiaCodigo, centroOperacionCodigo } = req.body;
+  if (!validarCentroFacturacion(req, res, companiaCodigo, centroOperacionCodigo)) return;
   const id = Number(pedidoId);
 
   const pedido = await prisma.pedido.findUnique({
@@ -459,7 +484,7 @@ router.post('/', wrap(async (req, res) => {
     if (pedido.mesaId) {
       await tx.mesa.update({ where: { id: pedido.mesaId }, data: { estado: 'LIBRE' } });
     }
-    const num = await asignarNumeracion(tx, electronica !== false);
+    const num = await asignarNumeracion(tx, electronica !== false, companiaCodigo, centroOperacionCodigo);
     // Crear factura
     const modeloFactura = electronica === false ? tx.facturaVenta : tx.factura;
     return modeloFactura.create({
@@ -518,7 +543,8 @@ router.post('/', wrap(async (req, res) => {
 // body: { items: [{ productoId, cantidad }], metodoPago?, clienteId?, credito?, creditoDias?, propina?, electronica? }
 // electronica=false (ej. modulo "Factura de venta"): NO se reporta a Factus/DIAN, es solo un documento de venta interno.
 router.post('/directa', wrap(async (req, res) => {
-  const { items = [], metodoPago, clienteId, credito, creditoDias, propina, electronica } = req.body;
+  const { items = [], metodoPago, clienteId, credito, creditoDias, propina, electronica, companiaCodigo, centroOperacionCodigo } = req.body;
+  if (!validarCentroFacturacion(req, res, companiaCodigo, centroOperacionCodigo)) return;
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Agrega al menos un producto' });
   }
@@ -586,7 +612,7 @@ router.post('/directa', wrap(async (req, res) => {
         },
       },
     });
-    const num = await asignarNumeracion(tx, electronica !== false);
+    const num = await asignarNumeracion(tx, electronica !== false, companiaCodigo, centroOperacionCodigo);
     const modeloFactura = electronica === false ? tx.facturaVenta : tx.factura;
     return modeloFactura.create({
       data: {
