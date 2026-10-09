@@ -362,6 +362,21 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 .crud-table-scroll:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .content .crud-table-scroll table { display: table; overflow: visible; }
 
+.tipos-documento-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: var(--primary) var(--panel-2);
+}
+.tipos-documento-scroll::-webkit-scrollbar { height: 14px; }
+.tipos-documento-scroll::-webkit-scrollbar-track { background: var(--panel-2); }
+.tipos-documento-scroll::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
+.tipos-documento-table { width: max-content; min-width: 100%; white-space: nowrap; }
+.tipos-documento-table th,
+.tipos-documento-table td { white-space: nowrap; }
+
 .mesa {
   cursor: pointer;
   text-align: center;
@@ -1405,6 +1420,13 @@ tbody tr:last-child td { border-bottom: none; }
     overflow-x: auto;
     white-space: nowrap;
     -webkit-overflow-scrolling: touch;
+  }
+  .content .tipos-documento-scroll table {
+    display: table;
+    width: max-content;
+    min-width: 100%;
+    overflow: visible;
+    white-space: nowrap;
   }
   .content .facturas-historial-scroll table {
     display: table;

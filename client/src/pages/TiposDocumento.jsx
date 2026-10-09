@@ -162,8 +162,8 @@ export default function TiposDocumento() {
       />
 
       <div className="card">
-        <div style={{ overflowX: 'auto' }}>
-          <table>
+        <div className="tipos-documento-scroll" tabIndex={0} aria-label="Tabla de tipos de documentos; desplazamiento horizontal disponible">
+          <table className="tipos-documento-table">
             <thead>
               <tr>
                 <th>Automático</th>
