@@ -11,6 +11,7 @@ const VACIO = {
   impuestoId: '',
   companiaCodigo: '',
   centroOperacionCodigo: '',
+  porcentaje: '',
   ctaCreditoVentas: '',
   ctaDebitoVentas: '',
   cuentasBase: '',
@@ -52,6 +53,7 @@ export default function Impuestos() {
   useEffect(() => { cargar(); }, []);
 
   const centrosDisponibles = companias.find((compania) => compania.codigo === form.companiaCodigo)?.centrosOperacion || [];
+  const impuestoBaseSeleccionado = impuestos.find((impuesto) => impuesto.id === form.impuestoId);
   const cambiarCompania = (companiaCodigo) => setForm((actual) => ({ ...actual, companiaCodigo, centroOperacionCodigo: '' }));
   const abrirNueva = () => { setEditId(null); setForm(VACIO); setModalAbierto(true); };
   const editar = (configuracion) => {
@@ -60,6 +62,7 @@ export default function Impuestos() {
       impuestoId: configuracion.impuestoId,
       companiaCodigo: configuracion.companiaCodigo,
       centroOperacionCodigo: configuracion.centroOperacionCodigo,
+      porcentaje: configuracion.porcentaje ?? '',
       ctaCreditoVentas: configuracion.ctaCreditoVentas || '',
       ctaDebitoVentas: configuracion.ctaDebitoVentas || '',
       cuentasBase: configuracion.cuentasBase || '',
@@ -81,6 +84,7 @@ export default function Impuestos() {
     }
     const payload = {
       ...form,
+      porcentaje: form.porcentaje === '' ? null : Number(form.porcentaje),
       ctaCreditoVentas: form.ctaCreditoVentas.trim(),
       ctaDebitoVentas: form.ctaDebitoVentas.trim() || null,
       cuentasBase: form.cuentasBase.trim(),
@@ -135,13 +139,14 @@ export default function Impuestos() {
             <table>
               <thead>
                 <tr>
-                  <th>Impuesto</th><th>Compañía</th><th>Centro</th><th>Cuenta impuesto ventas</th><th>Cuenta base</th><th>Cuenta impuesto devolución</th><th>Cuenta base devolución</th><th></th>
+                  <th>Impuesto</th><th>% aplicado</th><th>Compañía</th><th>Centro</th><th>Cuenta impuesto ventas</th><th>Cuenta base</th><th>Cuenta impuesto devolución</th><th>Cuenta base devolución</th><th></th>
                 </tr>
               </thead>
               <tbody>
                 {configuraciones.map((configuracion) => (
                   <tr key={configuracion.id}>
                     <td>{configuracion.impuesto.nombre} ({configuracion.impuesto.porcentaje}%)</td>
+                    <td>{configuracion.porcentaje ?? configuracion.impuesto.porcentaje}%</td>
                     <td>{configuracion.compania.codigo} · {configuracion.compania.razonSocial}</td>
                     <td>{configuracion.centroOperacion.codigo} · {configuracion.centroOperacion.descripcion}</td>
                     <td>{configuracion.ctaCreditoVentas || '—'}</td>
@@ -194,6 +199,10 @@ export default function Impuestos() {
                   <option value="">Seleccionar centro...</option>
                   {centrosDisponibles.map((centro) => <option key={centro.codigo} value={centro.codigo}>{centro.codigo} · {centro.descripcion}</option>)}
                 </select>
+              </div>
+              <div className="field">
+                <label>Porcentaje para este centro (opcional)</label>
+                <input type="number" min="0" max="100" step="0.01" value={form.porcentaje} onChange={(event) => setForm((actual) => ({ ...actual, porcentaje: event.target.value }))} placeholder={`Usar tasa base${impuestoBaseSeleccionado ? `: ${impuestoBaseSeleccionado.porcentaje}%` : ''}`} />
               </div>
             </div>
             <div className="grid grid-2">

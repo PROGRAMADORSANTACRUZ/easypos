@@ -21,6 +21,13 @@ function datosCuentas(body, { parcial = false } = {}) {
     if (parcial && body[campo] === undefined) continue;
     data[campo] = limpiar(body[campo]);
   }
+  if (!parcial || body.porcentaje !== undefined) {
+    const porcentaje = toNum(body.porcentaje);
+    if (porcentaje != null && (!Number.isFinite(porcentaje) || porcentaje < 0 || porcentaje > 100)) {
+      throw Object.assign(new Error('El porcentaje por centro debe estar entre 0 y 100'), { status: 400 });
+    }
+    data.porcentaje = porcentaje;
+  }
   return data;
 }
 
@@ -30,7 +37,7 @@ async function validarAlcance({ impuestoId, companiaCodigo, centroOperacionCodig
   }
   if (!['004', '006'].includes(companiaCodigo)) return 'Solo se permiten las compañías 004 y 006';
   const [impuesto, centro] = await Promise.all([
-    prisma.impuesto.findUnique({ where: { id: impuestoId }, select: { id: true } }),
+    prisma.impuesto.findFirst({ where: { id: impuestoId, activo: true }, select: { id: true } }),
     prisma.centroOperacion.findFirst({
       where: { codigo: centroOperacionCodigo, companiaCodigo, estado: 'Activo' },
       select: { codigo: true },
@@ -83,8 +90,12 @@ router.post('/cuentas-centro', wrap(async (req, res) => {
   const errorAlcance = await validarAlcance({ impuestoId, companiaCodigo, centroOperacionCodigo });
   if (errorAlcance) return res.status(400).json({ error: errorAlcance });
   try {
+    const cuentas = datosCuentas(req.body);
+    if (!cuentas.ctaCreditoVentas || !cuentas.cuentasBase) {
+      return res.status(400).json({ error: 'La cuenta de impuesto y la cuenta base de ventas son obligatorias' });
+    }
     const configuracion = await prisma.impuestoCuentaCentro.create({
-      data: { impuestoId, companiaCodigo, centroOperacionCodigo, ...datosCuentas(req.body) },
+      data: { impuestoId, companiaCodigo, centroOperacionCodigo, ...cuentas },
     });
     await auditar({ req, accion: 'CREAR', entidad: 'impuesto_cuenta_centro', entidadId: configuracion.id, detalle: `${impuestoId} ${companiaCodigo}/${centroOperacionCodigo}` });
     res.status(201).json(configuracion);
@@ -104,13 +115,17 @@ router.put('/cuentas-centro/:id', wrap(async (req, res) => {
     const centroOperacionCodigo = req.body?.centroOperacionCodigo === undefined ? actual.centroOperacionCodigo : limpiar(req.body.centroOperacionCodigo);
     const errorAlcance = await validarAlcance({ impuestoId, companiaCodigo, centroOperacionCodigo });
     if (errorAlcance) return res.status(400).json({ error: errorAlcance });
+    const cuentas = datosCuentas(req.body, { parcial: true });
+    if (!(cuentas.ctaCreditoVentas ?? actual.ctaCreditoVentas) || !(cuentas.cuentasBase ?? actual.cuentasBase)) {
+      return res.status(400).json({ error: 'La cuenta de impuesto y la cuenta base de ventas son obligatorias' });
+    }
     const configuracion = await prisma.impuestoCuentaCentro.update({
       where: { id },
       data: {
         impuestoId,
         companiaCodigo,
         centroOperacionCodigo,
-        ...datosCuentas(req.body, { parcial: true }),
+        ...cuentas,
       },
     });
     await auditar({ req, accion: 'EDITAR', entidad: 'impuesto_cuenta_centro', entidadId: id, detalle: `${impuestoId} ${companiaCodigo}/${centroOperacionCodigo}` });

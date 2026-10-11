@@ -635,6 +635,19 @@ export default function Facturas({ electronica = true }) {
         api.get('/aperturas/activa').catch(() => null),
         api.get(`/ventas-congeladas?electronica=${electronica}`),
       ]);
+      const tasasCentro = centroFacturacion
+        ? await api.get(`/facturas/porcentajes-impuesto?${new URLSearchParams({
+            electronica: String(electronica),
+            companiaCodigo: centroFacturacion.companiaCodigo,
+            centroOperacionCodigo: centroFacturacion.codigo,
+          })}`)
+        : [];
+      const porcentajePorImpuesto = new Map(tasasCentro.map(({ impuestoId, porcentaje }) => [impuestoId, porcentaje]));
+      const productosConTasaCentro = prods.map((producto) => (
+        producto.impuestoId && porcentajePorImpuesto.has(producto.impuestoId)
+          ? { ...producto, iva: porcentajePorImpuesto.get(producto.impuestoId) }
+          : producto
+      ));
       empresaRecibo = empresa;
       try {
         const query = centroFacturacion
@@ -646,7 +659,7 @@ export default function Facturas({ electronica = true }) {
       } catch { tipoFacturaRecibo = null; setTipoFactura(null); }
       setPendientes(abiertos);
       setFacturas(facs);
-      setProductos(prods.filter((p) => p.activo !== false && p.precio > 0));
+      setProductos(productosConTasaCentro.filter((p) => p.activo !== false && p.precio > 0));
       setClientes(clis);
       setApertura(ap);
       setCongeladas(ventasCongeladas);

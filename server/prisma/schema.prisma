@@ -1042,6 +1042,7 @@ model ImpuestoCuentaCentro {
   impuestoId              String   @db.Uuid @map("ImpuestoId")
   companiaCodigo          String   @db.VarChar(3) @map("CompaniaCodigo")
   centroOperacionCodigo   String   @db.VarChar(10) @map("CentroOperacionCodigo")
+  porcentaje              Float?  @map("Porcentaje")
   ctaCreditoVentas        String?  @db.VarChar(30) @map("CtaCreditoVentas")
   cuentasBase             String?  @db.VarChar(30) @map("CuentasBase")
   cuentasBaseDevoluciones String?  @db.VarChar(30) @map("CuentasBaseDevoluciones")

@@ -4,6 +4,7 @@ import { auditar } from '../auditoria.js';
 import { crearFacturaFactus } from '../factus.js';
 import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
 import { centroPermitido, filtroParesCentros } from '../centrosUsuario.js';
+import { obtenerTasasImpuesto, porcentajeProducto } from '../impuestoCentro.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -80,14 +81,14 @@ function repartirCentavos(total, pesos) {
   });
 }
 
-function calcularLineaPedido(item, electronica) {
+function calcularLineaPedido(item, electronica, tasasImpuesto) {
   const totalLinea = redondear(item.precioUnit * item.cantidad);
-  const impuesto = impuestoSobrePrecio(totalLinea, item.producto.iva || 0, !electronica);
+  const impuesto = impuestoSobrePrecio(totalLinea, porcentajeProducto(item.producto, tasasImpuesto), !electronica);
   const subtotal = electronica ? totalLinea : redondear(totalLinea - impuesto);
   return { item, subtotal, impuesto, total: electronica ? redondear(subtotal + impuesto) : totalLinea };
 }
 
-export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, electronica, propina }) {
+export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, electronica, propina, tasasImpuesto }) {
   const partes = Array.from({ length: cantidadPartes }, (_, indice) => ({
     numero: indice + 1,
     lineas: [],
@@ -96,7 +97,7 @@ export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, 
     total: 0,
     propina: 0,
   }));
-  const lineasBase = pedido.items.map((item) => calcularLineaPedido(item, electronica));
+  const lineasBase = pedido.items.map((item) => calcularLineaPedido(item, electronica, tasasImpuesto));
 
   if (modo === 'IGUALES') {
     for (const linea of lineasBase) {
@@ -211,6 +212,17 @@ async function emitirEnFactus(factura) {
 // Listar facturas
 // query ?electronica=false devuelve solo las ventas de "Factura de venta" (NO_APLICA, modulo aparte);
 // por defecto (sin query) devuelve solo las facturas electronicas reales del modulo Facturacion.
+router.get('/porcentajes-impuesto', wrap(async (req, res) => {
+  const companiaCodigo = String(req.query.companiaCodigo || '');
+  const centroOperacionCodigo = String(req.query.centroOperacionCodigo || '');
+  if (!validarCentroFacturacion(req, res, companiaCodigo, centroOperacionCodigo)) return;
+  const tasas = await prisma.impuestoCuentaCentro.findMany({
+    where: { companiaCodigo, centroOperacionCodigo, porcentaje: { not: null } },
+    select: { impuestoId: true, porcentaje: true },
+  });
+  res.json(tasas);
+}));
+
 router.get('/', wrap(async (req, res) => {
   const soloNoElectronicas = req.query.electronica === 'false';
   const centrosActivos = (req.usuario?.centrosOperacion || [])
@@ -336,10 +348,16 @@ router.post('/dividir', wrap(async (req, res) => {
   const apertura = await aperturaActiva(req.headers['x-usuario-id']);
   if (!apertura) return res.status(409).json({ error: 'Debes abrir la caja antes de facturar' });
 
+  const tasasImpuesto = await obtenerTasasImpuesto(
+    prisma,
+    pedido.items.map((item) => item.producto),
+    companiaCodigo,
+    centroOperacionCodigo,
+  );
   const propinaTotal = electronica ? Math.max(0, Number(propina) || 0) : 0;
   let partes;
   try {
-    partes = crearPartesPedido(pedido, { modo, cantidadPartes: partesN, asignaciones, electronica, propina: propinaTotal });
+    partes = crearPartesPedido(pedido, { modo, cantidadPartes: partesN, asignaciones, electronica, propina: propinaTotal, tasasImpuesto });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ error: error.message });
     throw error;
@@ -361,7 +379,7 @@ router.post('/dividir', wrap(async (req, res) => {
   }
 
   const lineasFacturaUnica = pedido.items.map((item) => {
-    const linea = calcularLineaPedido(item, electronica);
+    const linea = calcularLineaPedido(item, electronica, tasasImpuesto);
     return { pedidoItemId: item.id, productoId: item.productoId, cantidad: item.cantidad, precioUnitario: item.precioUnit, ...linea };
   });
   const partesFactura = emision === 'UNA'
@@ -482,8 +500,14 @@ router.post('/', wrap(async (req, res) => {
   const apertura = await aperturaActiva(req.headers['x-usuario-id']);
   if (!apertura) return res.status(409).json({ error: 'Debes abrir la caja antes de facturar. Registra la base con la que inicias.' });
 
+  const tasasImpuesto = await obtenerTasasImpuesto(
+    prisma,
+    pedido.items.map((item) => item.producto),
+    companiaCodigo,
+    centroOperacionCodigo,
+  );
   const precioProductos = redondear(pedido.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0));
-  const impuesto = redondear(pedido.items.reduce((s, it) => s + impuestoSobrePrecio(it.precioUnit * it.cantidad, it.producto.iva || 0, electronica === false), 0));
+  const impuesto = redondear(pedido.items.reduce((s, it) => s + impuestoSobrePrecio(it.precioUnit * it.cantidad, porcentajeProducto(it.producto, tasasImpuesto), electronica === false), 0));
   const subtotal = electronica === false ? redondear(precioProductos - impuesto) : precioProductos;
   const total = electronica === false ? precioProductos : redondear(subtotal + impuesto);
   const ivaPctPromedio = subtotal > 0 ? redondear((impuesto / subtotal) * 100) : 0;
@@ -527,7 +551,7 @@ router.post('/', wrap(async (req, res) => {
         detalle: {
           create: pedido.items.map((it) => {
             const lineaSub = it.precioUnit * it.cantidad;
-            const lineaIva = impuestoSobrePrecio(lineaSub, it.producto.iva || 0, electronica === false);
+            const lineaIva = impuestoSobrePrecio(lineaSub, porcentajeProducto(it.producto, tasasImpuesto), electronica === false);
             return {
               productoId: it.productoId,
               companiaCodigo: num.companiaCodigo,
@@ -578,6 +602,7 @@ router.post('/directa', wrap(async (req, res) => {
   for (const i of items) {
     if (!buscar(i.productoId)) return res.status(404).json({ error: `Producto ${i.productoId} no encontrado` });
   }
+  const tasasImpuesto = await obtenerTasasImpuesto(prisma, productos, companiaCodigo, centroOperacionCodigo);
 
   // Insumos requeridos segun los kits
   const requeridos = new Map();
@@ -602,7 +627,7 @@ router.post('/directa', wrap(async (req, res) => {
   const precioProductos = redondear(items.reduce((s, i) => s + buscar(i.productoId).precio * (Number(i.cantidad) || 1), 0));
   const impuesto = redondear(items.reduce((s, i) => {
     const prod = buscar(i.productoId);
-    return s + impuestoSobrePrecio(prod.precio * (Number(i.cantidad) || 1), prod.iva || 0, electronica === false);
+    return s + impuestoSobrePrecio(prod.precio * (Number(i.cantidad) || 1), porcentajeProducto(prod, tasasImpuesto), electronica === false);
   }, 0));
   const subtotal = electronica === false ? redondear(precioProductos - impuesto) : precioProductos;
   const total = electronica === false ? precioProductos : redondear(subtotal + impuesto);
@@ -656,7 +681,7 @@ router.post('/directa', wrap(async (req, res) => {
             const cant = Number(i.cantidad) || 1;
             const precio = buscar(i.productoId).precio;
             const lineaSub = precio * cant;
-            const lineaIva = impuestoSobrePrecio(lineaSub, buscar(i.productoId).iva || 0, electronica === false);
+            const lineaIva = impuestoSobrePrecio(lineaSub, porcentajeProducto(buscar(i.productoId), tasasImpuesto), electronica === false);
             return {
               productoId: String(i.productoId),
               companiaCodigo: num.companiaCodigo,
