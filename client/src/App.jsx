@@ -20,7 +20,6 @@ import AsignacionCajas from './pages/AsignacionCajas.jsx';
 import TiposDocumento from './pages/TiposDocumento.jsx';
 import Categorias from './pages/Categorias.jsx';
 import MediosPago from './pages/MediosPago.jsx';
-import Impuestos from './pages/Impuestos.jsx';
 import Restaurantes from './pages/Restaurantes.jsx';
 import ListasPrecios from './pages/ListasPrecios.jsx';
 import CrudPage from './components/CrudPage.jsx';
@@ -462,8 +461,7 @@ export default function App() {
               {puede(user, 'empresa.ver') && <Route path="/parametros/tipos-documentos" element={<TiposDocumento />} />}
               {puede(user, 'empresa.ver') && <Route path="/parametros/medios-pago" element={<MediosPago />} />}
               {puede(user, 'restaurantes.ver') && <Route path="/plataforma/restaurantes" element={<Restaurantes />} />}
-              {puede(user, 'impuestos.ver') && <Route path="/impuestos" element={<Impuestos />} />}
-              {CRUD_ENTIDADES.filter((e) => e.ruta !== '/impuestos' && puede(user, `${e.modulo}.ver`)).map((e) => (
+              {CRUD_ENTIDADES.filter((e) => puede(user, `${e.modulo}.ver`)).map((e) => (
                 <Route key={e.ruta} path={e.ruta} element={e.ruta === '/listas-precios' ? <ListasPrecios /> : <CrudPage cfg={e.cfg} />} />
               ))}
               {puede(user, 'auditoria.ver') && <Route path="/auditoria" element={<Auditoria />} />}

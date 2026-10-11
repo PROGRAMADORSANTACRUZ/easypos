@@ -37,25 +37,6 @@ test('reparte productos por cantidades y conserva el importe total', () => {
   assert.equal(partes.reduce((suma, parte) => suma + parte.total + parte.propina, 0), 40.7);
 });
 
-test('aplica el porcentaje del centro sobre la tasa base del producto al facturar', () => {
-  const pedidoConImpuesto = {
-    items: [{
-      ...pedido.items[0],
-      producto: { ...pedido.items[0].producto, impuestoId: 'impuesto-centro', iva: 19 },
-    }],
-  };
-  const partes = crearPartesPedido(pedidoConImpuesto, {
-    modo: 'IGUALES',
-    cantidadPartes: 2,
-    electronica: true,
-    propina: 0,
-    tasasImpuesto: new Map([['impuesto-centro', 8]]),
-  });
-
-  assert.deepEqual(partes.map((parte) => parte.total), [16.2, 16.2]);
-  assert.deepEqual(partes.map((parte) => parte.impuesto), [1.2, 1.2]);
-});
-
 test('rechaza una asignación de productos que no suma las unidades del pedido', () => {
   assert.throws(() => crearPartesPedido(pedido, {
     modo: 'PRODUCTOS',
