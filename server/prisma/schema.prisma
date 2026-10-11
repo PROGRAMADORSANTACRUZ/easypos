@@ -751,6 +751,7 @@ model Compania {
   facturasVenta FacturaVenta[]
   facturaDetalles FacturaDetalle[]
   facturaVentaDetalles FacturaVentaDetalle[]
+  impuestosCuentaCentro ImpuestoCuentaCentro[]
   createdAt  DateTime @default(now()) @map("FechaCreacion")
 
   @@map("Compania")
@@ -770,6 +771,7 @@ model CentroOperacion {
   facturasVenta FacturaVenta[]
   facturaDetalles FacturaDetalle[]
   facturaVentaDetalles FacturaVentaDetalle[]
+  impuestosCuentaCentro ImpuestoCuentaCentro[]
 
   @@map("CentrosOperaciones")
 }
@@ -1030,8 +1032,30 @@ model Impuesto {
   activo             Boolean  @default(true) @map("Activo")
   createdAt          DateTime @default(now()) @map("FechaCreacion")
   productos          Producto[]
+  cuentasPorCentro   ImpuestoCuentaCentro[]
 
   @@map("Impuestos")
+}
+
+model ImpuestoCuentaCentro {
+  id                      String   @id @default(uuid()) @db.Uuid @map("Id")
+  impuestoId              String   @db.Uuid @map("ImpuestoId")
+  companiaCodigo          String   @db.VarChar(3) @map("CompaniaCodigo")
+  centroOperacionCodigo   String   @db.VarChar(10) @map("CentroOperacionCodigo")
+  ctaCreditoVentas        String?  @db.VarChar(30) @map("CtaCreditoVentas")
+  cuentasBase             String?  @db.VarChar(30) @map("CuentasBase")
+  cuentasBaseDevoluciones String?  @db.VarChar(30) @map("CuentasBaseDevoluciones")
+  ctaDebitoVentas         String?  @db.VarChar(30) @map("CtaDebitoVentas")
+  ctaDebitoCompras        String?  @db.VarChar(30) @map("CtaDebitoCompras")
+  ctaCreditoCompras       String?  @db.VarChar(30) @map("CtaCreditoCompras")
+  createdAt               DateTime @default(now()) @map("FechaCreacion")
+  impuesto                Impuesto @relation(fields: [impuestoId], references: [id], onDelete: Cascade)
+  compania                Compania @relation(fields: [companiaCodigo], references: [codigo], onDelete: Cascade, onUpdate: Cascade)
+  centroOperacion         CentroOperacion @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([impuestoId, centroOperacionCodigo])
+  @@index([companiaCodigo, centroOperacionCodigo])
+  @@map("ImpuestosCuentasCentro")
 }
 
 // Eventos DIAN de una factura (acuse, aceptacion, rechazo, etc.)

@@ -710,7 +710,11 @@ export default function Facturas({ electronica = true }) {
     for (const factura of facturasFiltradas) {
       const grupos = new Map();
       for (const linea of factura.detalle || []) {
-        const impuesto = linea.producto?.impuesto;
+        const impuestoBase = linea.producto?.impuesto;
+        const impuesto = impuestoBase?.cuentasPorCentro?.find((cuenta) => (
+          cuenta.companiaCodigo === factura.companiaCodigo
+          && cuenta.centroOperacionCodigo === factura.centroOperacionCodigo
+        )) || impuestoBase;
         const iva = Number(linea.iva) || 0;
         const base = (Number(linea.total) || 0) - iva;
         if (!iva && !base) continue;

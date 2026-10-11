@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { centroPermitido, centrosUnicos } from '../src/centrosUsuario.js';
+import { centroPermitido, centrosUnicos, filtroParesCentros } from '../src/centrosUsuario.js';
 
 const centros = [
   { codigo: '606', companiaCodigo: '006', estado: 'Activo' },
@@ -18,4 +18,13 @@ test('autoriza solo el par compañía-centro asignado y activo', () => {
 test('normaliza códigos de centro y elimina duplicados', () => {
   assert.deepEqual(centrosUnicos(['606', ' 401 ', '606', '', null]), ['606', '401']);
   assert.deepEqual(centrosUnicos(null), []);
+});
+
+test('construye filtros exactos de compañía-centro e ignora centros inactivos', () => {
+  assert.deepEqual(filtroParesCentros(centros), {
+    OR: [
+      { companiaCodigo: '006', centroOperacionCodigo: '606' },
+      { companiaCodigo: '004', centroOperacionCodigo: '401' },
+    ],
+  });
 });

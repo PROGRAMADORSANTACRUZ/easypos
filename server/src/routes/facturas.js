@@ -3,7 +3,7 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { crearFacturaFactus } from '../factus.js';
 import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
-import { centroPermitido } from '../centrosUsuario.js';
+import { centroPermitido, filtroParesCentros } from '../centrosUsuario.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -41,11 +41,7 @@ function validarCentroFacturacion(req, res, companiaCodigo, centroOperacionCodig
 }
 
 function filtroCentrosUsuario(usuario) {
-  const centros = (usuario?.centrosOperacion || []).filter((centro) => centro.estado === 'Activo');
-  return {
-    companiaCodigo: { in: [...new Set(centros.map((centro) => centro.companiaCodigo))] },
-    centroOperacionCodigo: { in: [...new Set(centros.map((centro) => centro.codigo))] },
-  };
+  return filtroParesCentros(usuario?.centrosOperacion);
 }
 
 // Resuelve el cliente de una factura. Por defecto "Consumidor Final".
@@ -217,19 +213,34 @@ async function emitirEnFactus(factura) {
 // por defecto (sin query) devuelve solo las facturas electronicas reales del modulo Facturacion.
 router.get('/', wrap(async (req, res) => {
   const soloNoElectronicas = req.query.electronica === 'false';
+  const centrosActivos = (req.usuario?.centrosOperacion || [])
+    .filter((centro) => centro.estado === 'Activo')
+    .map((centro) => centro.codigo);
   const include = {
     pedido: { include: { mesa: true, mesera: true, items: { include: { producto: true } } } },
     cliente: true,
     usuario: true,
     apertura: { include: { caja: true } },
-    detalle: { include: { producto: { include: { impuesto: true } } } },
+    detalle: {
+      include: {
+        producto: {
+          include: {
+            impuesto: {
+              include: {
+                cuentasPorCentro: { where: { centroOperacionCodigo: { in: centrosActivos } } },
+              },
+            },
+          },
+        },
+      },
+    },
     tipoDocumento: true,
     compania: true,
     centroOperacion: true,
   };
   if (soloNoElectronicas) {
     const ventas = await prisma.facturaVenta.findMany({
-      where: { estadoDIAN: 'NO_APLICA', ...filtroCentrosUsuario(req.usuario) },
+      where: { estadoDIAN: 'NO_APLICA', AND: [filtroCentrosUsuario(req.usuario)] },
       orderBy: { createdAt: 'desc' },
       include,
     });
@@ -238,7 +249,12 @@ router.get('/', wrap(async (req, res) => {
   // OJO: en SQL, "columna <> 'X'" NO incluye filas NULL — hay que pedirlas aparte con OR,
   // si no, las facturas antiguas (sin estadoDIAN) quedan invisibles en el historial.
   const facturas = await prisma.factura.findMany({
-    where: { ...filtroCentrosUsuario(req.usuario), OR: [{ estadoDIAN: { not: 'NO_APLICA' } }, { estadoDIAN: null }] },
+    where: {
+      AND: [
+        filtroCentrosUsuario(req.usuario),
+        { OR: [{ estadoDIAN: { not: 'NO_APLICA' } }, { estadoDIAN: null }] },
+      ],
+    },
     orderBy: { createdAt: 'desc' },
     include: {
       ...include,
@@ -263,7 +279,7 @@ router.get('/:id', wrap(async (req, res) => {
   };
   const filtroCentros = filtroCentrosUsuario(req.usuario);
   const factura = await prisma.factura.findFirst({
-    where: { id: String(req.params.id), ...filtroCentros },
+    where: { id: String(req.params.id), AND: [filtroCentros] },
     include: {
       ...include,
       notasCredito: true,
@@ -273,7 +289,7 @@ router.get('/:id', wrap(async (req, res) => {
   });
   if (factura) return res.json(factura);
   const venta = await prisma.facturaVenta.findFirst({
-    where: { id: String(req.params.id), ...filtroCentros },
+    where: { id: String(req.params.id), AND: [filtroCentros] },
     include,
   });
   if (venta) return res.json({ ...venta, notasCredito: [], notasDebito: [], retenciones: [] });
@@ -283,7 +299,7 @@ router.get('/:id', wrap(async (req, res) => {
 // Reintenta el envío a Factus (DIAN) de una factura que quedó con estadoDIAN = 'ERROR' o sin reportar.
 router.post('/:id/reenviar-dian', wrap(async (req, res) => {
   const factura = await prisma.factura.findUnique({
-    where: { id: String(req.params.id), ...filtroCentrosUsuario(req.usuario) },
+    where: { id: String(req.params.id), AND: [filtroCentrosUsuario(req.usuario)] },
     include: { cliente: true, detalle: { include: { producto: true } } },
   });
   if (!factura) return res.status(404).json({ error: 'Factura no encontrada' });

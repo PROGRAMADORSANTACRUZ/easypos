@@ -13,9 +13,125 @@ const limpiar = (v) => {
 };
 const toNum = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
 const aBool = (v) => v === true || v === 'true' || v === 1 || v === '1';
+const CAMPOS_CUENTA = ['ctaCreditoVentas', 'cuentasBase', 'cuentasBaseDevoluciones', 'ctaDebitoVentas', 'ctaDebitoCompras', 'ctaCreditoCompras'];
+
+function datosCuentas(body, { parcial = false } = {}) {
+  const data = {};
+  for (const campo of CAMPOS_CUENTA) {
+    if (parcial && body[campo] === undefined) continue;
+    data[campo] = limpiar(body[campo]);
+  }
+  return data;
+}
+
+async function validarAlcance({ impuestoId, companiaCodigo, centroOperacionCodigo }) {
+  if (!impuestoId || !companiaCodigo || !centroOperacionCodigo) {
+    return 'Selecciona impuesto, compañía y centro de operaciones';
+  }
+  if (!['004', '006'].includes(companiaCodigo)) return 'Solo se permiten las compañías 004 y 006';
+  const [impuesto, centro] = await Promise.all([
+    prisma.impuesto.findUnique({ where: { id: impuestoId }, select: { id: true } }),
+    prisma.centroOperacion.findFirst({
+      where: { codigo: centroOperacionCodigo, companiaCodigo, estado: 'Activo' },
+      select: { codigo: true },
+    }),
+  ]);
+  if (!impuesto) return 'El impuesto seleccionado no existe';
+  if (!centro) return 'El centro debe estar activo y pertenecer a la compañía seleccionada';
+  return null;
+}
 
 router.get('/', wrap(async (req, res) => {
   res.json(await prisma.impuesto.findMany({ orderBy: { nombre: 'asc' } }));
+}));
+
+router.get('/cuentas-centro', wrap(async (req, res) => {
+  const { companiaCodigo, centroOperacionCodigo } = req.query;
+  res.json(await prisma.impuestoCuentaCentro.findMany({
+    where: {
+      ...(companiaCodigo && { companiaCodigo: String(companiaCodigo) }),
+      ...(centroOperacionCodigo && { centroOperacionCodigo: String(centroOperacionCodigo) }),
+    },
+    include: {
+      impuesto: { select: { id: true, nombre: true, tipo: true, porcentaje: true } },
+      compania: { select: { codigo: true, razonSocial: true } },
+      centroOperacion: { select: { codigo: true, descripcion: true } },
+    },
+    orderBy: [{ companiaCodigo: 'asc' }, { centroOperacionCodigo: 'asc' }, { impuesto: { nombre: 'asc' } }],
+  }));
+}));
+
+router.get('/alcances', wrap(async (_req, res) => {
+  const companias = await prisma.compania.findMany({
+    where: { codigo: { in: ['004', '006'] } },
+    include: {
+      centrosOperacion: {
+        where: { estado: 'Activo' },
+        orderBy: { codigo: 'asc' },
+        select: { codigo: true, descripcion: true, companiaCodigo: true },
+      },
+    },
+    orderBy: { codigo: 'asc' },
+  });
+  res.json(companias);
+}));
+
+router.post('/cuentas-centro', wrap(async (req, res) => {
+  const impuestoId = limpiar(req.body?.impuestoId);
+  const companiaCodigo = limpiar(req.body?.companiaCodigo);
+  const centroOperacionCodigo = limpiar(req.body?.centroOperacionCodigo);
+  const errorAlcance = await validarAlcance({ impuestoId, companiaCodigo, centroOperacionCodigo });
+  if (errorAlcance) return res.status(400).json({ error: errorAlcance });
+  try {
+    const configuracion = await prisma.impuestoCuentaCentro.create({
+      data: { impuestoId, companiaCodigo, centroOperacionCodigo, ...datosCuentas(req.body) },
+    });
+    await auditar({ req, accion: 'CREAR', entidad: 'impuesto_cuenta_centro', entidadId: configuracion.id, detalle: `${impuestoId} ${companiaCodigo}/${centroOperacionCodigo}` });
+    res.status(201).json(configuracion);
+  } catch (error) {
+    if (error.code === 'P2002') return res.status(409).json({ error: 'Ya existe una configuración para este impuesto y centro' });
+    throw error;
+  }
+}));
+
+router.put('/cuentas-centro/:id', wrap(async (req, res) => {
+  const id = String(req.params.id);
+  try {
+    const actual = await prisma.impuestoCuentaCentro.findUnique({ where: { id } });
+    if (!actual) return res.status(404).json({ error: 'Configuración por centro no encontrada' });
+    const impuestoId = req.body?.impuestoId === undefined ? actual.impuestoId : limpiar(req.body.impuestoId);
+    const companiaCodigo = req.body?.companiaCodigo === undefined ? actual.companiaCodigo : limpiar(req.body.companiaCodigo);
+    const centroOperacionCodigo = req.body?.centroOperacionCodigo === undefined ? actual.centroOperacionCodigo : limpiar(req.body.centroOperacionCodigo);
+    const errorAlcance = await validarAlcance({ impuestoId, companiaCodigo, centroOperacionCodigo });
+    if (errorAlcance) return res.status(400).json({ error: errorAlcance });
+    const configuracion = await prisma.impuestoCuentaCentro.update({
+      where: { id },
+      data: {
+        impuestoId,
+        companiaCodigo,
+        centroOperacionCodigo,
+        ...datosCuentas(req.body, { parcial: true }),
+      },
+    });
+    await auditar({ req, accion: 'EDITAR', entidad: 'impuesto_cuenta_centro', entidadId: id, detalle: `${impuestoId} ${companiaCodigo}/${centroOperacionCodigo}` });
+    res.json(configuracion);
+  } catch (error) {
+    if (error.code === 'P2002') return res.status(409).json({ error: 'Ya existe una configuración para este impuesto y centro' });
+    if (error.code === 'P2025') return res.status(404).json({ error: 'Configuración por centro no encontrada' });
+    throw error;
+  }
+}));
+
+router.delete('/cuentas-centro/:id', wrap(async (req, res) => {
+  const id = String(req.params.id);
+  try {
+    await prisma.impuestoCuentaCentro.delete({ where: { id } });
+    await auditar({ req, accion: 'ELIMINAR', entidad: 'impuesto_cuenta_centro', entidadId: id });
+    res.status(204).end();
+  } catch (error) {
+    if (error.code === 'P2025') return res.status(404).json({ error: 'Configuración por centro no encontrada' });
+    throw error;
+  }
 }));
 
 router.get('/:id', wrap(async (req, res) => {
