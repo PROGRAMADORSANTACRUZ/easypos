@@ -212,10 +212,10 @@ export const CRUD_ENTIDADES = [
       titulo: 'Impuestos', singular: 'Impuesto', modulo: 'impuestos', endpoint: '/impuestos',
       descripcion: 'Impuestos configurables (IVA, INC, retenciones).',
       campos: [
-        { name: 'nombre', label: 'Impuesto', type: 'text', required: true, maxLength: 100 },
-        { name: 'tipo', label: 'Tipo', type: 'select', options: ['IVA', 'INC', 'RETEFUENTE', 'RETEIVA', 'RETEICA'] },
         { name: 'companiaCodigo', label: 'Compañía', type: 'ref', fuente: '/impuestos/companias', labelKey: (compania) => `${compania.codigo} · ${compania.razonSocial}`, resetOnChange: ['centroOperacionCodigo'] },
         { name: 'centroOperacionCodigo', label: 'Centro de operaciones', type: 'ref', fuente: '/impuestos/centros-operaciones', labelKey: (centro) => `${centro.codigo} · ${centro.descripcion}`, dependsOn: 'companiaCodigo', dependsOnField: 'companiaCodigo' },
+        { name: 'nombre', label: 'Impuesto', type: 'text', required: true, maxLength: 100 },
+        { name: 'tipo', label: 'Tipo', type: 'select', options: ['IVA', 'INC', 'RETEFUENTE', 'RETEIVA', 'RETEICA'] },
         { name: 'porcentaje', label: 'Porcentaje Impuesto (%)', type: 'number', step: '0.01' },
         { name: 'valorImpuesto', label: 'Valor Impuesto (fijo)', type: 'number', step: '0.01' },
         { name: 'ctaCreditoVentas', label: 'CUENTA IPOCONSUMO', type: 'text', maxLength: 30 },
