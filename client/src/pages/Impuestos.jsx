@@ -56,7 +56,7 @@ export default function Impuestos() {
   const impuestoBaseSeleccionado = impuestos.find((impuesto) => impuesto.id === form.impuestoId);
   const filasUnificadas = impuestos.flatMap((impuesto) => {
     const cuentasCentro = configuraciones.filter((configuracion) => configuracion.impuestoId === impuesto.id);
-    return [
+    const filasBase = cuentasCentro.length ? [] : [
       {
         id: `general-${impuesto.id}`,
         alcance: 'General',
@@ -67,6 +67,9 @@ export default function Impuestos() {
         ctaDebitoVentas: impuesto.ctaDebitoVentas,
         cuentasBaseDevoluciones: impuesto.cuentasBaseDevoluciones,
       },
+    ];
+    return [
+      ...filasBase,
       ...cuentasCentro.map((configuracion) => ({
         ...configuracion,
         alcance: `${configuracion.compania.codigo} · ${configuracion.compania.razonSocial}`,
@@ -75,7 +78,11 @@ export default function Impuestos() {
     ];
   });
   const cambiarCompania = (companiaCodigo) => setForm((actual) => ({ ...actual, companiaCodigo, centroOperacionCodigo: '' }));
-  const abrirNueva = () => { setEditId(null); setForm(VACIO); setModalAbierto(true); };
+  const abrirNueva = (impuestoId = '') => {
+    setEditId(null);
+    setForm({ ...VACIO, impuestoId });
+    setModalAbierto(true);
+  };
   const editar = (configuracion) => {
     setEditId(configuracion.id);
     setForm({
@@ -175,7 +182,7 @@ export default function Impuestos() {
                     <td>{fila.cuentasBaseDevoluciones || '—'}</td>
                     <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                       {esGeneral ? (
-                        <button type="button" className="btn btn-sm" title="Editar impuesto base" onClick={() => document.getElementById('impuestos-base-details')?.setAttribute('open', '')}>
+                        <button type="button" className="btn btn-sm" title="Asignar a compañía y centro" onClick={() => abrirNueva(fila.impuesto.id)}>
                           <Icon name="edit" size={16} />
                         </button>
                       ) : (
