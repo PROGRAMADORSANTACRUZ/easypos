@@ -214,6 +214,8 @@ export const CRUD_ENTIDADES = [
       campos: [
         { name: 'nombre', label: 'Impuesto', type: 'text', required: true, maxLength: 100 },
         { name: 'tipo', label: 'Tipo', type: 'select', options: ['IVA', 'INC', 'RETEFUENTE', 'RETEIVA', 'RETEICA'] },
+        { name: 'companiaCodigo', label: 'Compañía', type: 'ref', fuente: '/impuestos/companias', labelKey: (compania) => `${compania.codigo} · ${compania.razonSocial}`, resetOnChange: ['centroOperacionCodigo'] },
+        { name: 'centroOperacionCodigo', label: 'Centro de operaciones', type: 'ref', fuente: '/impuestos/centros-operaciones', labelKey: (centro) => `${centro.codigo} · ${centro.descripcion}`, dependsOn: 'companiaCodigo', dependsOnField: 'companiaCodigo' },
         { name: 'porcentaje', label: 'Porcentaje Impuesto (%)', type: 'number', step: '0.01' },
         { name: 'valorImpuesto', label: 'Valor Impuesto (fijo)', type: 'number', step: '0.01' },
         { name: 'ctaCreditoVentas', label: 'CUENTA IPOCONSUMO', type: 'text', maxLength: 30 },
@@ -229,6 +231,8 @@ export const CRUD_ENTIDADES = [
       columnas: [
         { label: 'IdImpuesto', get: (r) => r.idImpuesto },
         { label: 'Nombre', get: (r) => r.nombre },
+        { label: 'Compañía', get: (r) => r.compania?.razonSocial || 'General' },
+        { label: 'Centro de operaciones', get: (r) => r.centroOperacion?.descripcion || 'General' },
         { label: 'Tipo', get: (r) => r.tipo },
         { label: '%', get: (r) => r.porcentaje },
         { label: 'Valor', get: (r) => r.valorImpuesto },

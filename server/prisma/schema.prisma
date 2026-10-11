@@ -746,6 +746,7 @@ model Compania {
   nit        String   @unique @db.VarChar(20) @map("Nit")
   razonSocial String  @db.VarChar(250) @map("RazonSocial")
   centrosOperacion CentroOperacion[]
+  impuestos       Impuesto[]
   tiposDocumento TipoDocumento[]
   facturas    Factura[]
   facturasVenta FacturaVenta[]
@@ -765,6 +766,7 @@ model CentroOperacion {
   nombre      String   @db.VarChar(100) @map("Nombre")
   companiaCodigo String @default("004") @db.VarChar(3) @map("CompaniaCodigo")
   compania    Compania @relation(fields: [companiaCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
+  impuestos   Impuesto[]
   usuarios    UsuarioCentroOperacion[]
   tiposDocumento TipoDocumento[]
   facturas    Factura[]
@@ -1030,9 +1032,13 @@ model Impuesto {
   exportado          Boolean  @default(false) @map("Exportado")
   valorImpuesto      Float    @default(0) @map("ValorImpuesto") // valor fijo (cuando el impuesto no es porcentual)
   activo             Boolean  @default(true) @map("Activo")
+  companiaCodigo     String?  @db.VarChar(3) @map("CompaniaCodigo")
+  centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
   createdAt          DateTime @default(now()) @map("FechaCreacion")
   productos          Producto[]
   cuentasPorCentro   ImpuestoCuentaCentro[]
+  compania            Compania? @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
+  centroOperacion     CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
 
   @@map("Impuestos")
 }

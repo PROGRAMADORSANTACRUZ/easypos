@@ -52,10 +52,14 @@ export default function CrudPage({ cfg }) {
   };
   useEffect(() => { cargar(); setForm(VACIO); setEditId(null); }, [cfg]);
 
-  const set = (campo, valor) => setForm((f) => ({
-    ...f,
-    [campo]: camposMayusculas.has(campo) && typeof valor === 'string' ? valor.toUpperCase() : valor,
-  }));
+  const set = (campo, valor) => setForm((f) => {
+    const configuracion = cfg.campos.find((item) => item.name === campo);
+    return {
+      ...f,
+      [campo]: camposMayusculas.has(campo) && typeof valor === 'string' ? valor.toUpperCase() : valor,
+      ...Object.fromEntries((configuracion?.resetOnChange || []).map((nombre) => [nombre, ''])),
+    };
+  });
   const limpiar = () => { setEditId(null); setForm(VACIO); };
   const abrirNuevo = () => { limpiar(); setModalAbierto(true); };
   const cerrarModal = () => { setModalAbierto(false); limpiar(); };
@@ -209,9 +213,13 @@ export default function CrudPage({ cfg }) {
                       ))}
                     </select>
                   ) : c.type === 'ref' ? (
-                    <select value={form[c.name] ?? ''} onChange={(e) => set(c.name, e.target.value)}>
+                    <select
+                      value={form[c.name] ?? ''}
+                      onChange={(e) => set(c.name, e.target.value)}
+                      disabled={c.dependsOn ? !form[c.dependsOn] : false}
+                    >
                       <option value="">—</option>
-                      {(refs[c.name] || []).map((o) => (
+                      {(refs[c.name] || []).filter((o) => !c.dependsOn || String(o[c.dependsOnField || c.dependsOn]) === String(form[c.dependsOn])).map((o) => (
                         <option key={o.id} value={o.id}>{opcionLabel(c, o)}</option>
                       ))}
                     </select>
