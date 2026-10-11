@@ -54,6 +54,26 @@ export default function Impuestos() {
 
   const centrosDisponibles = companias.find((compania) => compania.codigo === form.companiaCodigo)?.centrosOperacion || [];
   const impuestoBaseSeleccionado = impuestos.find((impuesto) => impuesto.id === form.impuestoId);
+  const filasUnificadas = impuestos.flatMap((impuesto) => {
+    const cuentasCentro = configuraciones.filter((configuracion) => configuracion.impuestoId === impuesto.id);
+    return [
+      {
+        id: `general-${impuesto.id}`,
+        alcance: 'General',
+        impuesto,
+        porcentaje: impuesto.porcentaje,
+        ctaCreditoVentas: impuesto.ctaCreditoVentas,
+        cuentasBase: impuesto.cuentasBase,
+        ctaDebitoVentas: impuesto.ctaDebitoVentas,
+        cuentasBaseDevoluciones: impuesto.cuentasBaseDevoluciones,
+      },
+      ...cuentasCentro.map((configuracion) => ({
+        ...configuracion,
+        alcance: `${configuracion.compania.codigo} · ${configuracion.compania.razonSocial}`,
+        porcentaje: configuracion.porcentaje ?? impuesto.porcentaje,
+      })),
+    ];
+  });
   const cambiarCompania = (companiaCodigo) => setForm((actual) => ({ ...actual, companiaCodigo, centroOperacionCodigo: '' }));
   const abrirNueva = () => { setEditId(null); setForm(VACIO); setModalAbierto(true); };
   const editar = (configuracion) => {
@@ -125,45 +145,57 @@ export default function Impuestos() {
 
   return (
     <div>
-      <CrudPage cfg={IMPUESTOS_CFG} />
-      <section style={{ marginTop: 20 }}>
-        <PageHeader
-          title="Cuentas por compañía y centro"
-          subtitle="Asigna cuentas distintas por compañía y centro. El porcentaje sigue siendo el del impuesto base; si no hay cuentas específicas, se usan las cuentas generales del impuesto."
-          actions={puede(user, 'crear') && <Button variant="primary" icon="add" onClick={abrirNueva} title="Configurar cuentas por centro" />}
-        />
-        <div className="card crud-table-scroll" role="region" aria-label="Cuentas de impuestos por compañía y centro" tabIndex={0}>
-          {cargando ? <div className="empty">Cargando configuraciones...</div> : configuraciones.length === 0 ? (
-            <EmptyState title="Sin cuentas por centro" description="Agrega una configuración para que cada factura use las cuentas de su compañía y centro." />
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Impuesto</th><th>% aplicado</th><th>Compañía</th><th>Centro</th><th>Cuenta impuesto ventas</th><th>Cuenta base</th><th>Cuenta impuesto devolución</th><th>Cuenta base devolución</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {configuraciones.map((configuracion) => (
-                  <tr key={configuracion.id}>
-                    <td>{configuracion.impuesto.nombre} ({configuracion.impuesto.porcentaje}%)</td>
-                    <td>{configuracion.porcentaje ?? configuracion.impuesto.porcentaje}%</td>
-                    <td>{configuracion.compania.codigo} · {configuracion.compania.razonSocial}</td>
-                    <td>{configuracion.centroOperacion.codigo} · {configuracion.centroOperacion.descripcion}</td>
-                    <td>{configuracion.ctaCreditoVentas || '—'}</td>
-                    <td>{configuracion.cuentasBase || '—'}</td>
-                    <td>{configuracion.ctaDebitoVentas || '—'}</td>
-                    <td>{configuracion.cuentasBaseDevoluciones || '—'}</td>
+      <PageHeader
+        title="Impuestos"
+        subtitle="Impuesto, compañía, centro, porcentaje y cuentas contables en una sola vista. Las filas generales son la configuración base."
+        actions={puede(user, 'crear') && <Button variant="primary" icon="add" onClick={abrirNueva} title="Nueva configuración por compañía y centro" />}
+      />
+      <div className="card crud-table-scroll" role="region" aria-label="Impuestos y cuentas por compañía y centro" tabIndex={0}>
+        {cargando ? <div className="empty">Cargando configuraciones...</div> : filasUnificadas.length === 0 ? (
+          <EmptyState title="Sin impuestos" description="Crea primero un impuesto base y luego podrás asignar cuentas por compañía y centro." />
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Impuesto</th><th>Alcance</th><th>Centro</th><th>% aplicado</th><th>Cuenta impuesto ventas</th><th>Cuenta base</th><th>Cuenta impuesto devolución</th><th>Cuenta base devolución</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filasUnificadas.map((fila) => {
+                const esGeneral = fila.alcance === 'General';
+                return (
+                  <tr key={fila.id}>
+                    <td>{fila.impuesto.nombre}</td>
+                    <td>{fila.alcance}</td>
+                    <td>{esGeneral ? 'Todos / predeterminado' : `${fila.centroOperacion.codigo} · ${fila.centroOperacion.descripcion}`}</td>
+                    <td>{fila.porcentaje}%{esGeneral ? ' · base' : ''}</td>
+                    <td>{fila.ctaCreditoVentas || '—'}</td>
+                    <td>{fila.cuentasBase || '—'}</td>
+                    <td>{fila.ctaDebitoVentas || '—'}</td>
+                    <td>{fila.cuentasBaseDevoluciones || '—'}</td>
                     <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                      {puede(user, 'editar') && <button className="btn btn-sm" title="Editar" onClick={() => editar(configuracion)}><Icon name="edit" size={16} /></button>}
-                      {puede(user, 'eliminar') && <button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminar(configuracion)} style={{ marginLeft: 6 }}><Icon name="delete" size={16} /></button>}
+                      {esGeneral ? (
+                        <button type="button" className="btn btn-sm" title="Editar impuesto base" onClick={() => document.getElementById('impuestos-base-details')?.setAttribute('open', '')}>
+                          <Icon name="edit" size={16} />
+                        </button>
+                      ) : (
+                        <>
+                          {puede(user, 'editar') && <button className="btn btn-sm" title="Editar" onClick={() => editar(fila)}><Icon name="edit" size={16} /></button>}
+                          {puede(user, 'eliminar') && <button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminar(fila)} style={{ marginLeft: 6 }}><Icon name="delete" size={16} /></button>}
+                        </>
+                      )}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </section>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <details id="impuestos-base-details" style={{ marginTop: 16 }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '10px 0' }}>Administrar definiciones base de impuestos</summary>
+        <CrudPage cfg={IMPUESTOS_CFG} />
+      </details>
 
       {modalAbierto && (
         <Modal
