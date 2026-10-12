@@ -131,6 +131,8 @@ model Cliente {
   ciudad    String?
   email     String?  @db.VarChar(150) @map("Email")
   municipioCodigo String? @db.VarChar(10) @map("MunicipioCodigo")
+  municipioSiesaCodigo String? @db.VarChar(8) @map("MunicipioSiesaCodigo")
+  municipioSiesa CiudadSiesa? @relation(fields: [municipioSiesaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
   responsableIVA  Boolean @default(false) @map("ResponsableIVA")
   porcentajeEmpleado Float? @map("PorcentajeEmpleado")
   porcentajeCliente  Float? @map("PorcentajeCliente")
@@ -145,6 +147,38 @@ model Cliente {
   cortesias Cortesia[]
   reservasMesa Mesa[] @relation("ClienteReservaMesa")
   createdAt DateTime @default(now()) @map("FechaCreacion")
+
+  @@index([municipioSiesaCodigo])
+}
+
+model PaisSiesa {
+  codigo        String              @id @db.VarChar(3) @map("Codigo")
+  nombre        String              @db.VarChar(100) @map("Nombre")
+  departamentos DepartamentoSiesa[]
+
+  @@map("PaisesSiesa")
+}
+
+model DepartamentoSiesa {
+  codigo       String       @id @db.VarChar(5) @map("Codigo")
+  paisCodigo   String       @db.VarChar(3) @map("PaisCodigo")
+  nombre       String       @db.VarChar(100) @map("Nombre")
+  pais         PaisSiesa    @relation(fields: [paisCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
+  ciudades     CiudadSiesa[]
+
+  @@index([paisCodigo])
+  @@map("DepartamentosSiesa")
+}
+
+model CiudadSiesa {
+  codigo             String             @id @db.VarChar(8) @map("Codigo")
+  departamentoCodigo String             @db.VarChar(5) @map("DepartamentoCodigo")
+  nombre             String             @db.VarChar(120) @map("Nombre")
+  departamento       DepartamentoSiesa  @relation(fields: [departamentoCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
+  clientes           Cliente[]
+
+  @@index([departamentoCodigo])
+  @@map("CiudadesSiesa")
 }
 
 // Mesas del local

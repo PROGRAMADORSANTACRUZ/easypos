@@ -70,6 +70,7 @@ const VACIO = {
   ciudad: '',
   email: '',
   municipioCodigo: '',
+  municipioSiesaCodigo: '',
   responsableIVA: false,
   porcentajeEmpleado: '',
   porcentajeCliente: '',
@@ -83,6 +84,11 @@ export default function Clientes() {
   const [busqueda, setBusqueda] = useState('');
   const [form, setForm] = useState(VACIO);
   const [municipio, setMunicipio] = useState('');
+  const [paisesSiesa, setPaisesSiesa] = useState([]);
+  const [paisSiesaCodigo, setPaisSiesaCodigo] = useState('169');
+  const [departamentosSiesa, setDepartamentosSiesa] = useState([]);
+  const [departamentoSiesaCodigo, setDepartamentoSiesaCodigo] = useState('');
+  const [ciudadesSiesa, setCiudadesSiesa] = useState([]);
   const [editando, setEditando] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
@@ -102,6 +108,38 @@ export default function Clientes() {
   };
   useEffect(() => { cargar(); }, []);
 
+  useEffect(() => {
+    let vigente = true;
+    api.get('/catalogos-siesa/paises')
+      .then((lista) => { if (vigente) setPaisesSiesa(lista); })
+      .catch((error) => { if (vigente) notify(error.message, 'err'); });
+    return () => { vigente = false; };
+  }, []);
+
+  useEffect(() => {
+    let vigente = true;
+    if (!paisSiesaCodigo) {
+      setDepartamentosSiesa([]);
+      return () => { vigente = false; };
+    }
+    api.get(`/catalogos-siesa/departamentos?paisCodigo=${encodeURIComponent(paisSiesaCodigo)}`)
+      .then((lista) => { if (vigente) setDepartamentosSiesa(lista); })
+      .catch((error) => { if (vigente) notify(error.message, 'err'); });
+    return () => { vigente = false; };
+  }, [paisSiesaCodigo]);
+
+  useEffect(() => {
+    let vigente = true;
+    if (!departamentoSiesaCodigo) {
+      setCiudadesSiesa([]);
+      return () => { vigente = false; };
+    }
+    api.get(`/catalogos-siesa/ciudades?departamentoCodigo=${encodeURIComponent(departamentoSiesaCodigo)}`)
+      .then((lista) => { if (vigente) setCiudadesSiesa(lista); })
+      .catch((error) => { if (vigente) notify(error.message, 'err'); });
+    return () => { vigente = false; };
+  }, [departamentoSiesaCodigo]);
+
   const buscar = (e) => {
     e.preventDefault();
     cargar(busqueda.trim());
@@ -110,6 +148,8 @@ export default function Clientes() {
   const empezarEdicion = (c) => {
     setEditando(c.id);
     setMunicipio(municipiosColombia.find((d) => d.ciudades.some((ciu) => ciu.nombre === c.ciudad))?.departamento || '');
+    setPaisSiesaCodigo(c.municipioSiesa?.departamento?.paisCodigo || '169');
+    setDepartamentoSiesaCodigo(c.municipioSiesa?.departamentoCodigo || '');
     setForm({
       tipoCliente: c.tipoCliente || 'NATURAL',
       tipoDocumento: c.tipoDocumento || 'CC',
@@ -124,6 +164,7 @@ export default function Clientes() {
       ciudad: c.ciudad || '',
       email: c.email || '',
       municipioCodigo: c.municipioCodigo || '',
+      municipioSiesaCodigo: c.municipioSiesaCodigo || '',
       responsableIVA: !!c.responsableIVA,
       porcentajeEmpleado: c.porcentajeEmpleado ?? '',
       porcentajeCliente: c.porcentajeCliente ?? '',
@@ -134,12 +175,21 @@ export default function Clientes() {
     setModalAbierto(true);
   };
 
-  const abrirNuevo = () => { setEditando(null); setForm(VACIO); setMunicipio(''); setModalAbierto(true); };
+  const abrirNuevo = () => {
+    setEditando(null);
+    setForm(VACIO);
+    setMunicipio('');
+    setPaisSiesaCodigo('169');
+    setDepartamentoSiesaCodigo('');
+    setModalAbierto(true);
+  };
 
   const cancelar = () => {
     setEditando(null);
     setForm(VACIO);
     setMunicipio('');
+    setPaisSiesaCodigo('169');
+    setDepartamentoSiesaCodigo('');
     setModalAbierto(false);
   };
 
@@ -341,6 +391,48 @@ export default function Clientes() {
               <div className="field">
                 <label>Código de municipio</label>
                 <input value={form.municipioCodigo} readOnly disabled placeholder="Se llena al elegir la ciudad" />
+              </div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <h4 style={{ margin: '4px 0 0' }}>Ubicación Siesa (opcional)</h4>
+              </div>
+              <div className="field">
+                <label>País Siesa</label>
+                <select
+                  value={paisSiesaCodigo}
+                  onChange={(e) => {
+                    setPaisSiesaCodigo(e.target.value);
+                    setDepartamentoSiesaCodigo('');
+                    setForm({ ...form, municipioSiesaCodigo: '' });
+                  }}
+                >
+                  <option value="">Seleccionar país…</option>
+                  {paisesSiesa.map((pais) => <option key={pais.codigo} value={pais.codigo}>{pais.codigo} · {pais.nombre}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label>Departamento Siesa</label>
+                <select
+                  value={departamentoSiesaCodigo}
+                  disabled={!paisSiesaCodigo}
+                  onChange={(e) => {
+                    setDepartamentoSiesaCodigo(e.target.value);
+                    setForm({ ...form, municipioSiesaCodigo: '' });
+                  }}
+                >
+                  <option value="">Seleccionar departamento…</option>
+                  {departamentosSiesa.map((departamento) => <option key={departamento.codigo} value={departamento.codigo}>{departamento.codigo} · {departamento.nombre}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label>Ciudad Siesa</label>
+                <select
+                  value={form.municipioSiesaCodigo}
+                  disabled={!departamentoSiesaCodigo}
+                  onChange={(e) => setForm({ ...form, municipioSiesaCodigo: e.target.value })}
+                >
+                  <option value="">Seleccionar ciudad…</option>
+                  {ciudadesSiesa.map((ciudad) => <option key={ciudad.codigo} value={ciudad.codigo}>{ciudad.codigo} · {ciudad.nombre}</option>)}
+                </select>
               </div>
               <div className="field" style={{ justifyContent: 'flex-end' }}>
                 <label className="mini" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
