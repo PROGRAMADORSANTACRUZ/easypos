@@ -335,6 +335,7 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 
 /* Panel de menu con barra de desplazamiento propia a la derecha */
 .menu-panel {
+  min-width: 0;
   max-height: calc(100vh - 48px);
   overflow-y: auto;
   position: sticky;
@@ -1074,10 +1075,14 @@ tbody tr:last-child td { border-bottom: none; }
 /* Cuadricula de productos (tarjetas cuadradas) */
 .menu-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, clamp(110px, 12vw, 170px)), 1fr));
   gap: 12px;
 }
 .producto-card {
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1486,7 +1491,6 @@ tbody tr:last-child td { border-bottom: none; }
 @media (max-width: 480px) {
   .content { padding: calc(56px + var(--sp-3)) var(--sp-3) var(--sp-5); }
   h1 { font-size: 20px; }
-  .menu-grid { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); }
   .mesera-grid { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
   .mesa .num { font-size: 28px; }
   .fc-acciones { grid-template-columns: 1fr; }
@@ -1497,7 +1501,6 @@ tbody tr:last-child td { border-bottom: none; }
 /* ---------- Teléfono pequeño (≤360) ---------- */
 @media (max-width: 360px) {
   .content { padding: calc(56px + var(--sp-2)) var(--sp-3) var(--sp-4); }
-  .menu-grid { grid-template-columns: 1fr 1fr; }
 }
 
 /* ---------- Landscape de poca altura (móviles apaisados) ---------- */
