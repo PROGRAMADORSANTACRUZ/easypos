@@ -111,6 +111,17 @@ export default function Usuarios() {
       : [...form.centrosOperacionCodigos, codigo],
   }));
 
+  const alternarCentrosCompania = (centros) => setUForm((form) => {
+    const codigos = centros.map((centro) => centro.codigo);
+    const estanTodosMarcados = codigos.every((codigo) => form.centrosOperacionCodigos.includes(codigo));
+    return {
+      ...form,
+      centrosOperacionCodigos: estanTodosMarcados
+        ? form.centrosOperacionCodigos.filter((codigo) => !codigos.includes(codigo))
+        : [...new Set([...form.centrosOperacionCodigos, ...codigos])],
+    };
+  });
+
   const alternarActivo = async (u) => {
     try {
       await api.put(`/usuarios/${u.id}`, { activo: !u.activo });
@@ -332,14 +343,24 @@ export default function Usuarios() {
                     <fieldset key={companiaCodigo} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
                       <legend className="mini">{companiaCodigo} · {razonSocial}</legend>
                       {centros.length ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 8 }}>
-                          {centros.map((centro) => (
-                            <label key={centro.codigo} className="mini" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <input type="checkbox" checked={uForm.centrosOperacionCodigos.includes(centro.codigo)} onChange={() => alternarCentro(centro.codigo)} />
-                              {centro.codigo} · {centro.descripcion}
-                            </label>
-                          ))}
-                        </div>
+                        <>
+                          <label className="mini" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                            <input
+                              type="checkbox"
+                              checked={centros.every((centro) => uForm.centrosOperacionCodigos.includes(centro.codigo))}
+                              onChange={() => alternarCentrosCompania(centros)}
+                            />
+                            Seleccionar todos los centros
+                          </label>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 8 }}>
+                            {centros.map((centro) => (
+                              <label key={centro.codigo} className="mini" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <input type="checkbox" checked={uForm.centrosOperacionCodigos.includes(centro.codigo)} onChange={() => alternarCentro(centro.codigo)} />
+                                {centro.codigo} · {centro.descripcion}
+                              </label>
+                            ))}
+                          </div>
+                        </>
                       ) : <span className="mini">Sin centros operativos activos.</span>}
                     </fieldset>
                   );
