@@ -306,17 +306,6 @@ export default function Clientes() {
                 <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="correo@ejemplo.com" />
               </div>
               <div className="field">
-                <label>Barrio</label>
-                <input value={form.barrio} onChange={(e) => setForm({ ...form, barrio: e.target.value.toUpperCase() })} placeholder="Barrio" />
-              </div>
-              <div className="field">
-                <label>Dirección</label>
-                <input value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value.toUpperCase() })} placeholder="Dirección" />
-              </div>
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <h4 style={{ margin: '4px 0 0' }}>Ubicación Siesa (opcional)</h4>
-              </div>
-              <div className="field">
                 <label>País Siesa</label>
                 <select
                   value={paisSiesaCodigo}
@@ -366,6 +355,14 @@ export default function Clientes() {
                   <option value="">Seleccionar ciudad…</option>
                   {ciudadesSiesa.map((ciudad) => <option key={ciudad.codigo} value={ciudad.codigo}>{ciudad.codigo} · {ciudad.nombre}</option>)}
                 </select>
+              </div>
+              <div className="field">
+                <label>Barrio</label>
+                <input value={form.barrio} onChange={(e) => setForm({ ...form, barrio: e.target.value.toUpperCase() })} placeholder="Barrio" />
+              </div>
+              <div className="field">
+                <label>Dirección</label>
+                <input value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value.toUpperCase() })} placeholder="Dirección" />
               </div>
               <div className="field" style={{ justifyContent: 'flex-end' }}>
                 <label className="mini" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
