@@ -4,6 +4,65 @@ import { Icon } from '../icons.jsx';
 import { useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, TableSkeleton, EmptyState } from '../components/ui/index.jsx';
 
+function BuscadorUbicacionSiesa({ items, value, onChange, placeholder, placeholderBusqueda, deshabilitado }) {
+  const [busqueda, setBusqueda] = useState('');
+  const [abierto, setAbierto] = useState(false);
+  const seleccionado = items.find((item) => item.codigo === value);
+  const consulta = busqueda.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const resultados = consulta
+    ? items.filter((item) => `${item.codigo} ${item.nombre}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(consulta))
+    : items;
+
+  return (
+    <div className="cliente-picker">
+      <button
+        type="button"
+        className="cliente-picker-btn"
+        disabled={deshabilitado}
+        aria-expanded={abierto}
+        onClick={() => !deshabilitado && setAbierto((estado) => !estado)}
+      >
+        <span className="cliente-picker-txt">{seleccionado ? `${seleccionado.codigo} · ${seleccionado.nombre}` : placeholder}</span>
+        <span className="nav-caret" aria-hidden>▾</span>
+      </button>
+      {abierto && !deshabilitado && (
+        <>
+          <div className="cliente-picker-backdrop" onClick={() => { setAbierto(false); setBusqueda(''); }} />
+          <div className="cliente-picker-pop">
+            <input
+              autoFocus
+              className="cliente-picker-search"
+              placeholder={placeholderBusqueda}
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+            />
+            <div className="cliente-picker-list">
+              <button
+                type="button"
+                className={`cliente-picker-item ${!value ? 'activo' : ''}`}
+                onClick={() => { onChange(''); setAbierto(false); setBusqueda(''); }}
+              >
+                <span>{placeholder}</span>
+              </button>
+              {resultados.map((item) => (
+                <button
+                  type="button"
+                  key={item.codigo}
+                  className={`cliente-picker-item ${item.codigo === value ? 'activo' : ''}`}
+                  onClick={() => { onChange(item.codigo); setAbierto(false); setBusqueda(''); }}
+                >
+                  <span style={{ fontWeight: 600 }}>{item.codigo} · {item.nombre}</span>
+                </button>
+              ))}
+              {resultados.length === 0 && <div className="empty" style={{ padding: 10 }}>Sin resultados</div>}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 const VACIO = {
   tipoCliente: 'NATURAL',
   tipoDocumento: 'CC',
@@ -325,36 +384,37 @@ export default function Clientes() {
               </div>
               <div className="field">
                 <label>Departamento Siesa</label>
-                <select
+                <BuscadorUbicacionSiesa
+                  key={paisSiesaCodigo}
+                  items={departamentosSiesa}
                   value={departamentoSiesaCodigo}
-                  disabled={!paisSiesaCodigo}
-                  onChange={(e) => {
-                    setDepartamentoSiesaCodigo(e.target.value);
+                  placeholder="Seleccionar departamento…"
+                  placeholderBusqueda="Buscar código o departamento…"
+                  deshabilitado={!paisSiesaCodigo}
+                  onChange={(codigo) => {
+                    setDepartamentoSiesaCodigo(codigo);
                     setForm({
                       ...form,
                       municipioSiesaCodigo: '',
                       ciudad: form.municipioSiesaCodigo ? '' : form.ciudad,
                     });
                   }}
-                >
-                  <option value="">Seleccionar departamento…</option>
-                  {departamentosSiesa.map((departamento) => <option key={departamento.codigo} value={departamento.codigo}>{departamento.codigo} · {departamento.nombre}</option>)}
-                </select>
+                />
               </div>
               <div className="field">
                 <label>Ciudad Siesa</label>
-                <select
+                <BuscadorUbicacionSiesa
+                  key={departamentoSiesaCodigo}
+                  items={ciudadesSiesa}
                   value={form.municipioSiesaCodigo}
-                  disabled={!departamentoSiesaCodigo}
-                  onChange={(e) => {
-                    const codigo = e.target.value;
+                  placeholder="Seleccionar ciudad…"
+                  placeholderBusqueda="Buscar código o ciudad…"
+                  deshabilitado={!departamentoSiesaCodigo}
+                  onChange={(codigo) => {
                     const ciudad = ciudadesSiesa.find((item) => item.codigo === codigo);
                     setForm({ ...form, municipioSiesaCodigo: codigo, ciudad: ciudad?.nombre || '' });
                   }}
-                >
-                  <option value="">Seleccionar ciudad…</option>
-                  {ciudadesSiesa.map((ciudad) => <option key={ciudad.codigo} value={ciudad.codigo}>{ciudad.codigo} · {ciudad.nombre}</option>)}
-                </select>
+                />
               </div>
               <div className="field">
                 <label>Barrio</label>
