@@ -3,58 +3,6 @@ import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
 import { useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, TableSkeleton, EmptyState } from '../components/ui/index.jsx';
-import { municipiosColombia } from '../municipiosColombia.js';
-
-// Selector genérico con búsqueda (municipio o ciudad según el municipio elegido).
-// items puede ser un array de strings o de objetos { codigo, nombre }.
-function BuscadorLista({ items, value, onChange, placeholder, deshabilitado }) {
-  const [q, setQ] = useState('');
-  const [open, setOpen] = useState(false);
-  const filtro = q.trim().toLowerCase();
-  const etiquetaDe = (i) => (typeof i === 'string' ? i : i.nombre);
-  const valorDe = (i) => (typeof i === 'string' ? i : i.nombre);
-  const lista = filtro ? items.filter((i) => etiquetaDe(i).toLowerCase().includes(filtro)) : items;
-  return (
-    <div className="cliente-picker">
-      <button
-        type="button"
-        className="cliente-picker-btn"
-        disabled={deshabilitado}
-        onClick={() => !deshabilitado && setOpen((o) => !o)}
-      >
-        <span className="cliente-picker-txt">{value || placeholder}</span>
-        <span className="nav-caret" aria-hidden>▾</span>
-      </button>
-      {open && (
-        <>
-          <div className="cliente-picker-backdrop" onClick={() => { setOpen(false); setQ(''); }} />
-          <div className="cliente-picker-pop">
-            <input
-              autoFocus
-              className="cliente-picker-search"
-              placeholder="Buscar…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-            <div className="cliente-picker-list">
-              {lista.map((i) => (
-                <button
-                  type="button"
-                  key={etiquetaDe(i)}
-                  className={`cliente-picker-item ${value === valorDe(i) ? 'activo' : ''}`}
-                  onClick={() => { onChange(i); setOpen(false); setQ(''); }}
-                >
-                  <span style={{ fontWeight: 600 }}>{etiquetaDe(i)}</span>
-                </button>
-              ))}
-              {lista.length === 0 && <div className="empty" style={{ padding: 10 }}>Sin resultados</div>}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 const VACIO = {
   tipoCliente: 'NATURAL',
@@ -83,7 +31,6 @@ export default function Clientes() {
   const [clientes, setClientes] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [form, setForm] = useState(VACIO);
-  const [municipio, setMunicipio] = useState('');
   const [paisesSiesa, setPaisesSiesa] = useState([]);
   const [paisSiesaCodigo, setPaisSiesaCodigo] = useState('169');
   const [departamentosSiesa, setDepartamentosSiesa] = useState([]);
@@ -147,7 +94,6 @@ export default function Clientes() {
 
   const empezarEdicion = (c) => {
     setEditando(c.id);
-    setMunicipio(municipiosColombia.find((d) => d.ciudades.some((ciu) => ciu.nombre === c.ciudad))?.departamento || '');
     setPaisSiesaCodigo(c.municipioSiesa?.departamento?.paisCodigo || '169');
     setDepartamentoSiesaCodigo(c.municipioSiesa?.departamentoCodigo || '');
     setForm({
@@ -178,7 +124,6 @@ export default function Clientes() {
   const abrirNuevo = () => {
     setEditando(null);
     setForm(VACIO);
-    setMunicipio('');
     setPaisSiesaCodigo('169');
     setDepartamentoSiesaCodigo('');
     setModalAbierto(true);
@@ -187,7 +132,6 @@ export default function Clientes() {
   const cancelar = () => {
     setEditando(null);
     setForm(VACIO);
-    setMunicipio('');
     setPaisSiesaCodigo('169');
     setDepartamentoSiesaCodigo('');
     setModalAbierto(false);
@@ -362,35 +306,12 @@ export default function Clientes() {
                 <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="correo@ejemplo.com" />
               </div>
               <div className="field">
-                <label>Municipio</label>
-                <BuscadorLista
-                  items={municipiosColombia.map((d) => d.departamento)}
-                  value={municipio}
-                  onChange={(v) => { setMunicipio(v); setForm({ ...form, ciudad: '' }); }}
-                  placeholder="Selecciona un municipio…"
-                />
-              </div>
-              <div className="field">
-                <label>Ciudad</label>
-                <BuscadorLista
-                  items={municipiosColombia.find((d) => d.departamento === municipio)?.ciudades || []}
-                  value={form.ciudad}
-                  onChange={(v) => setForm({ ...form, ciudad: v.nombre, municipioCodigo: v.codigo })}
-                  placeholder={municipio ? 'Selecciona una ciudad…' : 'Primero elige el municipio'}
-                  deshabilitado={!municipio}
-                />
-              </div>
-              <div className="field">
                 <label>Barrio</label>
                 <input value={form.barrio} onChange={(e) => setForm({ ...form, barrio: e.target.value.toUpperCase() })} placeholder="Barrio" />
               </div>
               <div className="field">
                 <label>Dirección</label>
                 <input value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value.toUpperCase() })} placeholder="Dirección" />
-              </div>
-              <div className="field">
-                <label>Código de municipio</label>
-                <input value={form.municipioCodigo} readOnly disabled placeholder="Se llena al elegir la ciudad" />
               </div>
               <div className="field" style={{ gridColumn: '1 / -1' }}>
                 <h4 style={{ margin: '4px 0 0' }}>Ubicación Siesa (opcional)</h4>
@@ -402,7 +323,11 @@ export default function Clientes() {
                   onChange={(e) => {
                     setPaisSiesaCodigo(e.target.value);
                     setDepartamentoSiesaCodigo('');
-                    setForm({ ...form, municipioSiesaCodigo: '' });
+                    setForm({
+                      ...form,
+                      municipioSiesaCodigo: '',
+                      ciudad: form.municipioSiesaCodigo ? '' : form.ciudad,
+                    });
                   }}
                 >
                   <option value="">Seleccionar país…</option>
@@ -416,7 +341,11 @@ export default function Clientes() {
                   disabled={!paisSiesaCodigo}
                   onChange={(e) => {
                     setDepartamentoSiesaCodigo(e.target.value);
-                    setForm({ ...form, municipioSiesaCodigo: '' });
+                    setForm({
+                      ...form,
+                      municipioSiesaCodigo: '',
+                      ciudad: form.municipioSiesaCodigo ? '' : form.ciudad,
+                    });
                   }}
                 >
                   <option value="">Seleccionar departamento…</option>
@@ -428,7 +357,11 @@ export default function Clientes() {
                 <select
                   value={form.municipioSiesaCodigo}
                   disabled={!departamentoSiesaCodigo}
-                  onChange={(e) => setForm({ ...form, municipioSiesaCodigo: e.target.value })}
+                  onChange={(e) => {
+                    const codigo = e.target.value;
+                    const ciudad = ciudadesSiesa.find((item) => item.codigo === codigo);
+                    setForm({ ...form, municipioSiesaCodigo: codigo, ciudad: ciudad?.nombre || '' });
+                  }}
                 >
                   <option value="">Seleccionar ciudad…</option>
                   {ciudadesSiesa.map((ciudad) => <option key={ciudad.codigo} value={ciudad.codigo}>{ciudad.codigo} · {ciudad.nombre}</option>)}
