@@ -11,6 +11,20 @@ const modulosVenta = [
   { codigo: 'cortesias', nombre: 'Cortesías' },
 ];
 
+const resumirCentros = (centros) => {
+  const grupos = new Map();
+  for (const centro of centros || []) {
+    const grupo = grupos.get(centro.companiaCodigo) || {
+      codigo: centro.companiaCodigo,
+      razonSocial: centro.compania?.razonSocial || '',
+      centros: [],
+    };
+    grupo.centros.push(centro);
+    grupos.set(centro.companiaCodigo, grupo);
+  }
+  return [...grupos.values()];
+};
+
 export default function Usuarios() {
   const { user } = useAuth();
   const esAdmin = user?.roles?.includes('ADMIN');
@@ -224,7 +238,22 @@ export default function Usuarios() {
                     {(u.roles || []).map((r) => <span key={r} className="badge blue" style={{ marginRight: 4 }}>{r}</span>)}
                     {(!u.roles || u.roles.length === 0) && <span className="mini">—</span>}
                   </td>
-                  <td className="mini">{(u.centrosOperacion || []).map((centro) => `${centro.companiaCodigo} · ${centro.compania?.razonSocial || ''} · ${centro.codigo}`).join(', ') || 'Sin asignación'}</td>
+                  <td>
+                    {u.centrosOperacion?.length ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 230 }}>
+                        {resumirCentros(u.centrosOperacion).map((grupo) => (
+                          <span
+                            key={grupo.codigo}
+                            className="badge blue"
+                            title={`${grupo.razonSocial}: ${grupo.centros.map((centro) => `${centro.codigo} · ${centro.descripcion}`).join(', ')}`}
+                            style={{ whiteSpace: 'nowrap' }}
+                          >
+                            {grupo.codigo} · {grupo.centros.length} {grupo.centros.length === 1 ? 'centro' : 'centros'}
+                          </span>
+                        ))}
+                      </div>
+                    ) : <span className="mini">Sin asignación</span>}
+                  </td>
                   <td>
                     <span className={`badge ${u.activo ? 'green' : 'red'}`}>{u.activo ? 'Activo' : 'Inactivo'}</span>
                   </td>
