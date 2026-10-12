@@ -304,8 +304,7 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 .fila-activa { background: var(--primary-soft); }
 
 .grid { display: grid; gap: 16px; }
-.grid-mesas { grid-template-columns: repeat(10, 110px); justify-content: start; gap: 12px; }
-.modal .grid-mesas { grid-template-columns: repeat(auto-fill, 110px); }
+.grid-mesas { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); justify-content: stretch; gap: 12px; }
 .grid-2 { grid-template-columns: 1.4fr 1fr; align-items: start; }
 
 /* Utilidades de layout responsivas */
@@ -382,7 +381,8 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
   text-align: center;
   border: 2px solid var(--border);
   transition: transform .1s, border-color .15s;
-  width: 110px;
+  width: 100%;
+  min-width: 0;
   height: 110px;
   padding: var(--sp-2);
   display: flex;
@@ -1441,7 +1441,6 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ---------- Tablet vertical (≤768) ---------- */
 @media (max-width: 768px) {
-  .grid-mesas { grid-template-columns: repeat(auto-fill, 110px); }
   .cobro-grid { grid-template-columns: 1fr; }
   .fc-acciones { grid-template-columns: 1fr 1fr; }
 }
@@ -1487,7 +1486,6 @@ tbody tr:last-child td { border-bottom: none; }
 @media (max-width: 480px) {
   .content { padding: calc(56px + var(--sp-3)) var(--sp-3) var(--sp-5); }
   h1 { font-size: 20px; }
-  .grid-mesas { grid-template-columns: repeat(auto-fill, 110px); }
   .menu-grid { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); }
   .mesera-grid { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
   .mesa .num { font-size: 28px; }
@@ -1499,7 +1497,6 @@ tbody tr:last-child td { border-bottom: none; }
 /* ---------- Teléfono pequeño (≤360) ---------- */
 @media (max-width: 360px) {
   .content { padding: calc(56px + var(--sp-2)) var(--sp-3) var(--sp-4); }
-  .grid-mesas { grid-template-columns: repeat(auto-fill, 110px); }
   .menu-grid { grid-template-columns: 1fr 1fr; }
 }
 
