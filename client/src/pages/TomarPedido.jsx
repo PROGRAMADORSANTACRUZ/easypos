@@ -528,7 +528,7 @@ export default function TomarPedido() {
               {productosFiltrados.map((p) => (
                 <button
                   key={p.id}
-                  className={`producto-card ${p.disponibles === 0 ? 'agotado' : ''}`}
+                  className={`producto-card${p.foto ? ' con-foto' : ''} ${p.disponibles === 0 ? 'agotado' : ''}`}
                   onClick={() => agregarProducto(p)}
                   disabled={p.disponibles === 0 || (pedido && !editando)}
                 >
