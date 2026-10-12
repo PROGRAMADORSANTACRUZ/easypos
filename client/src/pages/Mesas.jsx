@@ -15,17 +15,37 @@ export default function Mesas() {
   const navigate = useNavigate();
   const notify = useToast();
 
-  const cargar = async () => {
+  const cargar = async ({ silencioso = false } = {}) => {
     try {
       setMesas(await api.get('/mesas'));
     } catch (e) {
-      notify(e.message, 'err');
+      if (!silencioso) notify(e.message, 'err');
     } finally {
       setCargando(false);
     }
   };
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    let actualizando = false;
+    const actualizarSilencioso = async () => {
+      if (document.visibilityState !== 'visible' || actualizando) return;
+      actualizando = true;
+      try {
+        await cargar({ silencioso: true });
+      } finally {
+        actualizando = false;
+      }
+    };
+    const alVolver = () => { actualizarSilencioso(); };
+
+    cargar();
+    const intervalo = window.setInterval(actualizarSilencioso, 5000);
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      window.clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+  }, []);
 
   const agregarMesa = async (e) => {
     e.preventDefault();
