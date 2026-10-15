@@ -61,6 +61,7 @@ router.get('/', wrap(async (req, res) => {
           { razonSocial: { contains: String(q) } },
           { documento: { contains: String(q) } },
           { numeroDocumento: { contains: String(q) } },
+          { sucursal: { contains: String(q) } },
           { barrio: { contains: String(q) } },
           { email: { contains: String(q) } },
         ],
@@ -90,6 +91,7 @@ router.post('/', wrap(async (req, res) => {
         nombre: nombreFull,
         nombres: limpiar(nombres),
         apellidos: limpiar(apellidos),
+        sucursal: limpiar(req.body.sucursal),
         razonSocial: limpiar(razonSocial),
         tipoCliente: limpiar(req.body.tipoCliente) || 'NATURAL',
         tipoDocumento: limpiar(req.body.tipoDocumento),
@@ -118,7 +120,7 @@ router.post('/', wrap(async (req, res) => {
 }));
 
 router.put('/:id', wrap(async (req, res) => {
-  const { nombres, apellidos, nombre, razonSocial, documento, tipoCliente, tipoDocumento, numeroDocumento, telefono, direccion, barrio, ciudad, email, municipioCodigo, municipioSiesaCodigo, responsableIVA, porcentajeEmpleado, porcentajeCliente, activo } = req.body;
+  const { nombres, apellidos, nombre, razonSocial, documento, tipoCliente, tipoDocumento, numeroDocumento, sucursal, telefono, direccion, barrio, ciudad, email, municipioCodigo, municipioSiesaCodigo, responsableIVA, porcentajeEmpleado, porcentajeCliente, activo } = req.body;
   const tieneNombre = nombres !== undefined || apellidos !== undefined || nombre !== undefined || razonSocial !== undefined;
   const nombreFull = tieneNombre ? nombreCompleto(nombres, apellidos, nombre, razonSocial) : undefined;
   if (municipioSiesaCodigo !== undefined) {
@@ -132,6 +134,7 @@ router.put('/:id', wrap(async (req, res) => {
         ...(nombreFull !== undefined && nombreFull !== '' && { nombre: nombreFull }),
         ...(nombres !== undefined && { nombres: limpiar(nombres) }),
         ...(apellidos !== undefined && { apellidos: limpiar(apellidos) }),
+        ...(sucursal !== undefined && { sucursal: limpiar(sucursal) }),
         ...(razonSocial !== undefined && { razonSocial: limpiar(razonSocial) }),
         ...(tipoCliente !== undefined && { tipoCliente: limpiar(tipoCliente) || 'NATURAL' }),
         ...(tipoDocumento !== undefined && { tipoDocumento: limpiar(tipoDocumento) }),

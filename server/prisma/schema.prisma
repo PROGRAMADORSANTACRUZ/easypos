@@ -125,6 +125,7 @@ model Cliente {
   nombre    String   // nombres y apellidos (valor combinado para recibos/facturas)
   nombres   String?
   apellidos String?
+  sucursal  String?  @db.VarChar(200) @map("Sucursal")
   telefono  String?  @db.VarChar(50) @map("Telefono")
   direccion String?  @map("Direccion")
   barrio    String?

@@ -71,6 +71,7 @@ const VACIO = {
   documento: '',
   nombres: '',
   apellidos: '',
+  sucursal: '',
   telefono: '',
   direccion: '',
   barrio: '',
@@ -163,6 +164,7 @@ export default function Clientes() {
       documento: c.documento || '',
       nombres: c.nombres || '',
       apellidos: c.apellidos || '',
+      sucursal: c.sucursal || '',
       telefono: c.telefono || '',
       direccion: c.direccion || '',
       barrio: c.barrio || '',
@@ -355,6 +357,10 @@ export default function Clientes() {
               <div className="field">
                 <label>Apellidos</label>
                 <input value={form.apellidos} onChange={(e) => setForm({ ...form, apellidos: e.target.value.toUpperCase() })} placeholder="Apellidos" />
+              </div>
+              <div className="field">
+                <label>Sucursal</label>
+                <input value={form.sucursal} onChange={(e) => setForm({ ...form, sucursal: e.target.value.toUpperCase() })} placeholder="Sucursal del cliente" />
               </div>
               <div className="field">
                 <label>Teléfono</label>
