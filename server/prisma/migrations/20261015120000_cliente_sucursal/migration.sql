@@ -35,9 +35,9 @@ CREATE TABLE "Cliente_reordenada" (
 	"ResponsableIVA" BOOLEAN NOT NULL DEFAULT FALSE,
 	"PorcentajeEmpleado" DOUBLE PRECISION,
 	"PorcentajeCliente" DOUBLE PRECISION,
-	condicionPago TEXT NOT NULL DEFAULT 'CONTADO',
-	creditoDias INTEGER,
-	creditoCupo DOUBLE PRECISION,
+	"condicionPago" TEXT NOT NULL DEFAULT 'CONTADO',
+	"creditoDias" INTEGER,
+	"creditoCupo" DOUBLE PRECISION,
 	activo BOOLEAN NOT NULL DEFAULT TRUE,
 	"FechaCreacion" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	CONSTRAINT "Cliente_reordenada_pkey" PRIMARY KEY ("Id"),
@@ -52,13 +52,13 @@ INSERT INTO "Cliente_reordenada" (
 	"Id", "TipoCliente", "TipoDocumento", "NumeroDocumento", "RazonSocial", documento,
 	nombre, nombres, apellidos, "Telefono", "Direccion", barrio, ciudad, "Email",
 	"MunicipioCodigo", "MunicipioSiesaCodigo", "ResponsableIVA", "PorcentajeEmpleado",
-	"PorcentajeCliente", condicionPago, creditoDias, creditoCupo, activo, "FechaCreacion"
+	"PorcentajeCliente", "condicionPago", "creditoDias", "creditoCupo", activo, "FechaCreacion"
 )
 SELECT
 	"Id", "TipoCliente", "TipoDocumento", "NumeroDocumento", "RazonSocial", documento,
 	nombre, nombres, apellidos, "Telefono", "Direccion", barrio, ciudad, "Email",
 	"MunicipioCodigo", "MunicipioSiesaCodigo", "ResponsableIVA", "PorcentajeEmpleado",
-	"PorcentajeCliente", condicionPago, creditoDias, creditoCupo, activo, "FechaCreacion"
+	"PorcentajeCliente", "condicionPago", "creditoDias", "creditoCupo", activo, "FechaCreacion"
 FROM "Cliente";
 
 DO $$
@@ -67,25 +67,25 @@ BEGIN
 		SELECT "Id", "TipoCliente", "TipoDocumento", "NumeroDocumento", "RazonSocial", documento,
 			nombre, nombres, apellidos, "Telefono", "Direccion", barrio, ciudad, "Email",
 			"MunicipioCodigo", "MunicipioSiesaCodigo", "ResponsableIVA", "PorcentajeEmpleado",
-			"PorcentajeCliente", condicionPago, creditoDias, creditoCupo, activo, "FechaCreacion"
+			"PorcentajeCliente", "condicionPago", "creditoDias", "creditoCupo", activo, "FechaCreacion"
 		FROM "Cliente"
 		EXCEPT ALL
 		SELECT "Id", "TipoCliente", "TipoDocumento", "NumeroDocumento", "RazonSocial", documento,
 			nombre, nombres, apellidos, "Telefono", "Direccion", barrio, ciudad, "Email",
 			"MunicipioCodigo", "MunicipioSiesaCodigo", "ResponsableIVA", "PorcentajeEmpleado",
-			"PorcentajeCliente", condicionPago, creditoDias, creditoCupo, activo, "FechaCreacion"
+			"PorcentajeCliente", "condicionPago", "creditoDias", "creditoCupo", activo, "FechaCreacion"
 		FROM "Cliente_reordenada"
 	) OR EXISTS (
 		SELECT "Id", "TipoCliente", "TipoDocumento", "NumeroDocumento", "RazonSocial", documento,
 			nombre, nombres, apellidos, "Telefono", "Direccion", barrio, ciudad, "Email",
 			"MunicipioCodigo", "MunicipioSiesaCodigo", "ResponsableIVA", "PorcentajeEmpleado",
-			"PorcentajeCliente", condicionPago, creditoDias, creditoCupo, activo, "FechaCreacion"
+			"PorcentajeCliente", "condicionPago", "creditoDias", "creditoCupo", activo, "FechaCreacion"
 		FROM "Cliente_reordenada"
 		EXCEPT ALL
 		SELECT "Id", "TipoCliente", "TipoDocumento", "NumeroDocumento", "RazonSocial", documento,
 			nombre, nombres, apellidos, "Telefono", "Direccion", barrio, ciudad, "Email",
 			"MunicipioCodigo", "MunicipioSiesaCodigo", "ResponsableIVA", "PorcentajeEmpleado",
-			"PorcentajeCliente", condicionPago, creditoDias, creditoCupo, activo, "FechaCreacion"
+			"PorcentajeCliente", "condicionPago", "creditoDias", "creditoCupo", activo, "FechaCreacion"
 		FROM "Cliente"
 	) THEN
 		RAISE EXCEPTION 'La copia de Cliente no coincide; se cancela la reorganización';
