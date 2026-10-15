@@ -46,10 +46,35 @@ function filtroCentrosUsuario(usuario) {
 
 // Resuelve el cliente de una factura. Por defecto "Consumidor Final".
 async function resolverCliente(clienteId) {
-  if (clienteId == null || clienteId === '') return { clienteId: null, nombre: 'Consumidor Final' };
+  if (clienteId == null || clienteId === '') {
+    return {
+      clienteId: null,
+      nombre: 'Consumidor Final',
+      numeroDocumentoCliente: null,
+      nombreCliente: 'Consumidor Final',
+      sucursalCliente: null,
+      telefonoCliente: null,
+      direccionCliente: null,
+      barrioCliente: null,
+      ciudadCliente: null,
+      emailCliente: null,
+    };
+  }
   const c = await prisma.cliente.findUnique({ where: { id: String(clienteId) } });
-  if (!c) return { clienteId: null, nombre: 'Consumidor Final' };
-  return { clienteId: c.id, nombre: c.razonSocial || c.nombre };
+  if (!c) return resolverCliente(null);
+  const nombre = c.razonSocial || c.nombre;
+  return {
+    clienteId: c.id,
+    nombre,
+    numeroDocumentoCliente: c.numeroDocumento || c.documento || null,
+    nombreCliente: nombre,
+    sucursalCliente: c.sucursal || null,
+    telefonoCliente: c.telefono || null,
+    direccionCliente: c.direccion || null,
+    barrioCliente: c.barrio || null,
+    ciudadCliente: c.ciudad || null,
+    emailCliente: c.email || null,
+  };
 }
 
 // Devuelve la apertura de caja ABIERTA (prefiere la del usuario). null si no hay ninguna.
@@ -400,6 +425,14 @@ router.post('/dividir', wrap(async (req, res) => {
           companiaCodigo: numero.companiaCodigo,
           centroOperacionCodigo: numero.centroOperacionCodigo,
           clienteId: cliente.clienteId,
+          numeroDocumentoCliente: cliente.numeroDocumentoCliente,
+          nombreCliente: cliente.nombreCliente,
+          sucursalCliente: cliente.sucursalCliente,
+          telefonoCliente: cliente.telefonoCliente,
+          direccionCliente: cliente.direccionCliente,
+          barrioCliente: cliente.barrioCliente,
+          ciudadCliente: cliente.ciudadCliente,
+          emailCliente: cliente.emailCliente,
           usuarioId: req.headers['x-usuario-id'] ? String(req.headers['x-usuario-id']) : null,
           subtotal: parte.subtotal,
           impuestoPct: parte.subtotal > 0 ? redondear(parte.impuesto / parte.subtotal * 100) : 0,
@@ -498,6 +531,14 @@ router.post('/', wrap(async (req, res) => {
         companiaCodigo: num.companiaCodigo,
         centroOperacionCodigo: num.centroOperacionCodigo,
         clienteId: cli.clienteId,
+        numeroDocumentoCliente: cli.numeroDocumentoCliente,
+        nombreCliente: cli.nombreCliente,
+        sucursalCliente: cli.sucursalCliente,
+        telefonoCliente: cli.telefonoCliente,
+        direccionCliente: cli.direccionCliente,
+        barrioCliente: cli.barrioCliente,
+        ciudadCliente: cli.ciudadCliente,
+        emailCliente: cli.emailCliente,
         usuarioId: req.headers['x-usuario-id'] ? String(req.headers['x-usuario-id']) : null,
         subtotal,
         impuestoPct: ivaPctPromedio,
@@ -624,6 +665,14 @@ router.post('/directa', wrap(async (req, res) => {
         companiaCodigo: num.companiaCodigo,
         centroOperacionCodigo: num.centroOperacionCodigo,
         clienteId: cli.clienteId,
+        numeroDocumentoCliente: cli.numeroDocumentoCliente,
+        nombreCliente: cli.nombreCliente,
+        sucursalCliente: cli.sucursalCliente,
+        telefonoCliente: cli.telefonoCliente,
+        direccionCliente: cli.direccionCliente,
+        barrioCliente: cli.barrioCliente,
+        ciudadCliente: cli.ciudadCliente,
+        emailCliente: cli.emailCliente,
         usuarioId: req.headers['x-usuario-id'] ? String(req.headers['x-usuario-id']) : null,
         subtotal,
         impuestoPct: ivaPctPromedio,
