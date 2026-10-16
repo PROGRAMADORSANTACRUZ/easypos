@@ -20,7 +20,7 @@ const pedidoInclude = {
   mesa: true,
   mesera: true,
   clienteRel: true,
-  items: { include: { producto: { include: { categoria: true, componentes: { include: { item: true } } } } } },
+  items: { include: { producto: { include: { categoria: true, unidad: true, componentes: { include: { item: true } } } } } },
   facturas: true,
   facturasVenta: true,
 };
@@ -38,9 +38,25 @@ function disponibilidadKit(producto) {
   let max = Infinity;
   for (const c of producto.componentes) {
     if (c.cantidad <= 0) continue;
-    max = Math.min(max, Math.floor(c.item.stock / c.cantidad));
+    max = Math.min(max, c.item.stock / c.cantidad);
   }
-  return Number.isFinite(max) ? max : 0;
+  const factor = Number(producto.unidad?.factorConversion) > 0 ? Number(producto.unidad.factorConversion) : 1;
+  return Number.isFinite(max) ? Math.floor(max * factor + 1e-9) / factor : 0;
+}
+
+function normalizarCantidades(items, productos) {
+  const normalizados = [];
+  for (const item of items) {
+    const producto = productos.find((actual) => actual.id === String(item.productoId));
+    if (!producto) return { error: `Producto ${item.productoId} no encontrado` };
+    const cantidad = Number(item.cantidad);
+    const factor = Number(producto.unidad?.factorConversion) > 0 ? Number(producto.unidad.factorConversion) : 1;
+    if (!Number.isFinite(cantidad) || cantidad <= 0 || Math.abs(cantidad * factor - Math.round(cantidad * factor)) > 0.000001) {
+      return { error: `Cantidad inválida para ${producto.nombre}; usa pasos de ${1 / factor} ${producto.unidad?.abreviatura || 'UND'}.` };
+    }
+    normalizados.push({ ...item, productoId: String(item.productoId), cantidad });
+  }
+  return { items: normalizados };
 }
 
 // Registra la bitacora PedidosMesa (una fila por producto) y actualiza/crea la
@@ -150,13 +166,16 @@ router.get('/:id', wrap(async (req, res) => {
 router.post('/', wrap(async (req, res) => {
   const { mesaId, meseraId, items = [], observaciones } = req.body;
   if (!mesaId || !meseraId) return res.status(400).json({ error: 'mesaId y meseraId son requeridos' });
+  if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Agrega al menos un producto' });
 
   const productos = await prisma.producto.findMany({
     where: { id: { in: items.map((i) => String(i.productoId)) } },
-    include: { componentes: true },
+    include: { componentes: true, unidad: true },
   });
+  const validacion = normalizarCantidades(items, productos);
+  if (validacion.error) return res.status(400).json({ error: validacion.error });
+  const itemsNorm = validacion.items;
   const precioDe = (id) => productos.find((p) => p.id === String(id))?.precio ?? 0;
-  const itemsNorm = items.map((i) => ({ productoId: String(i.productoId), cantidad: Number(i.cantidad) || 1 }));
   const requeridos = calcularInsumosRequeridos(itemsNorm, productos);
 
   let pedido;
@@ -185,11 +204,11 @@ router.post('/', wrap(async (req, res) => {
           cliente: mesa.reservaCliente?.razonSocial || mesa.reservaCliente?.nombre || null,
           observaciones: observaciones ? String(observaciones).trim() || null : null,
           items: {
-            create: items.map((i) => ({
-              productoId: String(i.productoId),
-              cantidad: Number(i.cantidad) || 1,
-              precioUnit: precioDe(i.productoId),
-              notas: i.notas || null,
+            create: itemsNorm.map((item) => ({
+              productoId: item.productoId,
+              cantidad: item.cantidad,
+              precioUnit: precioDe(item.productoId),
+              notas: item.notas || null,
             })),
           },
         },
@@ -242,19 +261,21 @@ router.post('/online', wrap(async (req, res) => {
   const ids = items.map((i) => Number(i.productoId));
   const productos = await prisma.producto.findMany({
     where: { id: { in: items.map((i) => String(i.productoId)) } },
-    include: { componentes: { include: { item: true } } },
+    include: { componentes: { include: { item: true } }, unidad: true },
   });
+  const validacion = normalizarCantidades(items, productos);
+  if (validacion.error) return res.status(400).json({ error: validacion.error });
+  const itemsNorm = validacion.items;
   for (const it of items) {
     const p = productos.find((x) => x.id === String(it.productoId));
     if (!p) return res.status(404).json({ error: 'Producto no encontrado' });
     const disp = disponibilidadKit(p);
-    const cant = Number(it.cantidad) || 1;
+    const cant = Number(it.cantidad);
     if (disp != null && cant > disp) {
       return res.status(409).json({ error: `Sin inventario suficiente de "${p.nombre}" (disponible ${disp})` });
     }
   }
   const precioDe = (id) => productos.find((p) => p.id === String(id))?.precio ?? 0;
-  const itemsNorm = items.map((i) => ({ productoId: String(i.productoId), cantidad: Number(i.cantidad) || 1 }));
   const requeridos = calcularInsumosRequeridos(itemsNorm, productos);
 
   const nombreCompleto = [nombres, apellidos].filter(Boolean).join(' ');
@@ -298,10 +319,10 @@ router.post('/online', wrap(async (req, res) => {
         lngDestino: aNumero(lngDestino),
         seguimientoToken: randomUUID(),
         items: {
-          create: items.map((i) => ({
-            productoId: String(i.productoId),
-            cantidad: Number(i.cantidad) || 1,
-            precioUnit: precioDe(i.productoId),
+          create: itemsNorm.map((item) => ({
+            productoId: item.productoId,
+            cantidad: item.cantidad,
+            precioUnit: precioDe(item.productoId),
           })),
         },
       },

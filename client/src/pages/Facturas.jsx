@@ -969,8 +969,15 @@ export default function Facturas({ electronica = true }) {
         ? Array.from({ length: nPartes }, () => 0)
         : (asignacionesDivision[item.id] || [item.cantidad, ...Array.from({ length: nPartes - 1 }, () => 0)]),
     }));
-    if (modoDivision === 'PRODUCTOS' && asignaciones.some((asignacion, indice) =>
-      asignacion.cantidades.length !== nPartes || asignacion.cantidades.reduce((suma, cantidad) => suma + Number(cantidad || 0), 0) !== pedido.items[indice].cantidad)) {
+    if (modoDivision === 'PRODUCTOS' && asignaciones.some((asignacion, indice) => {
+      const item = pedido.items[indice];
+      const factor = Number(item.producto?.unidad?.factorConversion) > 0 ? Number(item.producto.unidad.factorConversion) : 1;
+      const cantidadesBase = asignacion.cantidades.map((cantidad) => Math.round(Number(cantidad || 0) * factor));
+      return asignacion.cantidades.length !== nPartes
+        || asignacion.cantidades.some((cantidad, i) => !Number.isFinite(Number(cantidad))
+          || Math.abs(Number(cantidad || 0) * factor - cantidadesBase[i]) > 0.000001)
+        || cantidadesBase.reduce((suma, cantidad) => suma + cantidad, 0) !== Math.round(item.cantidad * factor);
+    })) {
       return notify('Asigna todas las unidades de cada producto antes de continuar.', 'err');
     }
 
@@ -1063,9 +1070,11 @@ export default function Facturas({ electronica = true }) {
 
   const agregarDirecta = (producto) => {
     if (producto.disponibles === 0) return notify(`${producto.nombre} sin inventario`, 'err');
+    const factor = Number(producto.unidad?.factorConversion) > 0 ? Number(producto.unidad.factorConversion) : 1;
+    const pasoRapido = factor > 1 ? 0.1 : 1;
     setCarrito((prev) => {
       const existe = prev.find((c) => c.producto.id === producto.id);
-      if (existe) return prev.map((c) => (c.producto.id === producto.id ? { ...c, cantidad: c.cantidad + 1 } : c));
+      if (existe) return prev.map((c) => (c.producto.id === producto.id ? { ...c, cantidad: Number(c.cantidad) + pasoRapido } : c));
       return [...prev, { producto, cantidad: 1 }];
     });
   };
@@ -1077,6 +1086,13 @@ export default function Facturas({ electronica = true }) {
         .filter((c) => c.cantidad > 0)
     );
   };
+
+  const establecerCantidadDirecta = (id, valor) => setCarrito((prev) => prev.map((c) => (
+    c.producto.id === id ? { ...c, cantidad: valor === '' ? '' : Number(valor) } : c
+  )));
+
+  const pasoUnidad = (producto) => 1 / (Number(producto.unidad?.factorConversion) > 0 ? Number(producto.unidad.factorConversion) : 1);
+  const pasoRapidoUnidad = (producto) => (Number(producto.unidad?.factorConversion) || 1) > 1 ? 0.1 : 1;
 
   const subtotalDirecta = carrito.reduce((s, c) => s + c.producto.precio * c.cantidad, 0);
 
@@ -1139,6 +1155,11 @@ export default function Facturas({ electronica = true }) {
     if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     if (carrito.length === 0) return notify('Agrega al menos un producto', 'err');
+    if (carrito.some((item) => {
+      const cantidad = Number(item.cantidad);
+      const factor = Number(item.producto.unidad?.factorConversion) > 0 ? Number(item.producto.unidad.factorConversion) : 1;
+      return !Number.isFinite(cantidad) || cantidad <= 0 || Math.abs(cantidad * factor - Math.round(cantidad * factor)) > 0.000001;
+    })) return notify('Revisa las cantidades: deben coincidir con la precisión de su unidad.', 'err');
     const cli = clienteDe(cliente);
 
     // Cliente a crédito: se factura a crédito, sin exigir efectivo; valida el cupo máximo.
@@ -1438,9 +1459,14 @@ export default function Facturas({ electronica = true }) {
           : (basePropinaPartes ? Math.round(propP * valor / basePropinaPartes * 100) / 100 : Math.round(propP / nPartes * 100) / 100));
         const totalesPartes = totalesAntesPropina.map((total, indice) => total + propinaPartes[indice]);
         const pagosDivididosTotal = pagosDivision.reduce((suma, pago) => suma + (Number(pago.monto) || 0), 0);
-        const asignacionesCompletas = modoDivision !== 'PRODUCTOS' || asignacionesVisibles.every(({ item, cantidades }) =>
-          cantidades.length === nPartes && cantidades.every((cantidad) => Number.isInteger(cantidad) && cantidad >= 0)
-          && cantidades.reduce((suma, cantidad) => suma + cantidad, 0) === item.cantidad)
+        const asignacionesCompletas = modoDivision !== 'PRODUCTOS' || asignacionesVisibles.every(({ item, cantidades }) => {
+          const factor = Number(item.producto?.unidad?.factorConversion) > 0 ? Number(item.producto.unidad.factorConversion) : 1;
+          const cantidadesBase = cantidades.map((cantidad) => Math.round(Number(cantidad || 0) * factor));
+          return cantidades.length === nPartes
+            && cantidades.every((cantidad, indice) => Number(cantidad) >= 0
+              && Math.abs(Number(cantidad) * factor - cantidadesBase[indice]) < 0.000001)
+            && cantidadesBase.reduce((suma, cantidad) => suma + cantidad, 0) === Math.round(item.cantidad * factor);
+        })
           && (modoDivision !== 'PRODUCTOS' || Array.from({ length: nPartes }, (_, indice) =>
             asignacionesVisibles.some(({ cantidades }) => cantidades[indice] > 0)).every(Boolean));
         return (
@@ -1544,7 +1570,7 @@ export default function Facturas({ electronica = true }) {
                                       type="number"
                                       min="0"
                                       max={item.cantidad}
-                                      step="1"
+                                      step={pasoUnidad(item.producto)}
                                       value={cantidad}
                                       onChange={(e) => {
                                         const siguiente = [...cantidades];
@@ -1993,7 +2019,7 @@ export default function Facturas({ electronica = true }) {
                         {p.foto && <img src={p.foto} alt={p.nombre} className="pc-foto" />}
                         <div className="pc-cat">{p.categoria?.nombre || 'Sin categoría'}</div>
                         <div className="pc-nombre">{p.nombre}</div>
-                        <div className="pc-precio">{money(p.precio)}</div>
+                        <div className="pc-precio">{money(p.precio)} / {p.unidad?.abreviatura || 'UND'}</div>
                         {p.disponibles != null && (
                           <div className="pc-disp">{p.disponibles === 0 ? 'Agotado' : `Stock: ${p.disponibles}`}</div>
                         )}
@@ -2024,13 +2050,13 @@ export default function Facturas({ electronica = true }) {
                         <tr key={c.producto.id}>
                           <td>
                             <div style={{ fontWeight: 600, textTransform: 'uppercase' }}>{c.producto.nombre}</div>
-                            <div className="mini">{money(c.producto.precio)} c/u</div>
+                            <div className="mini">{money(c.producto.precio)} / {c.producto.unidad?.abreviatura || 'UND'}</div>
                           </td>
                           <td>
                             <div className="qty">
-                              <button className="btn btn-sm" onClick={() => cambiarDirecta(c.producto.id, -1)}>−</button>
-                              <span className="qty-num">{c.cantidad}</span>
-                              <button className="btn btn-sm" onClick={() => cambiarDirecta(c.producto.id, 1)}>+</button>
+                              <button className="btn btn-sm" title={`Restar ${pasoRapidoUnidad(c.producto)} ${c.producto.unidad?.abreviatura || 'UND'}`} onClick={() => cambiarDirecta(c.producto.id, -pasoRapidoUnidad(c.producto))}>−</button>
+                              <input className="qty-num" type="number" min={pasoUnidad(c.producto)} step={pasoUnidad(c.producto)} aria-label={`Cantidad en ${c.producto.unidad?.abreviatura || 'unidades'}`} value={c.cantidad} onChange={(e) => establecerCantidadDirecta(c.producto.id, e.target.value)} />
+                              <button className="btn btn-sm" title={`Sumar ${pasoRapidoUnidad(c.producto)} ${c.producto.unidad?.abreviatura || 'UND'}`} onClick={() => cambiarDirecta(c.producto.id, pasoRapidoUnidad(c.producto))}>+</button>
                             </div>
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 700 }}>{money(c.producto.precio * c.cantidad)}</td>

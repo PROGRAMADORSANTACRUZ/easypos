@@ -684,19 +684,22 @@ model FacturaVenta {
 }
 
 model FacturaVentaDetalle {
-  id             String         @id @default(uuid()) @db.Uuid @map("Id")
-  facturaVentaId String?        @db.Uuid @map("FacturaVentaId")
-  facturaVenta   FacturaVenta?  @relation(fields: [facturaVentaId], references: [id], onDelete: Cascade)
   companiaCodigo String?        @db.VarChar(3) @map("CompaniaCodigo")
   compania       Compania?      @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
   centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
   centroOperacion CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
-  productoId     String?        @db.Uuid @map("ProductoId")
-  producto       Producto?      @relation(fields: [productoId], references: [id])
+  productoCodigo String?        @db.VarChar(50) @map("CodigoProducto")
+  productoNombre String?        @db.VarChar(250) @map("NombreProducto")
   cantidad       Float          @default(0) @map("Cantidad")
+  unidad         String?        @db.VarChar(10) @map("Unidad")
   precioUnitario Float          @default(0) @map("PrecioUnitario")
   iva            Float          @default(0) @map("IVA")
   total          Float          @default(0) @map("Total")
+  id             String         @id @default(uuid()) @db.Uuid @map("Id")
+  facturaVentaId String?        @db.Uuid @map("FacturaVentaId")
+  facturaVenta   FacturaVenta?  @relation(fields: [facturaVentaId], references: [id], onDelete: Cascade)
+  productoId     String?        @db.Uuid @map("ProductoId")
+  producto       Producto?      @relation(fields: [productoId], references: [id], onDelete: SetNull)
 
   @@map("FacturaVentaDetalle")
 }
@@ -893,19 +896,22 @@ model CompraDetalle {
 
 // Detalle / lineas de una factura (estructura DIAN)
 model FacturaDetalle {
-  id             String    @id @default(uuid()) @db.Uuid @map("Id")
-  facturaId      String?   @db.Uuid @map("FacturaId")
-  factura        Factura?  @relation(fields: [facturaId], references: [id], onDelete: Cascade)
   companiaCodigo String?   @db.VarChar(3) @map("CompaniaCodigo")
   compania       Compania? @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
   centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
   centroOperacion CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
-  productoId     String?   @db.Uuid @map("ProductoId")
-  producto       Producto? @relation(fields: [productoId], references: [id])
+  productoCodigo String?   @db.VarChar(50) @map("CodigoProducto")
+  productoNombre String?   @db.VarChar(250) @map("NombreProducto")
   cantidad       Float     @default(0) @map("Cantidad")
+  unidad         String?   @db.VarChar(10) @map("Unidad")
   precioUnitario Float     @default(0) @map("PrecioUnitario")
   iva            Float     @default(0) @map("IVA")
   total          Float     @default(0) @map("Total")
+  id             String    @id @default(uuid()) @db.Uuid @map("Id")
+  facturaId      String?   @db.Uuid @map("FacturaId")
+  factura        Factura?  @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  productoId     String?   @db.Uuid @map("ProductoId")
+  producto       Producto? @relation(fields: [productoId], references: [id], onDelete: SetNull)
 }
 
 // Abono / pago parcial de una factura a credito

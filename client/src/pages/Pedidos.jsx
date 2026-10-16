@@ -17,6 +17,10 @@ const TIPOS_ID = [
 ];
 
 const norm = (s) => String(s || '').toLowerCase().trim();
+const factorUnidad = (producto) => Number(producto?.factorConversion ?? producto?.unidad?.factorConversion) > 0
+  ? Number(producto.factorConversion ?? producto.unidad.factorConversion)
+  : 1;
+const pasoRapidoUnidad = (producto) => factorUnidad(producto) > 1 ? 0.1 : 1;
 
 // Buscador de clientes ya registrados: al elegir uno, rellena los datos del pedido.
 function ClienteBuscador({ clientes, onPick }) {
@@ -135,11 +139,14 @@ export default function Pedidos() {
         nombre: c.producto.nombre,
         cantidad: c.cantidad,
         precioUnit: c.producto.precio,
+        unidad: c.producto.unidad?.abreviatura || 'UND',
+        factorConversion: factorUnidad(c.producto),
+        disponibles: c.producto.disponibles,
       })),
     [carrito]
   );
   const subtotal = items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0);
-  const totalUnidades = items.reduce((s, it) => s + it.cantidad, 0);
+  const totalItems = items.length;
 
   const categoriasMenu = [...new Set(productos.map((p) => p.categoria?.nombre || 'Sin categoría'))].sort();
   const productosMenu = productos.filter((p) => {
@@ -157,23 +164,35 @@ export default function Pedidos() {
     }
     setCarrito((prev) => {
       const existe = prev.find((c) => c.producto.id === producto.id);
+      const paso = pasoRapidoUnidad(producto);
       if (existe) {
-        if (producto.disponibles != null && existe.cantidad >= producto.disponibles) {
+        if (producto.disponibles != null && existe.cantidad + paso > producto.disponibles + 0.000001) {
           notify(`Solo hay ${producto.disponibles} de ${producto.nombre}`, 'err');
           return prev;
         }
-        return prev.map((c) => (c.producto.id === producto.id ? { ...c, cantidad: c.cantidad + 1 } : c));
+        return prev.map((c) => (c.producto.id === producto.id ? { ...c, cantidad: c.cantidad + paso } : c));
       }
-      return [...prev, { producto, cantidad: 1 }];
+      const inicial = producto.disponibles == null ? 1 : Math.min(1, producto.disponibles);
+      return [...prev, { producto, cantidad: Math.round(inicial * factorUnidad(producto)) / factorUnidad(producto) }];
     });
   };
 
   const cambiarCantidad = (item, delta) => {
+    if (delta > 0 && item.disponibles != null && item.cantidad + delta > item.disponibles + 0.000001) {
+      return notify(`Solo hay ${item.disponibles} de ${item.nombre}`, 'err');
+    }
     setCarrito((prev) =>
       prev
         .map((c) => (c.producto.id === item.id ? { ...c, cantidad: c.cantidad + delta } : c))
         .filter((c) => c.cantidad > 0)
     );
+  };
+
+  const establecerCantidad = (item, valor) => {
+    const cantidad = valor === '' ? 0 : Number(valor);
+    if (!Number.isFinite(cantidad) || cantidad < 0) return;
+    if (item.disponibles != null && cantidad > item.disponibles + 0.000001) return notify(`Solo hay ${item.disponibles} de ${item.nombre}`, 'err');
+    setCarrito((prev) => prev.map((c) => (c.producto.id === item.id ? { ...c, cantidad } : c)));
   };
 
   const quitarItem = (item) => setCarrito((prev) => prev.filter((c) => c.producto.id !== item.id));
@@ -229,6 +248,11 @@ export default function Pedidos() {
 
   const enviarPedido = async () => {
     if (carrito.length === 0) return notify('Agrega al menos un producto', 'err');
+    if (carrito.some(({ cantidad, producto }) => {
+      const factor = factorUnidad(producto);
+      return !Number.isFinite(Number(cantidad)) || Number(cantidad) <= 0
+        || Math.abs(Number(cantidad) * factor - Math.round(Number(cantidad) * factor)) > 0.000001;
+    })) return notify('Revisa las cantidades: deben coincidir con la precisión de su unidad.', 'err');
     if (!cliente.primerNombre.trim()) return notify('Ingresa el primer nombre del cliente', 'err');
     if (!metodoPago) return notify('Selecciona una forma de pago', 'err');
     const nombres = [cliente.primerNombre, cliente.segundoNombre].map((s) => s.trim()).filter(Boolean).join(' ');
@@ -315,7 +339,7 @@ export default function Pedidos() {
                   {p.foto && <img src={p.foto} alt={p.nombre} className="pc-foto" />}
                   <div className="pc-cat">{p.categoria?.nombre || 'Sin categoría'}</div>
                   <div className="pc-nombre">{p.nombre}</div>
-                  <div className="pc-precio">{money(p.precio)}</div>
+                  <div className="pc-precio">{money(p.precio)} / {p.unidad?.abreviatura || 'UND'}</div>
                   {p.disponibles != null && (
                     <div className="pc-disp">{p.disponibles === 0 ? 'Agotado' : `Stock: ${p.disponibles}`}</div>
                   )}
@@ -331,7 +355,7 @@ export default function Pedidos() {
             <h3 style={{ margin: 0 }}>Mi pedido</h3>
             <span className="carrito-badge">
               <Icon name="cart" size={15} />
-              {totalUnidades} {totalUnidades === 1 ? 'ítem' : 'ítems'}
+              {totalItems} {totalItems === 1 ? 'producto' : 'productos'}
             </span>
           </div>
 
@@ -347,14 +371,14 @@ export default function Pedidos() {
                 <div key={it.id} className="carrito-item">
                   <div className="ci-info">
                     <div className="ci-nombre">{it.nombre}</div>
-                    <div className="mini">{money(it.precioUnit)} c/u</div>
+                    <div className="mini">{money(it.precioUnit)} / {it.unidad}</div>
                   </div>
                   <div className="qty">
-                    <button className="qty-btn" title="Quitar uno" onClick={() => cambiarCantidad(it, -1)}>
+                    <button className="qty-btn" title={`Quitar ${pasoRapidoUnidad(it)} ${it.unidad}`} onClick={() => cambiarCantidad(it, -pasoRapidoUnidad(it))}>
                       <Icon name="minus" size={15} />
                     </button>
-                    <span className="qty-num">{it.cantidad}</span>
-                    <button className="qty-btn" title="Agregar uno" onClick={() => cambiarCantidad(it, 1)}>
+                    <input className="qty-num" type="number" min={1 / factorUnidad(it)} step={1 / factorUnidad(it)} aria-label={`Cantidad en ${it.unidad}`} value={it.cantidad || ''} onChange={(e) => establecerCantidad(it, e.target.value)} />
+                    <button className="qty-btn" title={`Agregar ${pasoRapidoUnidad(it)} ${it.unidad}`} onClick={() => cambiarCantidad(it, pasoRapidoUnidad(it))}>
                       <Icon name="add" size={15} />
                     </button>
                   </div>
@@ -394,7 +418,7 @@ export default function Pedidos() {
             </div>
 
             <div className="datos-resumen">
-              <span><Icon name="cart" size={15} /> {totalUnidades} {totalUnidades === 1 ? 'ítem' : 'ítems'}</span>
+              <span><Icon name="cart" size={15} /> {totalItems} {totalItems === 1 ? 'producto' : 'productos'}</span>
               <strong>{money(subtotal)}</strong>
             </div>
 

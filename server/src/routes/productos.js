@@ -14,7 +14,8 @@ function disponibilidadKit(producto) {
     if (c.cantidad <= 0) continue;
     max = Math.min(max, Math.floor(c.item.stock / c.cantidad));
   }
-  return Number.isFinite(max) ? max : 0;
+  const factor = Number(producto.unidad?.factorConversion) > 0 ? Number(producto.unidad.factorConversion) : 1;
+  return Number.isFinite(max) ? Math.floor(max * factor + 1e-9) / factor : 0;
 }
 
 // Listar productos con su receta y disponibilidad

@@ -117,6 +117,17 @@ function repartirCentavos(total, pesos) {
   });
 }
 
+function repartirCantidad(total, partes, factorConversion = 1) {
+  const factor = Number(factorConversion) > 0 ? Number(factorConversion) : 1;
+  const unidadesBase = Math.round(Number(total) * factor);
+  const basePorParte = Math.floor(unidadesBase / partes);
+  let sobrantes = unidadesBase % partes;
+  return Array.from({ length: partes }, () => {
+    const unidades = basePorParte + (sobrantes-- > 0 ? 1 : 0);
+    return unidades / factor;
+  });
+}
+
 function calcularLineaPedido(item, electronica) {
   const totalLinea = redondear(item.precioUnit * item.cantidad);
   const impuesto = impuestoSobrePrecio(totalLinea, item.producto.iva || 0, !electronica);
@@ -139,6 +150,11 @@ export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, 
     for (const linea of lineasBase) {
       const subv = repartirCentavos(linea.subtotal, partes.map(() => 1));
       const ivav = repartirCentavos(linea.impuesto, partes.map(() => 1));
+      const cantidadesPartes = repartirCantidad(
+        linea.item.cantidad,
+        partes.length,
+        linea.item.producto?.unidad?.factorConversion,
+      );
       partes.forEach((parte, indice) => {
         const subtotalParte = desdeCentavos(subv[indice]);
         const impuestoParte = desdeCentavos(ivav[indice]);
@@ -146,7 +162,10 @@ export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, 
         parte.lineas.push({
           pedidoItemId: linea.item.id,
           productoId: linea.item.productoId,
-          cantidad: linea.item.cantidad / partes.length,
+          productoCodigo: linea.item.producto?.codigo || null,
+          productoNombre: linea.item.producto?.nombre || null,
+          cantidad: cantidadesPartes[indice],
+          unidad: linea.item.producto?.unidad?.abreviatura || 'UND',
           precioUnitario: linea.item.precioUnit,
           subtotal: subtotalParte,
           impuesto: impuestoParte,
@@ -165,8 +184,14 @@ export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, 
         throw Object.assign(new Error('Asigna cada producto a una de las partes'), { status: 400 });
       }
       const cantidadesValidas = cantidades.map(Number);
-      if (cantidadesValidas.some((cantidad) => !Number.isInteger(cantidad) || cantidad < 0)
-        || cantidadesValidas.reduce((suma, cantidad) => suma + cantidad, 0) !== linea.item.cantidad) {
+      const factorConversion = Number(linea.item.producto?.unidad?.factorConversion) > 0
+        ? Number(linea.item.producto.unidad.factorConversion)
+        : 1;
+      const cantidadesBase = cantidadesValidas.map((cantidad) => Math.round(cantidad * factorConversion));
+      if (cantidadesValidas.some((cantidad, indice) => !Number.isFinite(cantidad) || cantidad < 0
+        || Math.abs(cantidad * factorConversion - cantidadesBase[indice]) > 0.000001)
+        || cantidadesBase.reduce((suma, cantidad) => suma + cantidad, 0)
+          !== Math.round(linea.item.cantidad * factorConversion)) {
         throw Object.assign(new Error(`Las cantidades de ${linea.item.producto.nombre} no coinciden con el pedido`), { status: 400 });
       }
       const subv = repartirCentavos(linea.subtotal, cantidadesValidas);
@@ -180,7 +205,10 @@ export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, 
         parte.lineas.push({
           pedidoItemId: linea.item.id,
           productoId: linea.item.productoId,
+          productoCodigo: linea.item.producto?.codigo || null,
+          productoNombre: linea.item.producto?.nombre || null,
           cantidad,
+          unidad: linea.item.producto?.unidad?.abreviatura || 'UND',
           precioUnitario: linea.item.precioUnit,
           subtotal: subtotalParte,
           impuesto: impuestoParte,
@@ -350,7 +378,7 @@ router.post('/dividir', wrap(async (req, res) => {
 
   const pedido = await prisma.pedido.findUnique({
     where: { id },
-    include: { mesa: true, items: { include: { producto: true } } },
+    include: { mesa: true, items: { include: { producto: { include: { unidad: true } } } } },
   });
   if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
   if (pedido.estado !== 'ABIERTO') return res.status(400).json({ error: 'El pedido no está abierto' });
@@ -460,9 +488,12 @@ router.post('/dividir', wrap(async (req, res) => {
           detalle: {
             create: parte.lineas.map((linea) => ({
               productoId: linea.productoId,
+              productoCodigo: linea.productoCodigo,
+              productoNombre: linea.productoNombre,
               companiaCodigo: numero.companiaCodigo,
               centroOperacionCodigo: numero.centroOperacionCodigo,
               cantidad: linea.cantidad,
+              unidad: linea.unidad,
               precioUnitario: linea.precioUnitario,
               iva: linea.impuesto,
               total: electronica ? redondear(linea.subtotal + linea.impuesto) : linea.total,
@@ -501,7 +532,7 @@ router.post('/', wrap(async (req, res) => {
   const pedido = await prisma.pedido.findUnique({
     where: { id },
     include: {
-      items: { include: { producto: { include: { componentes: true } } } },
+      items: { include: { producto: { include: { componentes: true, unidad: true } } } },
       factura: true,
     },
   });
@@ -572,9 +603,12 @@ router.post('/', wrap(async (req, res) => {
             const lineaIva = impuestoSobrePrecio(lineaSub, it.producto.iva || 0, electronica === false);
             return {
               productoId: it.productoId,
+              productoCodigo: it.producto.codigo || null,
+              productoNombre: it.producto.nombre,
               companiaCodigo: num.companiaCodigo,
               centroOperacionCodigo: num.centroOperacionCodigo,
               cantidad: it.cantidad,
+              unidad: it.producto.unidad?.abreviatura || 'UND',
               precioUnitario: it.precioUnit,
               iva: lineaIva,
               total: electronica === false ? redondear(lineaSub) : redondear(lineaSub + lineaIva),
@@ -614,17 +648,23 @@ router.post('/directa', wrap(async (req, res) => {
   const ids = items.map((i) => String(i.productoId));
   const productos = await prisma.producto.findMany({
     where: { id: { in: ids } },
-    include: { componentes: true },
+    include: { componentes: true, unidad: true },
   });
   const buscar = (id) => productos.find((p) => p.id === String(id));
   for (const i of items) {
-    if (!buscar(i.productoId)) return res.status(404).json({ error: `Producto ${i.productoId} no encontrado` });
+    const producto = buscar(i.productoId);
+    if (!producto) return res.status(404).json({ error: `Producto ${i.productoId} no encontrado` });
+    const cantidad = Number(i.cantidad);
+    const factor = Number(producto.unidad?.factorConversion) > 0 ? Number(producto.unidad.factorConversion) : 1;
+    if (!Number.isFinite(cantidad) || cantidad <= 0 || Math.abs(cantidad * factor - Math.round(cantidad * factor)) > 0.000001) {
+      return res.status(400).json({ error: `Cantidad inválida para ${producto.nombre}; usa pasos de ${1 / factor} ${producto.unidad?.abreviatura || 'UND'}.` });
+    }
   }
   // Insumos requeridos segun los kits
   const requeridos = new Map();
   for (const i of items) {
     const prod = buscar(i.productoId);
-    const cant = Number(i.cantidad) || 1;
+    const cant = Number(i.cantidad);
     for (const c of prod.componentes) {
       requeridos.set(c.itemId, (requeridos.get(c.itemId) || 0) + c.cantidad * cant);
     }
@@ -640,10 +680,10 @@ router.post('/directa', wrap(async (req, res) => {
     }
   }
 
-  const precioProductos = redondear(items.reduce((s, i) => s + buscar(i.productoId).precio * (Number(i.cantidad) || 1), 0));
+  const precioProductos = redondear(items.reduce((s, i) => s + buscar(i.productoId).precio * Number(i.cantidad), 0));
   const impuesto = redondear(items.reduce((s, i) => {
     const prod = buscar(i.productoId);
-    return s + impuestoSobrePrecio(prod.precio * (Number(i.cantidad) || 1), prod.iva || 0, electronica === false);
+    return s + impuestoSobrePrecio(prod.precio * Number(i.cantidad), prod.iva || 0, electronica === false);
   }, 0));
   const subtotal = electronica === false ? redondear(precioProductos - impuesto) : precioProductos;
   const total = electronica === false ? precioProductos : redondear(subtotal + impuesto);
@@ -665,7 +705,7 @@ router.post('/directa', wrap(async (req, res) => {
         items: {
           create: items.map((i) => ({
             productoId: String(i.productoId),
-            cantidad: Number(i.cantidad) || 1,
+            cantidad: Number(i.cantidad),
             precioUnit: buscar(i.productoId).precio,
           })),
         },
@@ -704,15 +744,18 @@ router.post('/directa', wrap(async (req, res) => {
         aperturaId: apertura.id,
         detalle: {
           create: items.map((i) => {
-            const cant = Number(i.cantidad) || 1;
+            const cant = Number(i.cantidad);
             const precio = buscar(i.productoId).precio;
             const lineaSub = precio * cant;
             const lineaIva = impuestoSobrePrecio(lineaSub, buscar(i.productoId).iva || 0, electronica === false);
             return {
               productoId: String(i.productoId),
+              productoCodigo: buscar(i.productoId).codigo || null,
+              productoNombre: buscar(i.productoId).nombre,
               companiaCodigo: num.companiaCodigo,
               centroOperacionCodigo: num.centroOperacionCodigo,
               cantidad: cant,
+              unidad: buscar(i.productoId).unidad?.abreviatura || 'UND',
               precioUnitario: precio,
               iva: lineaIva,
               total: electronica === false ? redondear(lineaSub) : redondear(lineaSub + lineaIva),
