@@ -85,6 +85,27 @@ router.get('/', wrap(async (req, res) => {
   }));
 }));
 
+router.get('/asignados', wrap(async (req, res) => {
+  const clase = req.query.clase ? String(req.query.clase) : '';
+  if (!clase) return res.status(400).json({ error: 'Indica la clase de documento' });
+  const centros = (req.usuario?.centrosOperacion || []).filter((centro) => centro.estado === 'Activo');
+  if (!centros.length) return res.json([]);
+  const esElectronico = clase === 'FACTURA ELECTRONICA DE VENTA';
+  const tipos = await prisma.tipoDocumento.findMany({
+    where: {
+      clase,
+      esElectronico,
+      activo: true,
+      OR: centros.map((centro) => ({
+        companiaCodigo: centro.companiaCodigo,
+        centroOperacionCodigo: centro.codigo,
+      })),
+    },
+    orderBy: [{ createdAt: 'asc' }],
+  });
+  res.json(tipos);
+}));
+
 router.get('/:id', wrap(async (req, res) => {
   const t = await prisma.tipoDocumento.findUnique({ where: { id: String(req.params.id) } });
   if (!t) return res.status(404).json({ error: 'Tipo de documento no encontrado' });

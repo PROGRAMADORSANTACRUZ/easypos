@@ -589,6 +589,7 @@ export default function Facturas({ electronica = true }) {
   const { user } = useAuth();
   const centrosAsignados = (user?.centrosOperacion || CENTROS_VACIOS).filter((centro) => centro.estado === 'Activo');
   const [centroOperacionCodigo, setCentroOperacionCodigo] = useState(() => centrosAsignados[0]?.codigo || '');
+  const [centroSeleccionadoManualmente, setCentroSeleccionadoManualmente] = useState(false);
   const centroFacturacion = centrosAsignados.find((centro) => centro.codigo === centroOperacionCodigo) || null;
   const contextoDocumento = {
     companiaCodigo: centroFacturacion?.companiaCodigo,
@@ -668,8 +669,19 @@ export default function Facturas({ electronica = true }) {
           ? `?companiaCodigo=${encodeURIComponent(centroFacturacion.companiaCodigo)}&centroOperacionCodigo=${encodeURIComponent(centroFacturacion.codigo)}`
           : '';
         const tipos = centroFacturacion ? await api.get(`/tipos-documento${query}`) : [];
+        const tipoActual = tipoDocumentoListo(tipos || [], claseDocumento);
+        if (!tipoActual && centroFacturacion && !centroSeleccionadoManualmente) {
+          const disponibles = await api.get(`/tipos-documento/asignados?clase=${encodeURIComponent(claseDocumento)}`);
+          const tipoDisponible = tipoDocumentoListo(disponibles || [], claseDocumento);
+          const centroDisponible = centrosAsignados.find((centro) => centro.companiaCodigo === tipoDisponible?.companiaCodigo
+            && centro.codigo === tipoDisponible?.centroOperacionCodigo);
+          if (centroDisponible && centroDisponible.codigo !== centroFacturacion.codigo) {
+            setCentroOperacionCodigo(centroDisponible.codigo);
+            return;
+          }
+        }
         tipoFacturaRecibo = tipoDocumentoListo(tipos || [], 'FACTURA ELECTRONICA DE VENTA') || null;
-        setTipoFactura(tipoDocumentoListo(tipos || [], claseDocumento) || null);
+        setTipoFactura(tipoActual || null);
       } catch { tipoFacturaRecibo = null; setTipoFactura(null); }
       setPendientes(abiertos);
       setFacturas(facs);
@@ -1249,7 +1261,7 @@ export default function Facturas({ electronica = true }) {
         {centrosAsignados.length > 0 && (
           <div className="field" style={{ minWidth: 280, maxWidth: 520, flex: '1 1 280px', marginBottom: 0 }}>
             <label>Compañía y centro para facturar</label>
-            <select value={centroOperacionCodigo} onChange={(e) => setCentroOperacionCodigo(e.target.value)}>
+            <select value={centroOperacionCodigo} onChange={(e) => { setCentroSeleccionadoManualmente(true); setCentroOperacionCodigo(e.target.value); }}>
               {centrosAsignados.map((centro) => (
                 <option key={centro.codigo} value={centro.codigo}>
                   {centro.companiaCodigo} · {centro.compania?.razonSocial || ''} · {centro.codigo} · {centro.descripcion}
