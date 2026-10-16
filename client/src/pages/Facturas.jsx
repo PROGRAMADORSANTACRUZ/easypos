@@ -642,6 +642,15 @@ export default function Facturas({ electronica = true }) {
 
   const puede = (codigo) => (user?.permisos || []).includes(codigo);
 
+  useEffect(() => {
+    const centroActualValido = centrosAsignados.some((centro) => centro.codigo === centroOperacionCodigo);
+    if (!centroActualValido && centrosAsignados.length) {
+      setCentroOperacionCodigo(centrosAsignados[0].codigo);
+    } else if (!centrosAsignados.length && centroOperacionCodigo) {
+      setCentroOperacionCodigo('');
+    }
+  }, [centroOperacionCodigo, centrosAsignados]);
+
   const cargar = async () => {
     try {
       const [abiertos, facs, prods, clis, empresa, ap, ventasCongeladas] = await Promise.all([
@@ -673,7 +682,7 @@ export default function Facturas({ electronica = true }) {
     }
   };
 
-  useEffect(() => { cargar(); }, [centroOperacionCodigo]);
+  useEffect(() => { if (centroOperacionCodigo) cargar(); }, [centroOperacionCodigo]);
 
   const [reenviando, setReenviando] = useState(null); // id de factura en proceso de reenvio a DIAN
 
