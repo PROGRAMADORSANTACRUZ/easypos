@@ -533,7 +533,6 @@ router.post('/', wrap(async (req, res) => {
     where: { id },
     include: {
       items: { include: { producto: { include: { componentes: true, unidad: true } } } },
-      factura: true,
     },
   });
 
