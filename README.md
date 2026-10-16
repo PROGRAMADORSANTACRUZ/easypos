@@ -110,8 +110,8 @@ EXTERNA: crea primero un servidor Postgres aparte en Dokploy (app tipo
 2. Configura las variables de entorno del panel de Dokploy — ver `.env.example`
    (`DATABASE_URL`, `JWT_SECRET`, etc. — `PLATFORM_DATABASE_URL` se rellena
    solo con el mismo valor de `DATABASE_URL`, una sola base para todo).
-3. Configura el dominio en Dokploy (ajusta `easypos.grupo-santacruz.com` en
-   `docker-compose.yml`/`deploy.sh` si el dominio real es otro).
+3. Configura el dominio principal `pos.grupo-santacruz.com`; `easypos.grupo-santacruz.com`
+   también queda disponible como alias en `docker-compose.yml` y `deploy.sh`.
 4. En instalaciones con datos, deja `RUN_DB_INIT=false` y `RUN_SEED=false`
    también en el panel de Dokploy. El sembrado borra y recrea productos, y
    aplicar sucesivamente ambos esquemas con `prisma db push --accept-data-loss`

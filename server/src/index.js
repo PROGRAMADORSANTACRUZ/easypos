@@ -68,6 +68,7 @@ import { restringirModuloRestaurante } from './modulosRestaurante.js';
 
 const app = express();
 const corsOrigins = new Set([
+  'https://pos.grupo-santacruz.com',
   'https://easypos.grupo-santacruz.com',
   ...(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
 ]);
