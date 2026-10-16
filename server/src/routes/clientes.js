@@ -34,7 +34,31 @@ async function validarMunicipioSiesa(codigo) {
 
 const incluirUbicacionSiesa = {
   municipioSiesa: { include: { departamento: { include: { pais: true } } } },
+  sucursales: { include: { municipioSiesa: { include: { departamento: { include: { pais: true } } } } }, orderBy: { createdAt: 'asc' } },
 };
+
+function datosSucursal(sucursal) {
+  return {
+    nombre: limpiar(sucursal.nombre),
+    telefono: limpiar(sucursal.telefono),
+    direccion: limpiar(sucursal.direccion),
+    barrio: limpiar(sucursal.barrio),
+    ciudad: limpiar(sucursal.ciudad),
+    email: limpiar(sucursal.email),
+    municipioSiesaCodigo: limpiar(sucursal.municipioSiesaCodigo),
+  };
+}
+
+async function validarSucursales(sucursales) {
+  if (!Array.isArray(sucursales)) return 'Las sucursales deben enviarse como una lista';
+  for (const sucursal of sucursales) {
+    if (!sucursal || typeof sucursal !== 'object') return 'Cada sucursal debe ser un objeto válido';
+    if (!limpiar(sucursal.nombre)) return 'Cada sucursal debe tener un nombre';
+    const error = await validarMunicipioSiesa(sucursal.municipioSiesaCodigo);
+    if (error) return error;
+  }
+  return null;
+}
 
 // Arma los campos de credito segun la condicion de pago; a contado no aplican
 const camposCredito = (condicionPago, creditoDias, creditoCupo) => {
@@ -61,7 +85,7 @@ router.get('/', wrap(async (req, res) => {
           { razonSocial: { contains: String(q) } },
           { documento: { contains: String(q) } },
           { numeroDocumento: { contains: String(q) } },
-          { sucursal: { contains: String(q) } },
+          { sucursales: { some: { nombre: { contains: String(q) } } } },
           { barrio: { contains: String(q) } },
           { email: { contains: String(q) } },
         ],
@@ -85,13 +109,15 @@ router.post('/', wrap(async (req, res) => {
   }
   const errorMunicipioSiesa = await validarMunicipioSiesa(req.body.municipioSiesaCodigo);
   if (errorMunicipioSiesa) return res.status(400).json({ error: errorMunicipioSiesa });
+  const sucursales = req.body.sucursales ?? [];
+  const errorSucursales = await validarSucursales(sucursales);
+  if (errorSucursales) return res.status(400).json({ error: errorSucursales });
   try {
     const cliente = await prisma.cliente.create({
       data: {
         nombre: nombreFull,
         nombres: limpiar(nombres),
         apellidos: limpiar(apellidos),
-        sucursal: limpiar(req.body.sucursal),
         razonSocial: limpiar(razonSocial),
         tipoCliente: limpiar(req.body.tipoCliente) || 'NATURAL',
         tipoDocumento: limpiar(req.body.tipoDocumento),
@@ -108,6 +134,7 @@ router.post('/', wrap(async (req, res) => {
         porcentajeEmpleado: aDecimal(req.body.porcentajeEmpleado),
         porcentajeCliente: aDecimal(req.body.porcentajeCliente),
         ...camposCredito(req.body.condicionPago, req.body.creditoDias, req.body.creditoCupo),
+        sucursales: sucursales.length ? { create: sucursales.map(datosSucursal) } : undefined,
       },
       include: incluirUbicacionSiesa,
     });
@@ -120,40 +147,64 @@ router.post('/', wrap(async (req, res) => {
 }));
 
 router.put('/:id', wrap(async (req, res) => {
-  const { nombres, apellidos, nombre, razonSocial, documento, tipoCliente, tipoDocumento, numeroDocumento, sucursal, telefono, direccion, barrio, ciudad, email, municipioCodigo, municipioSiesaCodigo, responsableIVA, porcentajeEmpleado, porcentajeCliente, activo } = req.body;
+  const { nombres, apellidos, nombre, razonSocial, documento, tipoCliente, tipoDocumento, numeroDocumento, telefono, direccion, barrio, ciudad, email, municipioCodigo, municipioSiesaCodigo, responsableIVA, porcentajeEmpleado, porcentajeCliente, activo, sucursales } = req.body;
   const tieneNombre = nombres !== undefined || apellidos !== undefined || nombre !== undefined || razonSocial !== undefined;
   const nombreFull = tieneNombre ? nombreCompleto(nombres, apellidos, nombre, razonSocial) : undefined;
   if (municipioSiesaCodigo !== undefined) {
     const errorMunicipioSiesa = await validarMunicipioSiesa(municipioSiesaCodigo);
     if (errorMunicipioSiesa) return res.status(400).json({ error: errorMunicipioSiesa });
   }
+  if (sucursales !== undefined) {
+    const errorSucursales = await validarSucursales(sucursales);
+    if (errorSucursales) return res.status(400).json({ error: errorSucursales });
+  }
   try {
-    const cliente = await prisma.cliente.update({
-      where: { id: String(req.params.id) },
-      data: {
-        ...(nombreFull !== undefined && nombreFull !== '' && { nombre: nombreFull }),
-        ...(nombres !== undefined && { nombres: limpiar(nombres) }),
-        ...(apellidos !== undefined && { apellidos: limpiar(apellidos) }),
-        ...(sucursal !== undefined && { sucursal: limpiar(sucursal) }),
-        ...(razonSocial !== undefined && { razonSocial: limpiar(razonSocial) }),
-        ...(tipoCliente !== undefined && { tipoCliente: limpiar(tipoCliente) || 'NATURAL' }),
-        ...(tipoDocumento !== undefined && { tipoDocumento: limpiar(tipoDocumento) }),
-        ...(numeroDocumento !== undefined && { numeroDocumento: limpiar(numeroDocumento) }),
-        ...(documento !== undefined && { documento: limpiar(documento) }),
-        ...(telefono !== undefined && { telefono: limpiar(telefono) }),
-        ...(direccion !== undefined && { direccion: limpiar(direccion) }),
-        ...(barrio !== undefined && { barrio: limpiar(barrio) }),
-        ...(ciudad !== undefined && { ciudad: limpiar(ciudad) }),
-        ...(email !== undefined && { email: limpiar(email) }),
-        ...(municipioCodigo !== undefined && { municipioCodigo: limpiar(municipioCodigo) }),
-        ...(municipioSiesaCodigo !== undefined && { municipioSiesaCodigo: limpiar(municipioSiesaCodigo) }),
-        ...(responsableIVA !== undefined && { responsableIVA: aBool(responsableIVA) }),
-        ...(porcentajeEmpleado !== undefined && { porcentajeEmpleado: aDecimal(porcentajeEmpleado) }),
-        ...(porcentajeCliente !== undefined && { porcentajeCliente: aDecimal(porcentajeCliente) }),
-        ...(req.body.condicionPago !== undefined && camposCredito(req.body.condicionPago, req.body.creditoDias, req.body.creditoCupo)),
-        ...(activo !== undefined && { activo: Boolean(activo) }),
-      },
-      include: incluirUbicacionSiesa,
+    const clienteId = String(req.params.id);
+    const cliente = await prisma.$transaction(async (tx) => {
+      await tx.cliente.update({
+        where: { id: clienteId },
+        data: {
+          ...(nombreFull !== undefined && nombreFull !== '' && { nombre: nombreFull }),
+          ...(nombres !== undefined && { nombres: limpiar(nombres) }),
+          ...(apellidos !== undefined && { apellidos: limpiar(apellidos) }),
+          ...(razonSocial !== undefined && { razonSocial: limpiar(razonSocial) }),
+          ...(tipoCliente !== undefined && { tipoCliente: limpiar(tipoCliente) || 'NATURAL' }),
+          ...(tipoDocumento !== undefined && { tipoDocumento: limpiar(tipoDocumento) }),
+          ...(numeroDocumento !== undefined && { numeroDocumento: limpiar(numeroDocumento) }),
+          ...(documento !== undefined && { documento: limpiar(documento) }),
+          ...(telefono !== undefined && { telefono: limpiar(telefono) }),
+          ...(direccion !== undefined && { direccion: limpiar(direccion) }),
+          ...(barrio !== undefined && { barrio: limpiar(barrio) }),
+          ...(ciudad !== undefined && { ciudad: limpiar(ciudad) }),
+          ...(email !== undefined && { email: limpiar(email) }),
+          ...(municipioCodigo !== undefined && { municipioCodigo: limpiar(municipioCodigo) }),
+          ...(municipioSiesaCodigo !== undefined && { municipioSiesaCodigo: limpiar(municipioSiesaCodigo) }),
+          ...(responsableIVA !== undefined && { responsableIVA: aBool(responsableIVA) }),
+          ...(porcentajeEmpleado !== undefined && { porcentajeEmpleado: aDecimal(porcentajeEmpleado) }),
+          ...(porcentajeCliente !== undefined && { porcentajeCliente: aDecimal(porcentajeCliente) }),
+          ...(req.body.condicionPago !== undefined && camposCredito(req.body.condicionPago, req.body.creditoDias, req.body.creditoCupo)),
+          ...(activo !== undefined && { activo: Boolean(activo) }),
+        },
+      });
+      if (sucursales !== undefined) {
+        const existentes = await tx.clienteSucursal.findMany({ where: { clienteId }, select: { id: true } });
+        const idsExistentes = new Set(existentes.map(({ id }) => id));
+        const idsConservados = [];
+        for (const sucursal of sucursales) {
+          const datos = datosSucursal(sucursal);
+          if (sucursal.id && idsExistentes.has(sucursal.id)) {
+            await tx.clienteSucursal.update({ where: { id: sucursal.id }, data: datos });
+            idsConservados.push(sucursal.id);
+          } else {
+            const creada = await tx.clienteSucursal.create({ data: { ...datos, clienteId } });
+            idsConservados.push(creada.id);
+          }
+        }
+        await tx.clienteSucursal.deleteMany({
+          where: { clienteId, ...(idsConservados.length ? { id: { notIn: idsConservados } } : {}) },
+        });
+      }
+      return tx.cliente.findUnique({ where: { id: clienteId }, include: incluirUbicacionSiesa });
     });
     await auditar({ req, accion: 'EDITAR', entidad: 'cliente', entidadId: cliente.id, detalle: cliente.nombre });
     res.json(cliente);

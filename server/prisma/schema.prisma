@@ -125,7 +125,6 @@ model Cliente {
   nombre    String   // nombres y apellidos (valor combinado para recibos/facturas)
   nombres   String?
   apellidos String?
-  sucursal  String?  @db.VarChar(200) @map("Sucursal")
   telefono  String?  @db.VarChar(50) @map("Telefono")
   direccion String?  @map("Direccion")
   barrio    String?
@@ -147,9 +146,30 @@ model Cliente {
   remisiones Remision[]
   cortesias Cortesia[]
   reservasMesa Mesa[] @relation("ClienteReservaMesa")
+  sucursales ClienteSucursal[]
   createdAt DateTime @default(now()) @map("FechaCreacion")
 
   @@index([municipioSiesaCodigo])
+}
+
+model ClienteSucursal {
+  id String @id @default(dbgenerated("('001'::text || lpad(nextval('\\\"ClienteSucursalIdSeq\\\"'::regclass)::text, 6, '0'))")) @db.VarChar(20) @map("Id")
+  clienteId String @db.Uuid @map("ClienteId")
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  nombre String @db.VarChar(120) @map("Nombre")
+  telefono String? @db.VarChar(50) @map("Telefono")
+  direccion String? @map("Direccion")
+  barrio String? @map("Barrio")
+  ciudad String? @map("Ciudad")
+  email String? @db.VarChar(150) @map("Email")
+  municipioSiesaCodigo String? @db.VarChar(8) @map("MunicipioSiesaCodigo")
+  municipioSiesa CiudadSiesa? @relation(fields: [municipioSiesaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
+  activo Boolean @default(true) @map("Activo")
+  createdAt DateTime @default(now()) @map("FechaCreacion")
+
+  @@index([clienteId])
+  @@index([municipioSiesaCodigo])
+  @@map("SucursalesClientes")
 }
 
 model PaisSiesa {
@@ -177,6 +197,7 @@ model CiudadSiesa {
   nombre             String             @db.VarChar(120) @map("Nombre")
   departamento       DepartamentoSiesa  @relation(fields: [departamentoCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
   clientes           Cliente[]
+  sucursales         ClienteSucursal[]
 
   @@index([departamentoCodigo])
   @@map("CiudadesSiesa")

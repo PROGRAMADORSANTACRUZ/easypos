@@ -63,6 +63,59 @@ function BuscadorUbicacionSiesa({ items, value, onChange, placeholder, placehold
   );
 }
 
+function EditorSucursalCliente({ sucursal, paises, onChange, onRemove }) {
+  const [paisCodigo, setPaisCodigo] = useState(() => sucursal.paisSiesaCodigo || sucursal.municipioSiesa?.departamento?.paisCodigo || '169');
+  const [departamentoCodigo, setDepartamentoCodigo] = useState(() => sucursal.departamentoSiesaCodigo || sucursal.municipioSiesa?.departamentoCodigo || '');
+  const [departamentos, setDepartamentos] = useState([]);
+  const [ciudades, setCiudades] = useState([]);
+
+  useEffect(() => {
+    let vigente = true;
+    if (!paisCodigo) { setDepartamentos([]); return () => { vigente = false; }; }
+    api.get(`/catalogos-siesa/departamentos?paisCodigo=${encodeURIComponent(paisCodigo)}`)
+      .then((lista) => { if (vigente) setDepartamentos(lista); });
+    return () => { vigente = false; };
+  }, [paisCodigo]);
+
+  useEffect(() => {
+    let vigente = true;
+    if (!departamentoCodigo) { setCiudades([]); return () => { vigente = false; }; }
+    api.get(`/catalogos-siesa/ciudades?departamentoCodigo=${encodeURIComponent(departamentoCodigo)}`)
+      .then((lista) => { if (vigente) setCiudades(lista); });
+    return () => { vigente = false; };
+  }, [departamentoCodigo]);
+
+  return (
+    <div className="field" style={{ gridColumn: '1 / -1', border: '1px solid var(--border)', padding: 12, gap: 10 }}>
+      <div className="row between" style={{ alignItems: 'center' }}>
+        <strong>{sucursal.nombre || 'Nueva sucursal'}</strong>
+        <button type="button" className="btn btn-red btn-sm" onClick={onRemove} title="Quitar sucursal"><Icon name="delete" size={16} /></button>
+      </div>
+      <div className="grid form-3col" style={{ gap: 10 }}>
+        <div className="field"><label>Nombre de la sede</label><input value={sucursal.nombre} onChange={(e) => onChange('nombre', e.target.value)} placeholder="Ej. Sede norte" /></div>
+        <div className="field"><label>Teléfono</label><input value={sucursal.telefono || ''} onChange={(e) => onChange('telefono', e.target.value)} /></div>
+        <div className="field"><label>Correo</label><input type="email" value={sucursal.email || ''} onChange={(e) => onChange('email', e.target.value)} /></div>
+        <div className="field"><label>Dirección</label><input value={sucursal.direccion || ''} onChange={(e) => onChange('direccion', e.target.value.toUpperCase())} /></div>
+        <div className="field"><label>Barrio</label><input value={sucursal.barrio || ''} onChange={(e) => onChange('barrio', e.target.value.toUpperCase())} /></div>
+        <div className="field"><label>País Siesa</label>
+          <select value={paisCodigo} onChange={(e) => { setPaisCodigo(e.target.value); setDepartamentoCodigo(''); onChange('municipioSiesaCodigo', ''); onChange('ciudad', ''); }}>
+            <option value="">Seleccionar país…</option>
+            {paises.map((pais) => <option key={pais.codigo} value={pais.codigo}>{pais.codigo} · {pais.nombre}</option>)}
+          </select>
+        </div>
+        <div className="field"><label>Departamento Siesa</label>
+          <BuscadorUbicacionSiesa items={departamentos} value={departamentoCodigo} placeholder="Seleccionar departamento…" placeholderBusqueda="Buscar departamento…" deshabilitado={!paisCodigo}
+            onChange={(codigo) => { setDepartamentoCodigo(codigo); onChange('municipioSiesaCodigo', ''); onChange('ciudad', ''); }} />
+        </div>
+        <div className="field"><label>Municipio Siesa</label>
+          <BuscadorUbicacionSiesa items={ciudades} value={sucursal.municipioSiesaCodigo || ''} placeholder="Seleccionar municipio…" placeholderBusqueda="Buscar municipio…" deshabilitado={!departamentoCodigo}
+            onChange={(codigo) => { const ciudad = ciudades.find((item) => item.codigo === codigo); onChange('municipioSiesaCodigo', codigo); onChange('ciudad', ciudad?.nombre || ''); }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const VACIO = {
   tipoCliente: 'NATURAL',
   tipoDocumento: 'CC',
@@ -71,7 +124,7 @@ const VACIO = {
   documento: '',
   nombres: '',
   apellidos: '',
-  sucursal: '',
+  sucursales: [],
   telefono: '',
   direccion: '',
   barrio: '',
@@ -164,7 +217,11 @@ export default function Clientes() {
       documento: c.documento || '',
       nombres: c.nombres || '',
       apellidos: c.apellidos || '',
-      sucursal: c.sucursal || '',
+      sucursales: (c.sucursales || []).map((sucursal) => ({
+        ...sucursal,
+        paisSiesaCodigo: sucursal.municipioSiesa?.departamento?.paisCodigo || '169',
+        departamentoSiesaCodigo: sucursal.municipioSiesa?.departamentoCodigo || '',
+      })),
       telefono: c.telefono || '',
       direccion: c.direccion || '',
       barrio: c.barrio || '',
@@ -198,12 +255,23 @@ export default function Clientes() {
     setModalAbierto(false);
   };
 
+  const actualizarSucursal = (indice, campo, valor) => setForm((actual) => ({
+    ...actual,
+    sucursales: actual.sucursales.map((sucursal, i) => i === indice ? { ...sucursal, [campo]: valor } : sucursal),
+  }));
+
+  const agregarSucursal = () => setForm((actual) => ({
+    ...actual,
+    sucursales: [...actual.sucursales, { nombre: '', telefono: '', direccion: '', barrio: '', ciudad: '', email: '', municipioSiesaCodigo: '', paisSiesaCodigo: '169', departamentoSiesaCodigo: '' }],
+  }));
+
   const guardar = async (e) => {
     e.preventDefault();
     if (!form.nombres.trim() && !form.razonSocial.trim()) return notify('Indica los nombres o la razón social', 'err');
     if (form.condicionPago === 'CREDITO' && !String(form.creditoDias).trim()) {
       return notify('Indica a cuántos días es el crédito', 'err');
     }
+    if (form.sucursales.some((sucursal) => !sucursal.nombre.trim())) return notify('Indica el nombre de cada sucursal', 'err');
     setGuardando(true);
     try {
       if (editando) {
@@ -358,9 +426,22 @@ export default function Clientes() {
                 <label>Apellidos</label>
                 <input value={form.apellidos} onChange={(e) => setForm({ ...form, apellidos: e.target.value.toUpperCase() })} placeholder="Apellidos" />
               </div>
-              <div className="field">
-                <label>Sucursal</label>
-                <input value={form.sucursal} onChange={(e) => setForm({ ...form, sucursal: e.target.value.toUpperCase() })} placeholder="Sucursal del cliente" />
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <div className="row between" style={{ alignItems: 'center' }}>
+                  <label style={{ margin: 0 }}>Sucursales del cliente</label>
+                  <button type="button" className="btn btn-sm" onClick={agregarSucursal}><Icon name="add" size={16} /> Agregar sucursal</button>
+                </div>
+                <div className="grid form-3col" style={{ gap: 12, marginTop: 8 }}>
+                  {form.sucursales.map((sucursal, indice) => (
+                    <EditorSucursalCliente
+                      key={sucursal.id || `nueva-${indice}`}
+                      sucursal={sucursal}
+                      paises={paisesSiesa}
+                      onChange={(campo, valor) => actualizarSucursal(indice, campo, valor)}
+                      onRemove={() => setForm((actual) => ({ ...actual, sucursales: actual.sucursales.filter((_, i) => i !== indice) }))}
+                    />
+                  ))}
+                </div>
               </div>
               <div className="field">
                 <label>Teléfono</label>

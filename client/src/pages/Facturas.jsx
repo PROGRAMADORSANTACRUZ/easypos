@@ -567,6 +567,22 @@ function ClientePicker({ clientes, value, onChange, onCreated }) {
   );
 }
 
+function SelectorSucursal({ cliente, value, onChange }) {
+  const sucursales = (cliente?.sucursales || []).filter((sucursal) => sucursal.activo);
+  if (!sucursales.length) return null;
+  return (
+    <div className="field">
+      <label>Sucursal del cliente</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)} required={sucursales.length > 1}>
+        {sucursales.length > 1 && <option value="">Seleccionar sucursal…</option>}
+        {sucursales.map((sucursal) => (
+          <option key={sucursal.id} value={sucursal.id}>{sucursal.id} · {sucursal.nombre}{sucursal.direccion ? ` · ${sucursal.direccion}` : ''}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export default function Facturas({ electronica = true }) {
   const claseDocumento = electronica ? 'FACTURA ELECTRONICA DE VENTA' : 'FACTURA DE VENTA (NO ELECTRONICA)';
   const formatoRecibo = electronica ? 'formatoFactura' : 'formatoFacturaVenta';
@@ -602,10 +618,12 @@ export default function Facturas({ electronica = true }) {
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [clientesSel, setClientesSel] = useState({}); // clienteId por pedidoId (mesa)
+  const [sucursalesSel, setSucursalesSel] = useState({}); // sucursalId por pedidoId
   const [directaAbierta, setDirectaAbierta] = useState(false);
   const [carrito, setCarrito] = useState([]); // items de la venta directa
   const [pagoDirecta, setPagoDirecta] = useState('EFECTIVO');
   const [cliente, setCliente] = useState(''); // clienteId seleccionado en venta directa
+  const [sucursalDirecta, setSucursalDirecta] = useState('');
   const [pagoRecibidoDirecta, setPagoRecibidoDirecta] = useState(''); // efectivo recibido en venta directa
   const [mixtoDirecta, setMixtoDirecta] = useState(false); // pago en 2 formas en venta directa
   const [pago2Directa, setPago2Directa] = useState('TARJETA'); // segunda forma de pago en venta directa
@@ -832,6 +850,11 @@ export default function Facturas({ electronica = true }) {
 
   // Busca el cliente seleccionado. La condición crédito/contado se define en el módulo Clientes.
   const clienteDe = (id) => clientes.find((c) => String(c.id) === String(id)) || null;
+  const sucursalIdPara = (clienteId, seleccionada) => {
+    const sucursales = (clienteDe(clienteId)?.sucursales || []).filter((sucursal) => sucursal.activo);
+    if (seleccionada && sucursales.some((sucursal) => sucursal.id === seleccionada)) return seleccionada;
+    return sucursales.length === 1 ? sucursales[0].id : null;
+  };
   const etiquetaCredito = (cli) => `CRÉDITO${cli?.creditoDias ? ` ${cli.creditoDias} días` : ''}`;
 
   const fecha = (d) => new Date(d).toLocaleString('es-CO');
@@ -869,6 +892,7 @@ export default function Facturas({ electronica = true }) {
           ...contextoDocumento,
           metodoPago: etiquetaCredito(cli),
           clienteId: cliId,
+          sucursalClienteId: sucursalIdPara(cliId, sucursalesSel[pedido.id]),
           credito: true,
           creditoDias: cli.creditoDias ?? null,
         });
@@ -912,6 +936,7 @@ export default function Facturas({ electronica = true }) {
         ...contextoDocumento,
         metodoPago: labelPago(esMixto, metodo, metodo2, monto2, total),
         clienteId: cliId,
+        sucursalClienteId: sucursalIdPara(cliId, sucursalesSel[pedido.id]),
         propina: prop,
       });
       notify(`Factura #${factura.id} generada: ${money(factura.total)}`);
@@ -967,6 +992,7 @@ export default function Facturas({ electronica = true }) {
         emision: emisionDivision,
         pagos: pagosDivision,
         clienteId,
+        sucursalClienteId: sucursalIdPara(clienteId, sucursalesSel[pedido.id]),
         propina,
       });
       const facturasNuevas = resultado.facturas || [];
@@ -1129,6 +1155,7 @@ export default function Facturas({ electronica = true }) {
           ...contextoDocumento,
           metodoPago: etiquetaCredito(cli),
           clienteId: cliente || null,
+          sucursalClienteId: sucursalIdPara(cliente, sucursalDirecta),
           credito: true,
           creditoDias: cli.creditoDias ?? null,
         });
@@ -1165,6 +1192,7 @@ export default function Facturas({ electronica = true }) {
         ...contextoDocumento,
         metodoPago: labelPago(mixtoDirecta, pagoDirecta, pago2Directa, pago2MontoDirecta, subtotalDirecta),
         clienteId: (cliente ?? idDefault) || null,
+        sucursalClienteId: sucursalIdPara(cliente ?? idDefault, sucursalDirecta),
         propina: propDirecta,
       });
       notify(`Factura #${factura.id} generada: ${money(factura.total)}`);
@@ -1456,10 +1484,15 @@ export default function Facturas({ electronica = true }) {
                     <ClientePicker
                       clientes={clientes}
                       value={clientesSel[p.id] ?? idDefault}
-                      onChange={(id) => setClientesSel({ ...clientesSel, [p.id]: id })}
+                      onChange={(id) => { setClientesSel({ ...clientesSel, [p.id]: id }); setSucursalesSel({ ...sucursalesSel, [p.id]: '' }); }}
                       onCreated={cargar}
                     />
                   </div>
+                  <SelectorSucursal
+                    cliente={clienteDe(clientesSel[p.id] ?? idDefault)}
+                    value={sucursalIdPara(clientesSel[p.id] ?? idDefault, sucursalesSel[p.id]) || ''}
+                    onChange={(id) => setSucursalesSel({ ...sucursalesSel, [p.id]: id })}
+                  />
                   {!credito && (
                     <button
                       type="button"
@@ -1974,8 +2007,13 @@ export default function Facturas({ electronica = true }) {
               <div>
                 <div className="field">
                   <label>Cliente</label>
-                  <ClientePicker clientes={clientes} value={cliente} onChange={setCliente} onCreated={cargar} />
+                  <ClientePicker clientes={clientes} value={cliente} onChange={(id) => { setCliente(id); setSucursalDirecta(''); }} onCreated={cargar} />
                 </div>
+                <SelectorSucursal
+                  cliente={clienteDe(cliente ?? idDefault)}
+                  value={sucursalIdPara(cliente ?? idDefault, sucursalDirecta) || ''}
+                  onChange={setSucursalDirecta}
+                />
                 {carrito.length === 0 ? (
                   <p className="empty">Agrega productos del menú.</p>
                 ) : (

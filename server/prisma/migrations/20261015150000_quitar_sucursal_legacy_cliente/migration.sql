@@ -1,0 +1,5 @@
+BEGIN;
+
+ALTER TABLE "Cliente" DROP COLUMN "Sucursal";
+
+COMMIT;

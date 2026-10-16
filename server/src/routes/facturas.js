@@ -45,7 +45,7 @@ function filtroCentrosUsuario(usuario) {
 }
 
 // Resuelve el cliente de una factura. Por defecto "Consumidor Final".
-async function resolverCliente(clienteId) {
+async function resolverCliente(clienteId, sucursalClienteId) {
   if (clienteId == null || clienteId === '') {
     return {
       clienteId: null,
@@ -60,20 +60,32 @@ async function resolverCliente(clienteId) {
       emailCliente: null,
     };
   }
-  const c = await prisma.cliente.findUnique({ where: { id: String(clienteId) } });
+  const c = await prisma.cliente.findUnique({
+    where: { id: String(clienteId) },
+    include: { sucursales: { where: { activo: true }, orderBy: { createdAt: 'asc' } } },
+  });
   if (!c) return resolverCliente(null);
   const nombre = c.razonSocial || c.nombre;
+  const sucursal = sucursalClienteId
+    ? c.sucursales.find((item) => item.id === String(sucursalClienteId))
+    : c.sucursales.length === 1 ? c.sucursales[0] : null;
+  if (sucursalClienteId && !sucursal) {
+    throw Object.assign(new Error('La sucursal seleccionada no pertenece al cliente o está inactiva.'), { status: 400 });
+  }
+  if (!sucursalClienteId && c.sucursales.length > 1) {
+    throw Object.assign(new Error('Selecciona la sucursal del cliente antes de facturar.'), { status: 400 });
+  }
   return {
     clienteId: c.id,
     nombre,
     numeroDocumentoCliente: c.numeroDocumento || c.documento || null,
     nombreCliente: nombre,
-    sucursalCliente: c.sucursal || null,
-    telefonoCliente: c.telefono || null,
-    direccionCliente: c.direccion || null,
-    barrioCliente: c.barrio || null,
-    ciudadCliente: c.ciudad || null,
-    emailCliente: c.email || null,
+    sucursalCliente: sucursal?.nombre || null,
+    telefonoCliente: sucursal?.telefono || c.telefono || null,
+    direccionCliente: sucursal?.direccion || c.direccion || null,
+    barrioCliente: sucursal?.barrio || c.barrio || null,
+    ciudadCliente: sucursal?.ciudad || c.ciudad || null,
+    emailCliente: sucursal?.email || c.email || null,
   };
 }
 
@@ -323,7 +335,7 @@ router.post('/dividir', wrap(async (req, res) => {
   const {
     pedidoId, electronica = true, modo, cantidadPartes, asignaciones,
     emision = 'SEPARADAS', pagos = [], metodoPago = 'EFECTIVO', clienteId, propina = 0,
-    companiaCodigo, centroOperacionCodigo,
+    sucursalClienteId, companiaCodigo, centroOperacionCodigo,
   } = req.body;
   if (!validarCentroFacturacion(req, res, companiaCodigo, centroOperacionCodigo)) return;
   const id = Number(pedidoId);
@@ -355,7 +367,9 @@ router.post('/dividir', wrap(async (req, res) => {
     throw error;
   }
 
-  const cliente = await resolverCliente(clienteId);
+  let cliente;
+  try { cliente = await resolverCliente(clienteId, sucursalClienteId); }
+  catch (error) { if (error.status) return res.status(error.status).json({ error: error.message }); throw error; }
   if (!Array.isArray(pagos) || pagos.length !== partesN) {
     return res.status(400).json({ error: 'Registra un pago por cada persona' });
   }
@@ -480,7 +494,7 @@ router.post('/dividir', wrap(async (req, res) => {
 // Facturar un pedido: el inventario ya se descontó al crear el pedido (cocina); aquí solo se cierra y cobra.
 // body: { pedidoId, metodoPago?, clienteId?, credito?, creditoDias?, propina? }
 router.post('/', wrap(async (req, res) => {
-  const { pedidoId, metodoPago, clienteId, credito, creditoDias, propina, electronica, companiaCodigo, centroOperacionCodigo } = req.body;
+  const { pedidoId, metodoPago, clienteId, sucursalClienteId, credito, creditoDias, propina, electronica, companiaCodigo, centroOperacionCodigo } = req.body;
   if (!validarCentroFacturacion(req, res, companiaCodigo, centroOperacionCodigo)) return;
   const id = Number(pedidoId);
 
@@ -506,7 +520,9 @@ router.post('/', wrap(async (req, res) => {
   const total = electronica === false ? precioProductos : redondear(subtotal + impuesto);
   const ivaPctPromedio = subtotal > 0 ? redondear((impuesto / subtotal) * 100) : 0;
 
-  const cli = await resolverCliente(clienteId);
+  let cli;
+  try { cli = await resolverCliente(clienteId, sucursalClienteId); }
+  catch (error) { if (error.status) return res.status(error.status).json({ error: error.message }); throw error; }
 
   const factura = await prisma.$transaction(async (tx) => {
     // Cerrar pedido, asignar cliente y liberar mesa (los domicilios no tienen mesa)
@@ -585,7 +601,7 @@ router.post('/', wrap(async (req, res) => {
 // body: { items: [{ productoId, cantidad }], metodoPago?, clienteId?, credito?, creditoDias?, propina?, electronica? }
 // electronica=false (ej. modulo "Factura de venta"): NO se reporta a Factus/DIAN, es solo un documento de venta interno.
 router.post('/directa', wrap(async (req, res) => {
-  const { items = [], metodoPago, clienteId, credito, creditoDias, propina, electronica, companiaCodigo, centroOperacionCodigo } = req.body;
+  const { items = [], metodoPago, clienteId, sucursalClienteId, credito, creditoDias, propina, electronica, companiaCodigo, centroOperacionCodigo } = req.body;
   if (!validarCentroFacturacion(req, res, companiaCodigo, centroOperacionCodigo)) return;
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Agrega al menos un producto' });
@@ -633,7 +649,9 @@ router.post('/directa', wrap(async (req, res) => {
   const total = electronica === false ? precioProductos : redondear(subtotal + impuesto);
   const ivaPctPromedio = subtotal > 0 ? redondear((impuesto / subtotal) * 100) : 0;
 
-  const cli = await resolverCliente(clienteId);
+  let cli;
+  try { cli = await resolverCliente(clienteId, sucursalClienteId); }
+  catch (error) { if (error.status) return res.status(error.status).json({ error: error.message }); throw error; }
 
   const factura = await prisma.$transaction(async (tx) => {
     for (const [itemId, cantidad] of requeridos.entries()) {
