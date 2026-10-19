@@ -10,6 +10,8 @@ import CierreCajaModal from '../components/CierreCajaModal.jsx';
 import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir, registrarEmpresa } from '../print.js';
 import { tipoDocumentoListo } from '../tipoDocumentoListo.js';
 import { diaColombia } from '../fechaComercial.js';
+import PagosMultiples from '../components/PagosMultiples.jsx';
+import { etiquetaPagos, resumirPagos } from '../pagosMultiples.js';
 
 // Número visible de la factura: prefijo + consecutivo DIAN, o el ID corto si aún no tiene numeración.
 function numeroDian(f) {
@@ -597,11 +599,7 @@ export default function Facturas({ electronica = true }) {
   };
   const [facturas, setFacturas] = useState([]);
   const [pendientes, setPendientes] = useState([]);
-  const [pagos, setPagos] = useState({}); // metodo de pago por pedidoId
-  const [recibido, setRecibido] = useState({}); // efectivo recibido por pedidoId
-  const [mixto, setMixto] = useState({}); // pago en 2 formas por pedidoId
-  const [pago2, setPago2] = useState({}); // segunda forma de pago por pedidoId
-  const [pago2Monto, setPago2Monto] = useState({}); // valor de la segunda forma por pedidoId
+  const [pagosPedidos, setPagosPedidos] = useState({});
   const [dividirCuenta, setDividirCuenta] = useState(false);
   const [modoDivision, setModoDivision] = useState('IGUALES');
   const [cantidadPartes, setCantidadPartes] = useState(2);
@@ -622,13 +620,9 @@ export default function Facturas({ electronica = true }) {
   const [sucursalesSel, setSucursalesSel] = useState({}); // sucursalId por pedidoId
   const [directaAbierta, setDirectaAbierta] = useState(false);
   const [carrito, setCarrito] = useState([]); // items de la venta directa
-  const [pagoDirecta, setPagoDirecta] = useState('EFECTIVO');
+  const [pagosDirecta, setPagosDirecta] = useState({ recibe: '', pagos: [] });
   const [cliente, setCliente] = useState(''); // clienteId seleccionado en venta directa
   const [sucursalDirecta, setSucursalDirecta] = useState('');
-  const [pagoRecibidoDirecta, setPagoRecibidoDirecta] = useState(''); // efectivo recibido en venta directa
-  const [mixtoDirecta, setMixtoDirecta] = useState(false); // pago en 2 formas en venta directa
-  const [pago2Directa, setPago2Directa] = useState('TARJETA'); // segunda forma de pago en venta directa
-  const [pago2MontoDirecta, setPago2MontoDirecta] = useState(''); // valor de la segunda forma en venta directa
   const [propinaDirecta, setPropinaDirecta] = useState(''); // propina en venta directa ('' = sugerir 10%)
   const [facturandoDirecta, setFacturandoDirecta] = useState(false);
   const [congeladas, setCongeladas] = useState([]);
@@ -931,23 +925,14 @@ export default function Facturas({ electronica = true }) {
       return;
     }
 
-    const metodo = pagos[pedido.id] || 'EFECTIVO';
-    const esMixto = !!mixto[pedido.id];
-    const recibidoVal = recibido[pedido.id] ?? '';
-    const metodo2 = pago2[pedido.id] || 'TARJETA';
-    const monto2 = pago2Monto[pedido.id] ?? '';
+    const pagoPedido = pagosPedidos[pedido.id] || { recibe: '', pagos: [] };
     const cobrarPropina = electronica && propinaOn[pedido.id] !== false;
     const prop = !cobrarPropina
       ? 0
       : (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(total));
     const totalPagar = total + prop;
-    if (esMixto) {
-      if (monto2 === '' || Number(monto2) <= 0) return notify(`Digita el valor de ${metodo2.toLowerCase()}`, 'err');
-      if (Number(monto2) >= total) return notify(`El valor de ${metodo2.toLowerCase()} debe ser menor al total`, 'err');
-    } else {
-      if (recibidoVal === '') return notify(metodo === 'EFECTIVO' ? 'Digita cuánto recibe en efectivo' : 'Digita el valor recibido', 'err');
-      if (Number(recibidoVal) < totalPagar) return notify(metodo === 'EFECTIVO' ? 'El efectivo recibido no puede ser menor al total a pagar' : 'El valor no puede ser menor al total a pagar', 'err');
-    }
+    const resumen = resumirPagos(pagoPedido.pagos, totalPagar);
+    if (pagoPedido.recibe !== '' || !resumen.valido) return notify('Asigna los importes a las formas de pago hasta cubrir el total', 'err');
     const ventana = abrirVentanaVacia();
     setProcesando(pedido.id);
     try {
@@ -955,13 +940,13 @@ export default function Facturas({ electronica = true }) {
         pedidoId: pedido.id,
         electronica,
         ...contextoDocumento,
-        metodoPago: labelPago(esMixto, metodo, metodo2, monto2, total),
+        metodoPago: etiquetaPagos(pagoPedido.pagos, totalPagar),
         clienteId: cliId,
         sucursalClienteId: sucursalIdPara(cliId, sucursalesSel[pedido.id]),
         propina: prop,
       });
       notify(`Factura #${factura.id} generada: ${money(factura.total)}`);
-      const recFinal = !esMixto && metodo === 'EFECTIVO' ? recibidoVal : null;
+      const recFinal = pagoPedido.pagos.some((pago) => pago.formaPago === 'EFECTIVO') ? resumen.recibido : null;
       setSel({ ...factura, _recibido: recFinal });
       setCobrando(null);
       await imprimirGenerada(factura, recFinal != null ? { recibido: recFinal } : null, ventana);
@@ -1045,11 +1030,6 @@ export default function Facturas({ electronica = true }) {
   const abrirCobro = (pedido) => {
     if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
-    if (pedido.tipo === 'DOMICILIO' && pedido.metodoPago && pagos[pedido.id] === undefined) {
-      const m = pedido.metodoPago.toUpperCase();
-      const conocido = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'].includes(m) ? m : 'EFECTIVO';
-      setPagos((prev) => ({ ...prev, [pedido.id]: conocido }));
-    }
     // Preselecciona el cliente registrado del domicilio para que la factura salga a su nombre
     if (pedido.clienteId && clientesSel[pedido.id] === undefined) {
       setClientesSel((prev) => ({ ...prev, [pedido.id]: pedido.clienteId }));
@@ -1069,11 +1049,7 @@ export default function Facturas({ electronica = true }) {
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
     setCarrito([]);
     setCliente(idDefault);
-    setPagoDirecta('EFECTIVO');
-    setPagoRecibidoDirecta('');
-    setMixtoDirecta(false);
-    setPago2Directa('TARJETA');
-    setPago2MontoDirecta('');
+    setPagosDirecta({ recibe: '', pagos: [] });
     setPropinaDirecta('');
     setFiltroCat('');
     setBusquedaProd('');
@@ -1139,7 +1115,7 @@ export default function Facturas({ electronica = true }) {
   const congelarDirecta = async () => {
     if (carrito.length === 0) return notify('Agrega al menos un producto', 'err');
     try {
-      const nueva = await api.post('/ventas-congeladas', { electronica, cliente, pago: pagoDirecta, items: carrito });
+      const nueva = await api.post('/ventas-congeladas', { electronica, cliente, pago: pagosDirecta.pagos[0]?.formaPago || 'EFECTIVO', items: carrito });
       setCongeladas((actuales) => [nueva, ...actuales]);
       setDirectaAbierta(false);
       notify('Venta congelada');
@@ -1153,7 +1129,7 @@ export default function Facturas({ electronica = true }) {
       await api.del(`/ventas-congeladas/${c.id}?electronica=${electronica}`);
       setCarrito(c.items);
       setCliente(c.cliente || idDefault);
-      setPagoDirecta(c.pago || 'EFECTIVO');
+      setPagosDirecta({ recibe: '', pagos: [] });
       setCongeladas((actuales) => actuales.filter((x) => x.id !== c.id));
       setDirectaAbierta(true);
     } catch (e) {
@@ -1215,16 +1191,8 @@ export default function Facturas({ electronica = true }) {
       return;
     }
 
-    if (mixtoDirecta) {
-      if (pago2MontoDirecta === '' || Number(pago2MontoDirecta) <= 0) return notify(`Digita el valor de ${pago2Directa.toLowerCase()}`, 'err');
-      if (Number(pago2MontoDirecta) >= subtotalDirecta) return notify(`El valor de ${pago2Directa.toLowerCase()} debe ser menor al total`, 'err');
-    } else if (pagoDirecta === 'EFECTIVO') {
-      if (pagoRecibidoDirecta === '') return notify('Digita cuánto recibe en efectivo', 'err');
-      if (Number(pagoRecibidoDirecta) < totalPagarDirecta) return notify('El efectivo recibido no puede ser menor al total a pagar', 'err');
-    } else {
-      if (pagoRecibidoDirecta === '') return notify('Digita el valor recibido', 'err');
-      if (Number(pagoRecibidoDirecta) < totalPagarDirecta) return notify('El valor no puede ser menor al total a pagar', 'err');
-    }
+    const resumen = resumirPagos(pagosDirecta.pagos, totalPagarDirecta);
+    if (pagosDirecta.recibe !== '' || !resumen.valido) return notify('Asigna los importes a las formas de pago hasta cubrir el total', 'err');
     const ventana = abrirVentanaVacia();
     setFacturandoDirecta(true);
     try {
@@ -1232,13 +1200,13 @@ export default function Facturas({ electronica = true }) {
         items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad })),
         electronica,
         ...contextoDocumento,
-        metodoPago: labelPago(mixtoDirecta, pagoDirecta, pago2Directa, pago2MontoDirecta, subtotalDirecta),
+        metodoPago: etiquetaPagos(pagosDirecta.pagos, totalPagarDirecta),
         clienteId: (cliente ?? idDefault) || null,
         sucursalClienteId: sucursalIdPara(cliente ?? idDefault, sucursalDirecta),
         propina: propDirecta,
       });
       notify(`Factura #${factura.id} generada: ${money(factura.total)}`);
-      const recDirecta = !mixtoDirecta && pagoDirecta === 'EFECTIVO' ? pagoRecibidoDirecta : null;
+      const recDirecta = pagosDirecta.pagos.some((pago) => pago.formaPago === 'EFECTIVO') ? resumen.recibido : null;
       setSel({ ...factura, _recibido: recDirecta });
       setDirectaAbierta(false);
       await imprimirGenerada(factura, recDirecta != null ? { recibido: recDirecta } : null, ventana);
@@ -1694,66 +1662,6 @@ export default function Facturas({ electronica = true }) {
                     </>
                   ) : (
                     <>
-                      <label className="pago-mixto-check">
-                        <input
-                          type="checkbox"
-                          checked={!!mixto[p.id]}
-                          onChange={(e) => setMixto({ ...mixto, [p.id]: e.target.checked })}
-                        />
-                        Pago en 2 formas
-                      </label>
-                      {!mixto[p.id] ? (
-                        <>
-                          <div className="field">
-                            <label>Método de pago</label>
-                            <select
-                              value={pagos[p.id] || 'EFECTIVO'}
-                              onChange={(e) => setPagos({ ...pagos, [p.id]: e.target.value })}
-                            >
-                              <option value="EFECTIVO">Efectivo</option>
-                              <option value="TARJETA">Tarjeta</option>
-                              <option value="TRANSFERENCIA">Transferencia</option>
-                            </select>
-                          </div>
-                          <div className="field">
-                            <label>{(pagos[p.id] || 'EFECTIVO') === 'EFECTIVO' ? 'Recibe' : 'Valor'}</label>
-                            <input
-                              type="number"
-                              min="0"
-                              placeholder="0"
-                              value={recibido[p.id] ?? ''}
-                              onChange={(e) => setRecibido({ ...recibido, [p.id]: e.target.value })}
-                            />
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="field">
-                            <label>Otra forma</label>
-                            <select
-                              value={pago2[p.id] || 'TARJETA'}
-                              onChange={(e) => setPago2({ ...pago2, [p.id]: e.target.value })}
-                            >
-                              <option value="TARJETA">Tarjeta</option>
-                              <option value="TRANSFERENCIA">Transferencia</option>
-                            </select>
-                          </div>
-                          <div className="field">
-                            <label>Valor {(pago2[p.id] || 'TARJETA').toLowerCase()}</label>
-                            <input
-                              type="number"
-                              min="0"
-                              placeholder="0"
-                              value={pago2Monto[p.id] ?? ''}
-                              onChange={(e) => setPago2Monto({ ...pago2Monto, [p.id]: e.target.value })}
-                            />
-                          </div>
-                          <div className="total-line grand">
-                            <span>Efectivo</span>
-                            <span>{money(Math.max(0, totalP - Number(pago2Monto[p.id] || 0)))}</span>
-                          </div>
-                        </>
-                      )}
                       {electronica && <label className="pago-mixto-check">
                         <input
                           type="checkbox"
@@ -1777,17 +1685,18 @@ export default function Facturas({ electronica = true }) {
                       <div className="total-line" style={{ marginBottom: 6 }}>
                         <span>Total a pagar</span><span>{money(totalPagarP)}</span>
                       </div>
-                      {!mixto[p.id] && (pagos[p.id] || 'EFECTIVO') === 'EFECTIVO' && recibido[p.id] !== undefined && recibido[p.id] !== '' && (
-                        <div className="total-line grand" style={{ marginBottom: 8 }}>
-                          <span>Vuelto</span>
-                          <span>{money(Math.max(0, Number(recibido[p.id]) - totalPagarP))}</span>
-                        </div>
-                      )}
+                      <PagosMultiples
+                        value={pagosPedidos[p.id]}
+                        onChange={(valor) => setPagosPedidos((actuales) => ({ ...actuales, [p.id]: valor }))}
+                        total={totalPagarP}
+                        sugerido={p.metodoPago?.toUpperCase()}
+                      />
                       <button
                         className="btn btn-green cobro-btn"
                         disabled={
                           procesando === p.id ||
-                          !pagoOk(!!mixto[p.id], recibido[p.id] ?? '', pago2Monto[p.id] ?? '', mixto[p.id] ? totalP : totalPagarP)
+                          (pagosPedidos[p.id]?.recibe ?? '') !== '' ||
+                          !resumirPagos(pagosPedidos[p.id]?.pagos || [], totalPagarP).valido
                         }
                         onClick={() => facturar(p)}
                       >
@@ -1992,7 +1901,7 @@ export default function Facturas({ electronica = true }) {
 
       {directaAbierta && (
         <div className="modal-overlay" {...overlayCierre(() => setDirectaAbierta(false))}>
-          <div className="modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal factura-directa-modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
             <div className="row between" style={{ marginBottom: 12 }}>
               <h3 style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 8 }}><Icon name="cart" size={18} /> Factura directa (para llevar)</h3>
               <button className="btn btn-sm" title="Cerrar" onClick={() => setDirectaAbierta(false)}><Icon name="close" size={16} /></button>
@@ -2092,15 +2001,6 @@ export default function Facturas({ electronica = true }) {
                   <span>Subtotal</span><span>{money(subtotalDirecta)}</span>
                 </div>
 
-                <label className="pago-mixto-check" style={{ marginTop: 12, display: creditoDirecta ? 'none' : undefined }}>
-                  <input
-                    type="checkbox"
-                    checked={mixtoDirecta}
-                    onChange={(e) => setMixtoDirecta(e.target.checked)}
-                  />
-                  Pago en 2 formas
-                </label>
-
                 {creditoDirecta ? (
                   <div className="field" style={{ marginTop: 12 }}>
                     <span className="badge blue">
@@ -2115,52 +2015,7 @@ export default function Facturas({ electronica = true }) {
                       </div>
                     )}
                   </div>
-                ) : !mixtoDirecta ? (
-                  <>
-                    <div className="field">
-                      <label>Método de pago</label>
-                      <select value={pagoDirecta} onChange={(e) => setPagoDirecta(e.target.value)}>
-                        <option value="EFECTIVO">Efectivo</option>
-                        <option value="TARJETA">Tarjeta</option>
-                        <option value="TRANSFERENCIA">Transferencia</option>
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label>{pagoDirecta === 'EFECTIVO' ? 'Recibe' : 'Valor'}</label>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={pagoRecibidoDirecta}
-                        onChange={(e) => setPagoRecibidoDirecta(e.target.value)}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="field">
-                      <label>Otra forma</label>
-                      <select value={pago2Directa} onChange={(e) => setPago2Directa(e.target.value)}>
-                        <option value="TARJETA">Tarjeta</option>
-                        <option value="TRANSFERENCIA">Transferencia</option>
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label>Valor {pago2Directa.toLowerCase()}</label>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={pago2MontoDirecta}
-                        onChange={(e) => setPago2MontoDirecta(e.target.value)}
-                      />
-                    </div>
-                    <div className="total-line grand">
-                      <span>Efectivo</span>
-                      <span>{money(Math.max(0, subtotalDirecta - Number(pago2MontoDirecta || 0)))}</span>
-                    </div>
-                  </>
-                )}
+                ) : null}
 
                 {!creditoDirecta && electronica && (
                   <>
@@ -2182,6 +2037,10 @@ export default function Facturas({ electronica = true }) {
                   </>
                 )}
 
+                {!creditoDirecta && (
+                  <PagosMultiples value={pagosDirecta} onChange={setPagosDirecta} total={totalPagarDirecta} />
+                )}
+
                 <div className="row" style={{ gap: 8, marginTop: 8 }}>
                   <button
                     className="btn"
@@ -2199,19 +2058,13 @@ export default function Facturas({ electronica = true }) {
                       carrito.length === 0 ||
                       (creditoDirecta
                         ? cupoExcedidoDirecta
-                        : !pagoOk(mixtoDirecta, pagoRecibidoDirecta, pago2MontoDirecta, mixtoDirecta ? subtotalDirecta : totalPagarDirecta))
+                        : pagosDirecta.recibe !== '' || !resumirPagos(pagosDirecta.pagos, totalPagarDirecta).valido)
                     }
                     onClick={facturarDirecta}
                   >
                     {creditoDirecta ? <><Icon name="receipt" size={16} /> Facturar a crédito</> : <><Icon name="cash" size={16} /> Facturar e imprimir</>} {money(creditoDirecta ? subtotalDirecta : totalPagarDirecta)}
                   </button>
                 </div>
-                {!creditoDirecta && !mixtoDirecta && pagoDirecta === 'EFECTIVO' && pagoRecibidoDirecta !== '' && (
-                  <div className="total-line grand" style={{ marginTop: 8 }}>
-                    <span>Vuelto</span>
-                    <span>{money(Math.max(0, Number(pagoRecibidoDirecta) - totalPagarDirecta))}</span>
-                  </div>
-                )}
               </div>
             </div>
           </div>

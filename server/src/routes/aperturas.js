@@ -13,7 +13,7 @@ const conRelaciones = { caja: true, usuario: true };
 // - Pago simple: el total al método indicado
 // La propina se recibe de contado: se suma al efectivo (o al método único si es
 // tarjeta/transferencia sin efectivo).
-function desglosarFactura(f) {
+export function desglosarFactura(f) {
   const m = String(f.metodoPago || '').trim();
   const propina = f.propina || 0;
   if (f.credito) {
@@ -25,11 +25,12 @@ function desglosarFactura(f) {
     const partes = [];
     for (const parte of m.split(' + ')) {
       const txt = parte.trim();
-      const monto = Number(txt.replace(/[^0-9]/g, '')) || 0;
+      const monto = Number(txt.replace(/[^0-9,]/g, '').replace(',', '.')) || 0;
       const metodo = txt.replace(/\s*\$?\s*[0-9.,]+\s*$/, '').trim().toUpperCase() || 'OTRO';
       partes.push({ metodo, monto });
     }
-    if (propina) {
+    const totalPagos = partes.reduce((suma, parte) => suma + parte.monto, 0);
+    if (propina && Math.abs(totalPagos - (f.total || 0)) < 0.01) {
       const ef = partes.find((p) => /^efectivo/i.test(p.metodo));
       if (ef) ef.monto += propina; else partes.push({ metodo: 'EFECTIVO', monto: propina });
     }

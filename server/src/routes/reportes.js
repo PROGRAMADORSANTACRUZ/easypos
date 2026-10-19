@@ -145,7 +145,7 @@ router.get('/', wrap(async (req, res) => {
       for (const parte of mp.split(' + ')) {
         const i = parte.indexOf('$');
         const metodo = (i >= 0 ? parte.slice(0, i) : parte).trim();
-        const monto = i >= 0 ? Number(parte.slice(i).replace(/[^\d]/g, '')) || 0 : 0;
+        const monto = i >= 0 ? Number(parte.slice(i).replace(/[^\d,]/g, '').replace(',', '.')) || 0 : 0;
         sumarForma(metodo, monto);
       }
     } else {
