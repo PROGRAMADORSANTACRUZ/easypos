@@ -935,6 +935,18 @@ tbody tr:last-child td { border-bottom: none; }
 .factura-directa-modal > .row h3 { min-width: 0; flex: 1; }
 
 .cobro-dividir-toggle { width: 100%; margin: 2px 0 12px; }
+.cocina-historial { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); min-width: 0; }
+.cocina-historial h2 { margin: 0; font-size: 18px; }
+.cocina-historial-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 16px 0; }
+.cocina-historial-filtros .field { min-width: 0; margin: 0; }
+.cocina-historial-filtros input, .cocina-historial-filtros select { width: 100%; min-width: 0; }
+.cocina-historial-tabla { width: 100%; overflow-x: auto; }
+.cocina-historial-tabla table { display: table; min-width: 900px; }
+.cocina-historial-tabla thead { display: table-header-group; }
+.cocina-historial-tabla tbody { display: table-row-group; }
+.cocina-historial-tabla tr { display: table-row; }
+.cocina-historial-tabla th, .cocina-historial-tabla td { display: table-cell; white-space: normal; vertical-align: top; }
+@media (max-width: 600px) { .cocina-historial-filtros .field:last-child { grid-column: 1 / -1; } }
 .cobro-dividir-toggle.is-active { border-color: var(--primary); color: var(--primary); }
 .split-segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-2); }
 .split-segmented button { min-height: 36px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
+import { ACCIONES_COCINA, combinarHistorialCocina, estadoPreparacion, filtroFechaCocina, registrarResultadoCocina } from '../historialCocina.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -15,7 +16,39 @@ router.get('/', wrap(async (req, res) => {
   const { listo } = req.query;
   const where = listo === undefined ? { listo: false } : { listo: listo === '1' || listo === 'true' };
   const items = await prisma.preparacionCocina.findMany({ where, include, orderBy: { consecutivo: 'asc' } });
-  res.json(items);
+  const eventos = items.length ? await prisma.auditoria.findMany({
+    where: { entidad: 'PreparacionCocina', entidadId: { in: items.map((item) => String(item.pedidoId)) }, accion: { in: ACCIONES_COCINA } },
+    orderBy: { createdAt: 'desc' }, distinct: ['entidadId'],
+  }) : [];
+  const ultimos = new Map(eventos.map((evento) => [evento.entidadId, evento]));
+  res.json(items.map((item) => ({ ...item, estadoCocina: estadoPreparacion(item, ultimos.get(String(item.pedidoId))) })));
+}));
+
+router.get('/historial', wrap(async (req, res) => {
+  const fecha = filtroFechaCocina(req.query.desde, req.query.hasta);
+  const [preparaciones, eventos] = await Promise.all([
+    prisma.preparacionCocina.findMany({ where: { listo: true, fechaListo: fecha }, include, orderBy: { fechaListo: 'desc' } }),
+    prisma.auditoria.findMany({
+      where: { entidad: 'PreparacionCocina', accion: { in: ACCIONES_COCINA }, createdAt: fecha },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
+  res.json(combinarHistorialCocina(preparaciones, eventos));
+}));
+
+router.put('/:pedidoId/resultado', wrap(async (req, res) => {
+  try {
+    const resultado = await registrarResultadoCocina(prisma, {
+      pedidoId: Number(req.params.pedidoId), estado: req.body.estado,
+      motivo: req.body.motivo, cocineroId: req.body.cocineroId,
+      usuarioId: req.headers['x-usuario-id'] ? String(req.headers['x-usuario-id']) : null,
+    });
+    res.json(resultado);
+  } catch (error) {
+    if (error.code === 'P2034') return res.status(409).json({ error: 'La comanda cambio; actualiza e intenta de nuevo' });
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    throw error;
+  }
 }));
 
 // Marca el pedido como listo para que el mesero lo recoja.
