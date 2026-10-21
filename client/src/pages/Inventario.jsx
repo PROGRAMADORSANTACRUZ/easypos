@@ -5,7 +5,7 @@ import { Icon } from '../icons.jsx';
 import { useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, EmptyState } from '../components/ui/index.jsx';
 
-const vacio = { codigo: '', nombre: '', unidad: 'unidad', stock: 0, stockMinimo: 0, costo: 0, cuentaContableId: '' };
+const vacio = { codigo: '', nombre: '', unidad: 'unidad', stock: 0, stockMinimo: 0, costo: 0 };
 
 // Columnas y filas del inventario para exportar
 function datosInventario(items) {
@@ -153,7 +153,6 @@ function exportarPDF(items, notify) {
 
 export default function Inventario() {
   const [items, setItems] = useState([]);
-  const [cuentas, setCuentas] = useState([]);
   const [form, setForm] = useState(vacio);
   const [editCosto, setEditCosto] = useState(null); // id del insumo con costo en edicion
   const [costoVal, setCostoVal] = useState('');
@@ -163,9 +162,7 @@ export default function Inventario() {
 
   const cargar = async () => {
     try {
-      const [ins, cts] = await Promise.all([api.get('/inventario'), api.get('/cuentas-contables')]);
-      setItems(ins);
-      setCuentas(cts);
+      setItems(await api.get('/inventario'));
     } catch (e) {
       notify(e.message, 'err');
     }
@@ -188,17 +185,6 @@ export default function Inventario() {
     }
   };
   const abrirNuevo = () => { setForm(vacio); setModalAbierto(true); };
-
-  // Amarra (o cambia) la cuenta contable de un insumo existente
-  const cambiarCuenta = async (item, cuentaContableId) => {
-    try {
-      await api.put(`/inventario/${item.id}`, { cuentaContableId: cuentaContableId || null });
-      notify('Cuenta contable actualizada');
-      cargar();
-    } catch (err) {
-      notify(err.message, 'err');
-    }
-  };
 
   const ajustar = async (item, cantidad) => {
     try {
@@ -264,7 +250,7 @@ export default function Inventario() {
         ) : (
           <table>
             <thead>
-              <tr><th>Referencia</th><th>Desc. Item</th><th>U.M.</th><th>Existencia</th><th>Costo</th><th>Cuenta contable</th><th>Ajuste</th><th></th></tr>
+              <tr><th>Referencia</th><th>Desc. Item</th><th>U.M.</th><th>Existencia</th><th>Costo</th><th>Ajuste</th><th></th></tr>
             </thead>
             <tbody>
               {items.map((it) => {
@@ -296,19 +282,6 @@ export default function Inventario() {
                           {money(it.costo)} <Icon name="edit" size={14} />
                         </button>
                       )}
-                    </td>
-                    <td>
-                      <select
-                        value={it.cuentaContableId || ''}
-                        onChange={(e) => cambiarCuenta(it, e.target.value)}
-                        style={{ maxWidth: 170 }}
-                        title={it.cuentaContable ? `${it.cuentaContable.codigo} · ${it.cuentaContable.nombre}` : 'Sin cuenta contable'}
-                      >
-                        <option value="">— Sin cuenta —</option>
-                        {cuentas.map((c) => (
-                          <option key={c.id} value={c.id}>{c.codigo} · {c.nombre}</option>
-                        ))}
-                      </select>
                     </td>
                     <td>
                       <div className="row">
@@ -362,15 +335,6 @@ export default function Inventario() {
             <div className="field">
               <label>Stock mínimo</label>
               <input type="number" value={form.stockMinimo} onChange={(e) => setForm({ ...form, stockMinimo: e.target.value })} />
-            </div>
-            <div className="field">
-              <label>Cuenta contable</label>
-              <select value={form.cuentaContableId} onChange={(e) => setForm({ ...form, cuentaContableId: e.target.value })}>
-                <option value="">— Sin cuenta —</option>
-                {cuentas.map((c) => (
-                  <option key={c.id} value={c.id}>{c.codigo} · {c.nombre}</option>
-                ))}
-              </select>
             </div>
           </form>
         </Modal>
