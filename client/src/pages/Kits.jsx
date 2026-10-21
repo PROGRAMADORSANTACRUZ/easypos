@@ -89,6 +89,7 @@ export default function Kits() {
   const [insumos, setInsumos] = useState([]);
   const [productoId, setProductoId] = useState('');
   const [receta, setReceta] = useState([]); // [{ itemId, cantidad }]
+  const [busqueda, setBusqueda] = useState('');
   const [modalAbierto, setModalAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const notify = useToast();
@@ -106,6 +107,11 @@ export default function Kits() {
 
   const kits = useMemo(() => productos.filter((p) => p.componentes?.length > 0), [productos]);
   const disponiblesParaKit = useMemo(() => productos.filter((p) => !p.componentes?.length), [productos]);
+  const termino = busqueda.trim().toLowerCase();
+  const kitsFiltrados = termino
+    ? kits.filter((producto) => [producto.codigo, producto.nombre, ...(producto.componentes || []).flatMap((componente) => [componente.item?.codigo, componente.item?.nombre])]
+      .some((valor) => String(valor || '').toLowerCase().includes(termino)))
+    : kits;
 
   const agregarLinea = () => setReceta([...receta, { itemId: '', cantidad: 1 }]);
   const actualizarLinea = (i, campo, valor) =>
@@ -163,6 +169,10 @@ export default function Kits() {
         actions={<Button variant="primary" icon="add" onClick={abrirNuevo} title="Nuevo kit" />}
       />
 
+      <div style={{ maxWidth: 450, marginBottom: 10 }}>
+        <input value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar por referencia, producto o insumo..." />
+      </div>
+
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {kits.length === 0 ? (
           <EmptyState
@@ -170,6 +180,8 @@ export default function Kits() {
             title="Sin kits"
             description="Arma tu primer kit con el botón “+” de arriba."
           />
+        ) : kitsFiltrados.length === 0 ? (
+          <EmptyState icon="kits" title="Sin resultados" description="Ningún kit o insumo coincide con la búsqueda." />
         ) : (
           <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           <table className="table">
@@ -182,7 +194,7 @@ export default function Kits() {
               </tr>
             </thead>
             <tbody>
-              {kits.map((p) => (
+              {kitsFiltrados.map((p) => (
                 <tr key={p.id}>
                   <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{p.nombre}</td>
                   <td>

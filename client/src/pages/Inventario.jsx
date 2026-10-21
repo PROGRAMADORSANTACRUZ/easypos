@@ -153,6 +153,7 @@ function exportarPDF(items, notify) {
 
 export default function Inventario() {
   const [items, setItems] = useState([]);
+  const [busqueda, setBusqueda] = useState('');
   const [form, setForm] = useState(vacio);
   const [editCosto, setEditCosto] = useState(null); // id del insumo con costo en edicion
   const [costoVal, setCostoVal] = useState('');
@@ -220,6 +221,11 @@ export default function Inventario() {
     }
   };
 
+  const termino = busqueda.trim().toLowerCase();
+  const itemsFiltrados = termino
+    ? items.filter((item) => [item.codigo, item.nombre].some((valor) => String(valor || '').toLowerCase().includes(termino)))
+    : items;
+
   return (
     <div>
       <PageHeader
@@ -240,6 +246,10 @@ export default function Inventario() {
         )}
       />
 
+      <div style={{ maxWidth: 450, marginBottom: 10 }}>
+        <input value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar por referencia o nombre..." />
+      </div>
+
       <div className="card">
         {items.length === 0 ? (
           <EmptyState
@@ -247,13 +257,15 @@ export default function Inventario() {
             title="Sin insumos"
             description="Crea tu primer insumo con el botón “+” de arriba."
           />
+        ) : itemsFiltrados.length === 0 ? (
+          <EmptyState icon="inventario" title="Sin resultados" description="Ningún insumo coincide con la búsqueda." />
         ) : (
           <table>
             <thead>
               <tr><th>Referencia</th><th>Desc. Item</th><th>U.M.</th><th>Existencia</th><th>Costo</th><th>Ajuste</th><th></th></tr>
             </thead>
             <tbody>
-              {items.map((it) => {
+              {itemsFiltrados.map((it) => {
                 const bajo = it.stock <= it.stockMinimo;
                 return (
                   <tr key={it.id}>

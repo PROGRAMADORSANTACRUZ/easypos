@@ -20,6 +20,7 @@ export default function Ensamble() {
   const [outputItemId, setOutputItemId] = useState('');
   const [outputQuantity, setOutputQuantity] = useState('');
   const [inputs, setInputs] = useState([nuevaLinea()]);
+  const [busqueda, setBusqueda] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const notify = useToast();
@@ -73,6 +74,15 @@ export default function Ensamble() {
 
   const insumoProducido = items.find((item) => String(item.id) === outputItemId);
   const insumosDisponibles = items.filter((item) => String(item.id) !== outputItemId);
+  const termino = busqueda.trim().toLowerCase();
+  const historialFiltrado = termino
+    ? historial.filter((ensamble) => [
+      ensamble.referencia,
+      ensamble.salida?.codigo,
+      ensamble.salida?.nombre,
+      ...(ensamble.entradas || []).flatMap((entrada) => [entrada.codigo, entrada.nombre]),
+    ].some((valor) => String(valor || '').toLowerCase().includes(termino)))
+    : historial;
 
   return (
     <div>
@@ -142,8 +152,13 @@ export default function Ensamble() {
 
       <section style={{ marginTop: 28 }}>
         <h2 style={{ fontSize: 18, margin: '0 0 12px' }}>Historial de ensambles</h2>
+        <div style={{ maxWidth: 450, marginBottom: 10 }}>
+          <input value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar por referencia o insumo..." />
+        </div>
         {historial.length === 0 ? (
           <EmptyState icon="kits" title="Sin ensambles registrados" description="Los lotes que registres aparecerán aquí." />
+        ) : historialFiltrado.length === 0 ? (
+          <EmptyState icon="kits" title="Sin resultados" description="Ningún ensamble coincide con la búsqueda." />
         ) : (
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             <table className="table">
@@ -151,7 +166,7 @@ export default function Ensamble() {
                 <tr><th>Fecha</th><th>Referencia</th><th>Insumo producido</th><th>Cantidad</th><th>Insumos consumidos</th></tr>
               </thead>
               <tbody>
-                {historial.map((ensamble) => (
+                {historialFiltrado.map((ensamble) => (
                   <tr key={ensamble.referencia}>
                     <td className="mini">{fechaLocal(ensamble.fecha)}</td>
                     <td className="mini">{ensamble.referencia}</td>
