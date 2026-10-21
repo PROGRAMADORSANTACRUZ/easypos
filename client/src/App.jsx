@@ -6,6 +6,7 @@ import Pedidos from './pages/Pedidos.jsx';
 import Repartidor from './pages/Repartidor.jsx';
 import TomarPedido from './pages/TomarPedido.jsx';
 import Inventario from './pages/Inventario.jsx';
+import Ensamble from './pages/Ensamble.jsx';
 import Bodegas from './pages/Bodegas.jsx';
 import Movimientos from './pages/Movimientos.jsx';
 import Caja from './pages/Caja.jsx';
@@ -128,6 +129,7 @@ export const NAV_GRUPOS = [
     items: [
       { permiso: 'productos.ver', ruta: '/productos', label: 'Productos', icon: 'productos' },
       { permiso: 'productos.ver', ruta: '/kits', label: 'Kits', icon: 'kits' },
+      { permiso: 'inventario.ver', ruta: '/ensamble', label: 'Ensamble', icon: 'kits' },
       { permiso: 'inventario.ver', ruta: '/inventario', label: 'Inventario', icon: 'inventario' },
       { permiso: 'bodegas.ver', ruta: '/bodegas', label: 'Bodegas', icon: 'bodegas' },
       { permiso: 'movimientos.ver', ruta: '/movimientos', label: 'Movimientos', icon: 'movimientos' },
@@ -436,6 +438,7 @@ export default function App() {
               {puede(user, 'cocina.ver') && <Route path="/cocina" element={<Cocina />} />}
               {puede(user, 'productos.ver') && <Route path="/productos" element={<Productos />} />}
               {puede(user, 'productos.ver') && <Route path="/kits" element={<Kits />} />}
+              {puede(user, 'inventario.ver') && <Route path="/ensamble" element={<Ensamble />} />}
               {puede(user, 'inventario.ver') && <Route path="/inventario" element={<Inventario />} />}
               {puede(user, 'bodegas.ver') && <Route path="/bodegas" element={<Bodegas />} />}
               {puede(user, 'movimientos.ver') && <Route path="/movimientos" element={<Movimientos />} />}
