@@ -123,9 +123,10 @@ export default function Productos() {
   };
 
   const q = busqueda.trim().toLowerCase();
+  const activos = productos.filter((p) => p.activo !== false);
   const filtrados = q
-    ? productos.filter((p) => p.nombre.toLowerCase().includes(q) || (p.codigo || '').toLowerCase().includes(q))
-    : productos;
+    ? activos.filter((p) => p.nombre.toLowerCase().includes(q) || (p.codigo || '').toLowerCase().includes(q))
+    : activos;
 
   return (
     <div>
@@ -150,6 +151,8 @@ export default function Productos() {
             title="Sin productos"
             description="Crea tu primer producto o kit con el botón “+” de arriba."
           />
+        ) : activos.length === 0 ? (
+          <EmptyState icon="productos" title="Sin productos activos" description="No hay productos activos en el catálogo." />
         ) : filtrados.length === 0 ? (
           <EmptyState icon="productos" title="Sin resultados" description="Ningún producto coincide con la búsqueda." />
         ) : (
