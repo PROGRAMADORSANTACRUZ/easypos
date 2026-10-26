@@ -23,8 +23,8 @@ export default function Productos() {
   const [foto, setFoto] = useState('');      // data URL de la imagen
   const [editId, setEditId] = useState(null); // producto en edicion (null = nuevo)
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [modalSiesaAbierto, setModalSiesaAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
-  const [sincronizandoSiesa, setSincronizandoSiesa] = useState(false);
   const notify = useToast();
 
   const cargar = async () => {
@@ -123,19 +123,6 @@ export default function Productos() {
     }
   };
 
-  const sincronizarSiesa = async () => {
-    try {
-      setSincronizandoSiesa(true);
-      const resultado = await api.post('/productos/siesa/sincronizar', {});
-      notify(`Siesa: ${resultado.creados} nuevos, ${resultado.actualizados} actualizados, ${resultado.omitidos} omitidos`);
-      await cargar();
-    } catch (err) {
-      notify(err.message, 'err');
-    } finally {
-      setSincronizandoSiesa(false);
-    }
-  };
-
   const productoEditado = productos.find((p) => p.id === editId);
 
   const q = busqueda.trim().toLowerCase();
@@ -151,7 +138,7 @@ export default function Productos() {
         subtitle="Catálogo de productos vendibles. Para armar la receta (insumos) de un kit, ve al módulo Kits."
         actions={(
           <>
-            <Button variant="secondary" onClick={sincronizarSiesa} loading={sincronizandoSiesa}>Sincronizar Siesa</Button>
+            <Button variant="secondary" onClick={() => setModalSiesaAbierto(true)}>Sincronizar Siesa</Button>
             <Button variant="primary" icon="add" onClick={abrirNuevo} title="Nuevo producto" />
           </>
         )}
@@ -215,6 +202,19 @@ export default function Productos() {
           </div>
         )}
       </div>
+
+      {modalSiesaAbierto && (
+        <Modal
+          title="Sincronizar catálogo Siesa"
+          onClose={() => setModalSiesaAbierto(false)}
+          footer={<Button variant="primary" onClick={() => setModalSiesaAbierto(false)}>Listo</Button>}
+        >
+          <p>Conecta la VPN en este equipo y ejecuta desde PowerShell, en la carpeta del proyecto:</p>
+          <pre><code>npm.cmd --prefix easypos/server run siesa:sync-local</code></pre>
+          <p>El proceso consulta solo la compañía 4, muestra cuántos artículos encontró y pide confirmación antes de importarlos.</p>
+          <p>Las contraseñas se solicitan en la terminal y no se muestran.</p>
+        </Modal>
+      )}
 
       {modalAbierto && (
         <Modal

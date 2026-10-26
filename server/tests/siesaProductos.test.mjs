@@ -65,8 +65,17 @@ test('actualiza datos Siesa del producto existente sin cambiar su precio', async
 test('rechaza referencias duplicadas para evitar asociaciones ambiguas', async () => {
   const prisma = crearPrisma();
   await assert.rejects(
-    sincronizarItemsSiesa(prisma, [itemSiesa, { ...itemSiesa, f120_id_cia: 5, f120_rowid: 21802 }]),
+    sincronizarItemsSiesa(prisma, [itemSiesa, { ...itemSiesa, f120_rowid: 21802 }]),
     /referencia duplicada 10105/,
+  );
+  assert.equal(prisma.llamadas.creados.length, 0);
+});
+
+test('rechaza artículos que no pertenecen a la compañía Siesa 4', async () => {
+  const prisma = crearPrisma();
+  await assert.rejects(
+    sincronizarItemsSiesa(prisma, [{ ...itemSiesa, f120_id_cia: 5 }]),
+    /compañía Siesa 4/,
   );
   assert.equal(prisma.llamadas.creados.length, 0);
 });

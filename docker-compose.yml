@@ -34,14 +34,6 @@ services:
       FACTUS_PASSWORD: ${FACTUS_PASSWORD:-}
       FACTUS_NUMBERING_RANGE_FACTURA: ${FACTUS_NUMBERING_RANGE_FACTURA:-}
       FACTUS_NUMBERING_RANGE_NOTA_CREDITO: ${FACTUS_NUMBERING_RANGE_NOTA_CREDITO:-}
-      SIESA_SQL_SERVER: ${SIESA_SQL_SERVER:-}
-      SIESA_SQL_PORT: ${SIESA_SQL_PORT:-1433}
-      SIESA_SQL_DATABASE: ${SIESA_SQL_DATABASE:-}
-      SIESA_SQL_USER: ${SIESA_SQL_USER:-}
-      SIESA_SQL_PASSWORD: ${SIESA_SQL_PASSWORD:-}
-      SIESA_SQL_ITEMS_TABLE: ${SIESA_SQL_ITEMS_TABLE:-dbo.t120_mc_items}
-      SIESA_SQL_ENCRYPT: ${SIESA_SQL_ENCRYPT:-true}
-      SIESA_SQL_TRUST_CERT: ${SIESA_SQL_TRUST_CERT:-false}
       # La inicializacion y el seed se ejecutan manualmente al crear una
       # instalacion; nunca al reiniciar un servicio con datos reales.
       RUN_DB_INIT: "false"
