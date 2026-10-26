@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { imprimirComandaPorEstacion } from '../impresionCocina.js';
+import { consultarItemsSiesa, sincronizarItemsSiesa } from '../siesaProductos.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -30,6 +31,12 @@ router.get('/', wrap(async (_req, res) => {
     },
   });
   res.json(productos.map((p) => ({ ...p, disponibles: disponibilidadKit(p) })));
+}));
+
+router.post('/siesa/sincronizar', wrap(async (_req, res) => {
+  const items = await consultarItemsSiesa();
+  const resultado = await sincronizarItemsSiesa(prisma, items);
+  res.json({ consultados: items.length, ...resultado });
 }));
 
 // Categorias

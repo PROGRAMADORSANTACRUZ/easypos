@@ -446,6 +446,17 @@ model Producto {
   esKit       Boolean         @default(false)
   activo      Boolean         @default(true) @map("Activo")
   foto        String?         // data URL o URL de imagen
+  siesaIdCia  String?         @db.VarChar(20) @map("SiesaIdCia")
+  siesaId     String?         @db.VarChar(50) @map("SiesaId")
+  siesaRowid  String?         @db.VarChar(50) @map("SiesaRowid")
+  siesaDescripcion String?    @map("SiesaDescripcion")
+  siesaDescripcionCorta String? @map("SiesaDescripcionCorta")
+  siesaIdGrupoImpositivo String? @db.VarChar(50) @map("SiesaIdGrupoImpositivo")
+  siesaIdTipoInv String?      @db.VarChar(50) @map("SiesaIdTipoInv")
+  siesaIndTipoItem Int?       @map("SiesaIndTipoItem")
+  siesaIndCompra Int?         @map("SiesaIndCompra")
+  siesaIndVenta Int?          @map("SiesaIndVenta")
+  siesaIndManufactura Int?    @map("SiesaIndManufactura")
   componentes KitComponente[]
   pedidoItems PedidoItem[]
   pedidosMesa PedidoMesa[]

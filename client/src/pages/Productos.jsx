@@ -24,6 +24,7 @@ export default function Productos() {
   const [editId, setEditId] = useState(null); // producto en edicion (null = nuevo)
   const [modalAbierto, setModalAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [sincronizandoSiesa, setSincronizandoSiesa] = useState(false);
   const notify = useToast();
 
   const cargar = async () => {
@@ -122,6 +123,21 @@ export default function Productos() {
     }
   };
 
+  const sincronizarSiesa = async () => {
+    try {
+      setSincronizandoSiesa(true);
+      const resultado = await api.post('/productos/siesa/sincronizar', {});
+      notify(`Siesa: ${resultado.creados} nuevos, ${resultado.actualizados} actualizados, ${resultado.omitidos} omitidos`);
+      await cargar();
+    } catch (err) {
+      notify(err.message, 'err');
+    } finally {
+      setSincronizandoSiesa(false);
+    }
+  };
+
+  const productoEditado = productos.find((p) => p.id === editId);
+
   const q = busqueda.trim().toLowerCase();
   const activos = productos.filter((p) => p.activo !== false);
   const filtrados = q
@@ -133,7 +149,12 @@ export default function Productos() {
       <PageHeader
         title="Productos"
         subtitle="Catálogo de productos vendibles. Para armar la receta (insumos) de un kit, ve al módulo Kits."
-        actions={<Button variant="primary" icon="add" onClick={abrirNuevo} title="Nuevo producto" />}
+        actions={(
+          <>
+            <Button variant="secondary" onClick={sincronizarSiesa} loading={sincronizandoSiesa}>Sincronizar Siesa</Button>
+            <Button variant="primary" icon="add" onClick={abrirNuevo} title="Nuevo producto" />
+          </>
+        )}
       />
 
       <div style={{ maxWidth: 360, marginBottom: 10 }}>
@@ -274,6 +295,24 @@ export default function Productos() {
                 </div>
               )}
             </div>
+            {productoEditado?.siesaId && (
+              <div className="field">
+                <label>Datos de Siesa</label>
+                <div className="grid form-4col" style={{ gap: 8 }}>
+                  <div><small>Compañía</small><div>{productoEditado.siesaIdCia || '—'}</div></div>
+                  <div><small>ID Siesa</small><div>{productoEditado.siesaId}</div></div>
+                  <div><small>Row ID</small><div>{productoEditado.siesaRowid || '—'}</div></div>
+                  <div><small>Descripción</small><div>{productoEditado.siesaDescripcion || '—'}</div></div>
+                  <div><small>Descripción corta</small><div>{productoEditado.siesaDescripcionCorta || '—'}</div></div>
+                  <div><small>Grupo impositivo</small><div>{productoEditado.siesaIdGrupoImpositivo || '—'}</div></div>
+                  <div><small>Tipo inventario</small><div>{productoEditado.siesaIdTipoInv || '—'}</div></div>
+                  <div><small>Tipo de ítem</small><div>{productoEditado.siesaIndTipoItem ?? '—'}</div></div>
+                  <div><small>Compra</small><div>{productoEditado.siesaIndCompra ?? '—'}</div></div>
+                  <div><small>Venta</small><div>{productoEditado.siesaIndVenta ?? '—'}</div></div>
+                  <div><small>Manufactura</small><div>{productoEditado.siesaIndManufactura ?? '—'}</div></div>
+                </div>
+              </div>
+            )}
           </form>
         </Modal>
       )}
