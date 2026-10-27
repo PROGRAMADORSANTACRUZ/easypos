@@ -43,27 +43,23 @@ export async function sincronizarItemsSiesa(prisma, items) {
     referencias.add(item.referencia);
   }
 
-  const resultado = { creados: 0, actualizados: 0, omitidos: items.length - productos.length };
+  const resultado = { actualizados: 0, omitidos: items.length - productos.length };
   await prisma.$transaction(async (tx) => {
     for (const item of productos) {
       const { referencia, indicadorVenta, nombre, ...datosSiesa } = item;
       const existente = await tx.producto.findUnique({ where: { codigo: referencia }, select: { id: true } });
+      if (!existente) {
+        resultado.omitidos += 1;
+        continue;
+      }
       const datosBase = {
-        codigo: referencia,
         nombre,
         ...datosSiesa,
         ...(indicadorVenta == null ? {} : { activo: indicadorVenta === 1 }),
       };
 
-      if (existente) {
-        await tx.producto.update({ where: { id: existente.id }, data: datosBase });
-        resultado.actualizados += 1;
-      } else {
-        await tx.producto.create({
-          data: { ...datosBase, precio: 0, costo: 0, iva: 0 },
-        });
-        resultado.creados += 1;
-      }
+      await tx.producto.update({ where: { id: existente.id }, data: datosBase });
+      resultado.actualizados += 1;
     }
   });
   return resultado;

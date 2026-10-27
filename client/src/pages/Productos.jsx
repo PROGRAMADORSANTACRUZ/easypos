@@ -211,7 +211,7 @@ export default function Productos() {
         >
           <p>Conecta la VPN en este equipo y ejecuta desde PowerShell, en la carpeta del proyecto:</p>
           <pre><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File easypos/server/scripts/sincronizar-items-siesa-local.ps1</code></pre>
-          <p>El proceso consulta solo la compañía 4, muestra cuántos artículos encontró y pide confirmación antes de importarlos.</p>
+          <p>El proceso consulta solo la compañía 4 y actualiza coincidencias por referencia. Los artículos que no existan en EasyPOS se omiten; no se crean productos nuevos ni se cambian precios.</p>
           <p>Las credenciales se escriben en una ventana local y no se guardan.</p>
         </Modal>
       )}

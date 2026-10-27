@@ -194,17 +194,16 @@ async function main() {
     }
 
     const token = await autenticar(restaurante, usuarioPos, passwordPos);
-    const total = { creados: 0, actualizados: 0, omitidos: 0 };
+    const total = { actualizados: 0, omitidos: 0 };
     const cantidadLotes = Math.ceil(items.length / TAMANO_LOTE);
     for (let inicio = 0; inicio < items.length; inicio += TAMANO_LOTE) {
       const lote = items.slice(inicio, inicio + TAMANO_LOTE);
       const resultado = await enviarLote(lote, token, restaurante);
-      total.creados += resultado.creados;
       total.actualizados += resultado.actualizados;
       total.omitidos += resultado.omitidos;
       console.log(`Lote ${Math.floor(inicio / TAMANO_LOTE) + 1}/${cantidadLotes} enviado`);
     }
-    console.log(`Finalizado: ${total.creados} creados, ${total.actualizados} actualizados, ${total.omitidos} omitidos.`);
+    console.log(`Finalizado: ${total.actualizados} actualizados, ${total.omitidos} omitidos (sin crear productos).`);
   } finally {
     if (pool) await pool.close().catch(() => {});
   }
