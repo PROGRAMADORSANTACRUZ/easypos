@@ -139,10 +139,10 @@ async function main() {
     const restaurante = await elegirRestaurante();
     console.log(`Restaurante: ${restaurante?.nombre || 'base predeterminada'}`);
 
-    const usuarioSiesa = (await preguntar('Usuario SQL Server [Carnesantacruz]: ')) || 'Carnesantacruz';
-    const passwordSiesa = await preguntarSecreto('Contraseña SQL Server (no se mostrará): ');
-    const usuarioPos = await preguntar('Usuario de EasyPOS: ');
-    const passwordPos = await preguntarSecreto('Contraseña de EasyPOS (no se mostrará): ');
+    const usuarioSiesa = process.env.SIESA_LOCAL_SQL_USER || (await preguntar('Usuario SQL Server [Carnesantacruz]: ')) || 'Carnesantacruz';
+    const passwordSiesa = process.env.SIESA_LOCAL_SQL_PASSWORD || await preguntarSecreto('Contraseña SQL Server (no se mostrará): ');
+    const usuarioPos = process.env.EASYPOS_LOCAL_USER || await preguntar('Usuario de EasyPOS: ');
+    const passwordPos = process.env.EASYPOS_LOCAL_PASSWORD || await preguntarSecreto('Contraseña de EasyPOS (no se mostrará): ');
 
     pool = new sql.ConnectionPool({
       server: SIESA_SERVER,
