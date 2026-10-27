@@ -22,7 +22,7 @@ function datosProductoSiesa(item) {
     siesaDescripcion: descripcion,
     siesaDescripcionCorta: valorTexto(item.f120_descripcion_corta),
     siesaIdGrupoImpositivo: valorTexto(item.f120_id_grupo_impositivo),
-    siesaIdTipoInv: valorTexto(item.f120_id_tipo_inv),
+    siesaIdTipoInv: valorTexto(item.f120_id_tipo_inv_serv),
     siesaIndTipoItem: valorIndicador(item.f120_ind_tipo_item),
     siesaIndCompra: valorIndicador(item.f120_ind_compra),
     siesaIndVenta: indicadorVenta,

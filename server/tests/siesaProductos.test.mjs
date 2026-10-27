@@ -34,7 +34,7 @@ const itemSiesa = {
   f120_descripcion: 'LECHONA X 300 GR',
   f120_descripcion_corta: 'LECHONA X 300 GR',
   f120_id_grupo_impositivo: 802,
-  f120_id_tipo_inv: 'IN350505',
+  f120_id_tipo_inv_serv: 'IN350505',
   f120_ind_tipo_item: 3,
   f120_ind_compra: 1,
   f120_ind_venta: 1,

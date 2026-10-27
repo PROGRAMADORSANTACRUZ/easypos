@@ -5,6 +5,7 @@ const API_BASE = (process.env.EASYPOS_API_BASE || 'https://pos.grupo-santacruz.c
 const SIESA_SERVER = 'siesa-m6-sqlsw-carnessantacruz.cu94u26q0284.us-east-1.rds.amazonaws.com';
 const SIESA_DATABASE = 'UnoEE_Carnesantacruz_Real';
 const SIESA_TABLE = '[dbo].[t120_mc_items]';
+const SIESA_CA_BUNDLE = 'https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem';
 const COMPANY_ID = 4;
 const TAMANO_LOTE = 250;
 const CAMPOS = [
@@ -15,7 +16,7 @@ const CAMPOS = [
   'f120_descripcion',
   'f120_descripcion_corta',
   'f120_id_grupo_impositivo',
-  'f120_id_tipo_inv',
+  'f120_id_tipo_inv_serv',
   'f120_ind_tipo_item',
   'f120_ind_compra',
   'f120_ind_venta',
@@ -132,6 +133,12 @@ async function enviarLote(items, token, restaurante) {
   return jsonRespuesta(respuesta);
 }
 
+async function cargarBundleCaSiesa() {
+  const respuesta = await fetch(SIESA_CA_BUNDLE);
+  if (!respuesta.ok) throw new Error('No se pudo obtener el certificado oficial de Amazon RDS');
+  return Buffer.from(await respuesta.arrayBuffer());
+}
+
 async function main() {
   let pool;
   try {
@@ -143,6 +150,7 @@ async function main() {
     const passwordSiesa = process.env.SIESA_LOCAL_SQL_PASSWORD || await preguntarSecreto('Contraseña SQL Server (no se mostrará): ');
     const usuarioPos = process.env.EASYPOS_LOCAL_USER || await preguntar('Usuario de EasyPOS: ');
     const passwordPos = process.env.EASYPOS_LOCAL_PASSWORD || await preguntarSecreto('Contraseña de EasyPOS (no se mostrará): ');
+    const caSiesa = await cargarBundleCaSiesa();
 
     pool = new sql.ConnectionPool({
       server: SIESA_SERVER,
@@ -150,11 +158,25 @@ async function main() {
       database: SIESA_DATABASE,
       user: usuarioSiesa,
       password: passwordSiesa,
-      options: { encrypt: true, trustServerCertificate: false },
+      options: {
+        encrypt: true,
+        trustServerCertificate: false,
+        cryptoCredentialsDetails: { ca: caSiesa },
+      },
       connectionTimeout: 15000,
       requestTimeout: 120000,
     });
     await pool.connect();
+    const metadata = await pool.request().query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 't120_mc_items' ORDER BY ORDINAL_POSITION",
+    );
+    const disponibles = metadata.recordset.map((fila) => String(fila.COLUMN_NAME));
+    const conjunto = new Set(disponibles.map((campo) => campo.toLowerCase()));
+    const faltantes = CAMPOS.filter((campo) => !conjunto.has(campo.toLowerCase()));
+    if (faltantes.length > 0) {
+      const similares = disponibles.filter((campo) => campo.toLowerCase().startsWith('f120_'));
+      throw new Error(`Campos no encontrados: ${faltantes.join(', ')}. Campos f120 disponibles: ${similares.join(', ')}`);
+    }
     const columnas = CAMPOS.map((campo) => `[${campo}]`).join(', ');
     const consulta = await pool.request()
       .input('companyId', sql.Int, COMPANY_ID)
