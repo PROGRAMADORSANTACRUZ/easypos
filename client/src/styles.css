@@ -362,6 +362,15 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 .crud-table-scroll:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .content .crud-table-scroll table { display: table; overflow: visible; }
 
+.inventario-tabla-scroll {
+  max-height: 65vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.inventario-tabla-scroll table { display: table; overflow: visible; }
+.inventario-tabla-scroll thead { position: sticky; top: 0; z-index: 2; }
+
 .tipos-documento-scroll {
   max-width: 100%;
   overflow-x: auto;

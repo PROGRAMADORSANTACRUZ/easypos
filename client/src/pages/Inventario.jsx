@@ -155,6 +155,7 @@ export default function Inventario() {
   const [items, setItems] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [form, setForm] = useState(vacio);
+  const [editId, setEditId] = useState(null);
   const [detalleSiesa, setDetalleSiesa] = useState(null);
   const [editCosto, setEditCosto] = useState(null); // id del insumo con costo en edicion
   const [costoVal, setCostoVal] = useState('');
@@ -171,14 +172,20 @@ export default function Inventario() {
   };
   useEffect(() => { cargar(); }, []);
 
-  const crear = async (e) => {
+  const guardar = async (e) => {
     e.preventDefault();
     try {
       setGuardando(true);
-      await api.post('/inventario', form);
+      if (editId == null) {
+        await api.post('/inventario', form);
+        notify('Insumo creado');
+      } else {
+        await api.put(`/inventario/${editId}`, form);
+        notify('Insumo actualizado');
+      }
       setForm(vacio);
+      setEditId(null);
       setModalAbierto(false);
-      notify('Insumo creado');
       cargar();
     } catch (err) {
       notify(err.message, 'err');
@@ -186,7 +193,19 @@ export default function Inventario() {
       setGuardando(false);
     }
   };
-  const abrirNuevo = () => { setForm(vacio); setModalAbierto(true); };
+  const abrirNuevo = () => { setEditId(null); setForm(vacio); setModalAbierto(true); };
+  const abrirEditar = (item) => {
+    setEditId(item.id);
+    setForm({
+      codigo: item.codigo || '',
+      nombre: item.nombre || '',
+      unidad: item.unidad || 'UNIDAD',
+      stock: item.stock ?? 0,
+      stockMinimo: item.stockMinimo ?? 0,
+      costo: item.costo ?? 0,
+    });
+    setModalAbierto(true);
+  };
 
   const ajustar = async (item, cantidad) => {
     try {
@@ -261,6 +280,7 @@ export default function Inventario() {
         ) : itemsFiltrados.length === 0 ? (
           <EmptyState icon="inventario" title="Sin resultados" description="Ningún insumo coincide con la búsqueda." />
         ) : (
+          <div className="inventario-tabla-scroll">
           <table>
             <thead>
               <tr><th>Referencia</th><th>Desc. Item</th><th>U.M.</th><th>Existencia</th><th>Costo</th><th>Ajuste</th><th></th></tr>
@@ -305,6 +325,7 @@ export default function Inventario() {
                     </td>
                     <td>
                       <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                        <button className="btn btn-sm" title="Editar insumo" onClick={() => abrirEditar(it)}><Icon name="edit" size={16} /></button>
                         {it.siesaId && <button className="btn btn-sm" title="Ver datos Siesa" onClick={() => setDetalleSiesa(it)}>Siesa</button>}
                         <button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminar(it)}><Icon name="delete" size={16} /></button>
                       </div>
@@ -314,6 +335,7 @@ export default function Inventario() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -345,17 +367,17 @@ export default function Inventario() {
 
       {modalAbierto && (
         <Modal
-          title="Nuevo insumo"
-          onClose={() => setModalAbierto(false)}
+          title={editId == null ? 'Nuevo insumo' : 'Editar insumo'}
+          onClose={() => { setModalAbierto(false); setEditId(null); }}
           size="md"
           footer={(
             <>
-              <Button variant="secondary" onClick={() => setModalAbierto(false)}>Cancelar</Button>
-              <Button variant="primary" type="submit" form="inv-form" loading={guardando}>Crear insumo</Button>
+              <Button variant="secondary" onClick={() => { setModalAbierto(false); setEditId(null); }}>Cancelar</Button>
+              <Button variant="primary" type="submit" form="inv-form" loading={guardando}>{editId == null ? 'Crear insumo' : 'Guardar cambios'}</Button>
             </>
           )}
         >
-          <form id="inv-form" onSubmit={crear}>
+          <form id="inv-form" onSubmit={guardar}>
             <div className="field">
               <label>Referencia</label>
               <input value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} placeholder="Código / referencia" />
