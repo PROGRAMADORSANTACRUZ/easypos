@@ -306,6 +306,10 @@ export default function Productos() {
                   <div><small>Descripción corta</small><div>{productoEditado.siesaDescripcionCorta || '—'}</div></div>
                   <div><small>Grupo impositivo</small><div>{productoEditado.siesaIdGrupoImpositivo || '—'}</div></div>
                   <div><small>Tipo inventario</small><div>{productoEditado.siesaIdTipoInv || '—'}</div></div>
+                  <div><small>Unidad inventario</small><div>{productoEditado.siesaIdUnidadInventario || '—'}</div></div>
+                  <div><small>Unidad orden</small><div>{productoEditado.siesaIdUnidadOrden || '—'}</div></div>
+                  <div><small>Segmento costo</small><div>{productoEditado.siesaIdSegmentoCosto || '—'}</div></div>
+                  <div><small>Usuario actualización</small><div>{productoEditado.siesaUsuarioActualizacion || '—'}</div></div>
                   <div><small>Tipo de ítem</small><div>{productoEditado.siesaIndTipoItem ?? '—'}</div></div>
                   <div><small>Compra</small><div>{productoEditado.siesaIndCompra ?? '—'}</div></div>
                   <div><small>Venta</small><div>{productoEditado.siesaIndVenta ?? '—'}</div></div>

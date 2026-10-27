@@ -35,6 +35,10 @@ const itemSiesa = {
   f120_descripcion_corta: 'LECHONA X 300 GR',
   f120_id_grupo_impositivo: 802,
   f120_id_tipo_inv_serv: 'IN350505',
+  f120_id_unidad_inventario: 'UND',
+  f120_id_unidad_orden: 'CAJ',
+  f120_id_segmento_costo: 'CAR',
+  f120_usuario_actualizacion: 'OPERADOR',
   f120_ind_tipo_item: 3,
   f120_ind_compra: 1,
   f120_ind_venta: 1,
@@ -56,6 +60,10 @@ test('actualiza datos Siesa del producto existente sin cambiar su precio', async
   assert.equal(prisma.llamadas.actualizados[0].id, 'producto-1');
   assert.equal(prisma.llamadas.actualizados[0].data.nombre, 'LECHONA X 300 GR');
   assert.equal(prisma.llamadas.actualizados[0].data.siesaId, '2595');
+  assert.equal(prisma.llamadas.actualizados[0].data.siesaIdUnidadInventario, 'UND');
+  assert.equal(prisma.llamadas.actualizados[0].data.siesaIdUnidadOrden, 'CAJ');
+  assert.equal(prisma.llamadas.actualizados[0].data.siesaIdSegmentoCosto, 'CAR');
+  assert.equal(prisma.llamadas.actualizados[0].data.siesaUsuarioActualizacion, 'OPERADOR');
   assert.equal('precio' in prisma.llamadas.actualizados[0].data, false);
 });
 
