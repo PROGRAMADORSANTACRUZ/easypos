@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sincronizarItemsSiesa } from '../src/siesaProductos.js';
 
-function crearPrisma(productos = []) {
+function crearPrisma(productos = [], inventarioItems = []) {
   const porCodigo = new Map(productos.map((producto) => [producto.codigo, producto]));
-  const llamadas = { creados: [], actualizados: [] };
+  const inventarioPorCodigo = new Map(inventarioItems.map((item) => [item.codigo, item]));
+  const llamadas = { creados: [], actualizados: [], inventarioActualizados: [] };
   const tx = {
     producto: {
       async findUnique({ where }) {
@@ -17,6 +18,15 @@ function crearPrisma(productos = []) {
       },
       async update({ where, data }) {
         llamadas.actualizados.push({ id: where.id, data });
+      },
+    },
+    inventarioItem: {
+      async findUnique({ where }) {
+        const item = inventarioPorCodigo.get(where.codigo);
+        return item ? { id: item.id } : null;
+      },
+      async update({ where, data }) {
+        llamadas.inventarioActualizados.push({ id: where.id, data });
       },
     },
   };
@@ -48,15 +58,16 @@ const itemSiesa = {
 test('omite referencias inexistentes y no crea productos', async () => {
   const prisma = crearPrisma();
   const resultado = await sincronizarItemsSiesa(prisma, [itemSiesa, { ...itemSiesa, f120_referencia: '' }]);
-  assert.deepEqual(resultado, { actualizados: 0, omitidos: 2 });
+  assert.deepEqual(resultado, { productosActualizados: 0, inventarioActualizados: 0, omitidos: 2 });
   assert.equal(prisma.llamadas.creados.length, 0);
   assert.equal(prisma.llamadas.actualizados.length, 0);
+  assert.equal(prisma.llamadas.inventarioActualizados.length, 0);
 });
 
 test('actualiza datos Siesa del producto existente sin cambiar su precio', async () => {
   const prisma = crearPrisma([{ id: 'producto-1', codigo: '10105', precio: 12500 }]);
   const resultado = await sincronizarItemsSiesa(prisma, [itemSiesa]);
-  assert.deepEqual(resultado, { actualizados: 1, omitidos: 0 });
+  assert.deepEqual(resultado, { productosActualizados: 1, inventarioActualizados: 0, omitidos: 0 });
   assert.equal(prisma.llamadas.actualizados[0].id, 'producto-1');
   assert.equal(prisma.llamadas.actualizados[0].data.nombre, 'LECHONA X 300 GR');
   assert.equal(prisma.llamadas.actualizados[0].data.siesaId, '2595');
@@ -65,6 +76,22 @@ test('actualiza datos Siesa del producto existente sin cambiar su precio', async
   assert.equal(prisma.llamadas.actualizados[0].data.siesaIdSegmentoCosto, 'CAR');
   assert.equal(prisma.llamadas.actualizados[0].data.siesaUsuarioActualizacion, 'OPERADOR');
   assert.equal('precio' in prisma.llamadas.actualizados[0].data, false);
+});
+
+test('actualiza insumos existentes por referencia y conserva sus datos operativos', async () => {
+  const inventario = { id: 21, codigo: '10105', nombre: 'LECHONA LOCAL', unidad: 'KILO', stock: 8, costo: 15000, cuentaContableId: 'cuenta-1' };
+  const prisma = crearPrisma([], [inventario]);
+  const resultado = await sincronizarItemsSiesa(prisma, [itemSiesa]);
+  assert.deepEqual(resultado, { productosActualizados: 0, inventarioActualizados: 1, omitidos: 0 });
+  const actualizado = prisma.llamadas.inventarioActualizados[0];
+  assert.equal(actualizado.id, 21);
+  assert.equal(actualizado.data.siesaDescripcion, 'LECHONA X 300 GR');
+  assert.equal(actualizado.data.siesaIdUnidadInventario, 'UND');
+  assert.equal('nombre' in actualizado.data, false);
+  assert.equal('unidad' in actualizado.data, false);
+  assert.equal('stock' in actualizado.data, false);
+  assert.equal('costo' in actualizado.data, false);
+  assert.equal('cuentaContableId' in actualizado.data, false);
 });
 
 test('rechaza referencias duplicadas para evitar asociaciones ambiguas', async () => {

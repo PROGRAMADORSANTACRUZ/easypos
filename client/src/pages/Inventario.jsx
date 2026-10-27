@@ -155,6 +155,7 @@ export default function Inventario() {
   const [items, setItems] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [form, setForm] = useState(vacio);
+  const [detalleSiesa, setDetalleSiesa] = useState(null);
   const [editCosto, setEditCosto] = useState(null); // id del insumo con costo en edicion
   const [costoVal, setCostoVal] = useState('');
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -302,7 +303,12 @@ export default function Inventario() {
                         <button className="btn btn-sm" onClick={() => ajustar(it, 10)}>+10</button>
                       </div>
                     </td>
-                    <td><button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminar(it)}><Icon name="delete" size={16} /></button></td>
+                    <td>
+                      <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                        {it.siesaId && <button className="btn btn-sm" title="Ver datos Siesa" onClick={() => setDetalleSiesa(it)}>Siesa</button>}
+                        <button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminar(it)}><Icon name="delete" size={16} /></button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -310,6 +316,32 @@ export default function Inventario() {
           </table>
         )}
       </div>
+
+      {detalleSiesa && (
+        <Modal
+          title={`Datos de Siesa · ${detalleSiesa.codigo || detalleSiesa.nombre}`}
+          onClose={() => setDetalleSiesa(null)}
+          footer={<Button variant="primary" onClick={() => setDetalleSiesa(null)}>Cerrar</Button>}
+        >
+          <div className="grid form-4col" style={{ gap: 10 }}>
+            <div><small>Compañía</small><div>{detalleSiesa.siesaIdCia || '—'}</div></div>
+            <div><small>ID Siesa</small><div>{detalleSiesa.siesaId || '—'}</div></div>
+            <div><small>Row ID</small><div>{detalleSiesa.siesaRowid || '—'}</div></div>
+            <div><small>Descripción</small><div>{detalleSiesa.siesaDescripcion || '—'}</div></div>
+            <div><small>Descripción corta</small><div>{detalleSiesa.siesaDescripcionCorta || '—'}</div></div>
+            <div><small>Grupo impositivo</small><div>{detalleSiesa.siesaIdGrupoImpositivo || '—'}</div></div>
+            <div><small>Tipo inventario</small><div>{detalleSiesa.siesaIdTipoInv || '—'}</div></div>
+            <div><small>Unidad inventario</small><div>{detalleSiesa.siesaIdUnidadInventario || '—'}</div></div>
+            <div><small>Unidad orden</small><div>{detalleSiesa.siesaIdUnidadOrden || '—'}</div></div>
+            <div><small>Segmento costo</small><div>{detalleSiesa.siesaIdSegmentoCosto || '—'}</div></div>
+            <div><small>Usuario actualización</small><div>{detalleSiesa.siesaUsuarioActualizacion || '—'}</div></div>
+            <div><small>Tipo de ítem</small><div>{detalleSiesa.siesaIndTipoItem ?? '—'}</div></div>
+            <div><small>Compra</small><div>{detalleSiesa.siesaIndCompra ?? '—'}</div></div>
+            <div><small>Venta</small><div>{detalleSiesa.siesaIndVenta ?? '—'}</div></div>
+            <div><small>Manufactura</small><div>{detalleSiesa.siesaIndManufactura ?? '—'}</div></div>
+          </div>
+        </Modal>
+      )}
 
       {modalAbierto && (
         <Modal

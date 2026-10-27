@@ -47,23 +47,33 @@ export async function sincronizarItemsSiesa(prisma, items) {
     referencias.add(item.referencia);
   }
 
-  const resultado = { actualizados: 0, omitidos: items.length - productos.length };
+  const resultado = { productosActualizados: 0, inventarioActualizados: 0, omitidos: items.length - productos.length };
   await prisma.$transaction(async (tx) => {
     for (const item of productos) {
       const { referencia, indicadorVenta, nombre, ...datosSiesa } = item;
-      const existente = await tx.producto.findUnique({ where: { codigo: referencia }, select: { id: true } });
-      if (!existente) {
+      const [producto, inventario] = await Promise.all([
+        tx.producto.findUnique({ where: { codigo: referencia }, select: { id: true } }),
+        tx.inventarioItem.findUnique({ where: { codigo: referencia }, select: { id: true } }),
+      ]);
+      if (!producto && !inventario) {
         resultado.omitidos += 1;
         continue;
       }
-      const datosBase = {
-        nombre,
-        ...datosSiesa,
-        ...(indicadorVenta == null ? {} : { activo: indicadorVenta === 1 }),
-      };
-
-      await tx.producto.update({ where: { id: existente.id }, data: datosBase });
-      resultado.actualizados += 1;
+      if (producto) {
+        await tx.producto.update({
+          where: { id: producto.id },
+          data: {
+            nombre,
+            ...datosSiesa,
+            ...(indicadorVenta == null ? {} : { activo: indicadorVenta === 1 }),
+          },
+        });
+        resultado.productosActualizados += 1;
+      }
+      if (inventario) {
+        await tx.inventarioItem.update({ where: { id: inventario.id }, data: datosSiesa });
+        resultado.inventarioActualizados += 1;
+      }
     }
   });
   return resultado;
