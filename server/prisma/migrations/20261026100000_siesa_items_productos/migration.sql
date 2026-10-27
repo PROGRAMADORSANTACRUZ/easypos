@@ -1,4 +1,4 @@
-ALTER TABLE "Productos"
+ALTER TABLE "Producto"
   ADD COLUMN "SiesaIdCia" VARCHAR(20),
   ADD COLUMN "SiesaId" VARCHAR(50),
   ADD COLUMN "SiesaRowid" VARCHAR(50),
