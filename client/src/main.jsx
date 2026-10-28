@@ -6,6 +6,7 @@ import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
+    {window.EASYPOS_DESKTOP && <div className="desktop-titlebar" aria-hidden="true" />}
     <BrowserRouter>
       <App />
     </BrowserRouter>

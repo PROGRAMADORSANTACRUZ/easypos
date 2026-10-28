@@ -89,7 +89,20 @@ body {
   color: var(--text);
 }
 
-.app { display: flex; min-height: 100vh; overflow-x: hidden; }
+.app { display: flex; min-height: var(--app-height, 100vh); overflow-x: hidden; }
+
+.desktop-app { --app-height: calc(100vh - 32px); }
+.desktop-app body { padding-top: 32px; }
+.desktop-titlebar {
+  position: fixed;
+  inset: 0 0 auto;
+  height: 32px;
+  z-index: 2147483647;
+  background: #1E1B18;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.desktop-app .topbar { top: 32px; }
 
 /* Barra superior: solo visible en móvil/tablet */
 .topbar { display: none; }
@@ -329,14 +342,14 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 .cuenta-panel {
   position: sticky;
   top: 0;
-  max-height: calc(100vh - 48px);
+  max-height: calc(var(--app-height, 100vh) - 48px);
   overflow-y: auto;
 }
 
 /* Panel de menu con barra de desplazamiento propia a la derecha */
 .menu-panel {
   min-width: 0;
-  max-height: calc(100vh - 48px);
+  max-height: calc(var(--app-height, 100vh) - 48px);
   overflow-y: auto;
   position: sticky;
   top: 0;
@@ -978,7 +991,7 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ===== Login split-screen ===== */
 .login-split {
-  min-height: 100vh;
+  min-height: var(--app-height, 100vh);
   display: grid;
   grid-template-columns: 1fr 1fr;
   background: var(--bg);
@@ -1416,8 +1429,8 @@ tbody tr:last-child td { border-bottom: none; }
   .sidebar {
     position: fixed;
     top: 0; left: 0;
-    height: 100vh;
-    height: 100dvh;
+    height: var(--app-height, 100vh);
+    height: var(--app-height, 100dvh);
     width: 280px;
     max-width: 84vw;
     transform: translateX(-100%);
@@ -1426,6 +1439,7 @@ tbody tr:last-child td { border-bottom: none; }
     overflow-y: auto;
   }
   .sidebar.open { transform: translateX(0); box-shadow: 0 0 40px rgba(0, 0, 0, .5); }
+  .desktop-app .sidebar { top: 32px; }
   .sidebar-backdrop {
     display: block;
     position: fixed;

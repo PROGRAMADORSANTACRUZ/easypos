@@ -2,25 +2,29 @@
 // El backend (API JSON pura) y el frontend (estático) corren en procesos/puertos
 // separados: si el backend falla, la interfaz sigue sirviéndose y puede avisarle al
 // usuario en vez de dejar la ventana en blanco.
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell } = require('electron');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const http = require('node:http');
 const { crearServidorEstatico } = require('./static-server.js');
 
 const API_PORT = process.env.PORT || 4010;
-const API_URL = `http://localhost:${API_PORT}`;
+const API_ORIGIN = app.isPackaged
+  ? (process.env.EASYPOS_API_URL || 'https://pos.grupo-santacruz.com').replace(/\/+$/, '')
+  : `http://localhost:${API_PORT}`;
 const CLIENT_PORT = process.env.CLIENT_PORT || 4011;
-const CLIENT_URL = `http://localhost:${CLIENT_PORT}`;
+const CLIENT_URL = `http://127.0.0.1:${CLIENT_PORT}`;
 const serverDir = path.join(__dirname, '..', 'server');
-const clientDist = process.env.CLIENT_DIST || path.join(__dirname, '..', 'client', 'dist');
+const clientDist = process.env.CLIENT_DIST || (
+  app.isPackaged ? path.join(__dirname, 'web') : path.join(__dirname, '..', 'client', 'dist')
+);
 
 let serverProcess = null;
 let staticServer = null;
 let mainWindow = null;
 
 function startServer() {
-  serverProcess = spawn(process.execPath, [path.join(serverDir, 'src', 'index.js')], {
+  serverProcess = spawn(process.env.EASYPOS_NODE || 'node', [path.join(serverDir, 'src', 'index.js')], {
     cwd: serverDir,
     env: { ...process.env, PORT: String(API_PORT) },
     stdio: 'inherit',
@@ -58,6 +62,14 @@ function createWindow() {
     height: 900,
     show: false,
     title: 'EASYPOS',
+    icon: path.join(__dirname, 'build', 'icon.ico'),
+    backgroundColor: '#141210',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#1E1B18',
+      symbolColor: '#EDDFCA',
+      height: 32,
+    },
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -80,12 +92,21 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  startServer();
-  staticServer = await crearServidorEstatico({ clientDist, apiUrl: `${API_URL}/api`, port: CLIENT_PORT });
-  try {
-    await waitForServer(API_URL);
-  } catch (err) {
-    console.error('[EASYPOS]', err.message);
+  Menu.setApplicationMenu(null);
+  app.setAppUserModelId('com.gruposantacruz.easypos');
+  if (!app.isPackaged) startServer();
+  staticServer = await crearServidorEstatico({
+    clientDist,
+    apiUrl: app.isPackaged ? `${CLIENT_URL}/api` : `${API_ORIGIN}/api`,
+    apiProxyUrl: app.isPackaged ? API_ORIGIN : null,
+    port: CLIENT_PORT,
+  });
+  if (!app.isPackaged) {
+    try {
+      await waitForServer(API_ORIGIN);
+    } catch (err) {
+      console.error('[EASYPOS]', err.message);
+    }
   }
   createWindow();
 

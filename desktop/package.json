@@ -5,9 +5,60 @@
   "main": "main.js",
   "type": "commonjs",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "test": "node --test tests/*.test.js",
+    "build:client": "npm --prefix ../client run build",
+    "copy:client": "node copy-client.js",
+    "build:branding": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File build-branding.ps1",
+    "prepare:desktop": "npm run build:branding && npm run build:client && npm run copy:client",
+    "pack": "npm run prepare:desktop && electron-builder --dir",
+    "dist": "npm run prepare:desktop && electron-builder --win"
   },
   "devDependencies": {
-    "electron": "^33.2.1"
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.gruposantacruz.easypos",
+    "productName": "EASYPOS",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "static-server.js",
+      "build/icon.ico",
+      "web/**"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "EASYPOS",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeader": "build/header.bmp",
+      "installerSidebar": "build/sidebar.bmp",
+      "uninstallerSidebar": "build/sidebar.bmp",
+      "include": "build/installer.nsh",
+      "installerLanguages": ["es_ES"],
+      "language": "3082"
+    },
+    "artifactName": "EASYPOS-Setup-${version}.${ext}"
   }
 }

@@ -70,6 +70,42 @@ npm run dev                 # app en http://localhost:5173
 
 Abre <http://localhost:5173> y empieza a tomar pedidos.
 
+## App de escritorio para Windows
+
+La app de escritorio empaqueta el frontend con Electron y se conecta a la API
+de produccion en `https://pos.grupo-santacruz.com`. La conexion se hace por un
+proxy local para conservar la sesion segura por cookies. Requiere internet y
+una cuenta de EASYPOS; no instala una base de datos local.
+
+Para generar el instalador NSIS x64, instala las dependencias del cliente y del
+empaquetador y ejecuta:
+
+```powershell
+cd client
+npm install
+cd ../desktop
+npm install
+npm run dist
+```
+
+El instalador sin firma digital queda en `desktop/release/EASYPOS-Setup-1.0.0.exe`;
+Windows puede mostrar una advertencia de SmartScreen al instalarlo.
+El asistente esta en espanol e incluye el logo del login, colores de marca,
+progreso real de instalacion y acceso para abrir el POS al finalizar.
+Se instala para todos los usuarios del equipo: al aceptar el permiso de Windows
+comienza directamente la instalacion, sin bienvenida ni seleccion de cuenta o
+carpeta. En la pantalla final, la opcion de abrir el POS tiene texto blanco.
+No descarga el programa: el instalador ya contiene todos sus archivos.
+`npm run build:branding` regenera el icono multirresolucion y las imagenes del
+asistente desde `client/public/logo-claro.png` (requiere Windows).
+El asistente declara compatibilidad DPI y usa ilustraciones a 4x (panel de
+656 x 1256 y cabecera de 600 x 228 pixeles) para conservar nitidez en pantallas
+con escalado de Windows. Los textos y controles se dibujan al DPI del sistema.
+La app oculta el menu y el titulo de Electron, conserva los controles nativos
+de minimizar, maximizar/restaurar y cerrar, y permite arrastrar la franja superior.
+Para apuntar la app a otra API, define `EASYPOS_API_URL` con el origen HTTP(S)
+de la API antes de iniciar la app (por defecto, `https://pos.grupo-santacruz.com`).
+
 ## Configuración
 
 En `server/.env`:
