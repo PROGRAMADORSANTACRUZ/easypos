@@ -4,12 +4,13 @@
 # Dominios: pos.grupo-santacruz.com (principal) y easypos.grupo-santacruz.com (alias).
 #
 # Uso:
-#   ./deploy.sh SERVICE_NAME
+#   ./deploy.sh [SERVICE_NAME]
+# Si no se pasa SERVICE_NAME, usa el servicio de EASYPOS en Dokploy.
 # Obtén el nombre real con: docker service ls --format '{{.Name}}'
 
 set -euo pipefail
 
-SERVICE_NAME="${1:-}"
+SERVICE_NAME="${1-posgruposantacruz-5wzjke}"
 if [ -z "$SERVICE_NAME" ]; then
   echo "Uso: ./deploy.sh NOMBRE_REAL_DEL_SERVICIO" >&2
   echo "Lista de servicios disponibles:" >&2
