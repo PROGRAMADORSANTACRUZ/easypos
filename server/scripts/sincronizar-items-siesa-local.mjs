@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline';
 import sql from 'mssql';
 
-const API_BASE = (process.env.EASYPOS_API_BASE || 'https://pos.grupo-santacruz.com/api').replace(/\/$/, '');
+const API_BASE = (process.env.POS_API_BASE || 'https://pos.grupo-santacruz.com/api').replace(/\/$/, '');
 const SIESA_SERVER = 'siesa-m6-sqlsw-carnessantacruz.cu94u26q0284.us-east-1.rds.amazonaws.com';
 const SIESA_DATABASE = 'UnoEE_Carnesantacruz_Real';
 const SIESA_TABLE = '[dbo].[t120_mc_items]';
@@ -90,7 +90,7 @@ async function elegirRestaurante() {
   });
   const seleccion = restaurantes.length === 1
     ? '1'
-    : await preguntar('Número del restaurante EasyPOS: ');
+    : await preguntar('Número del restaurante POS: ');
   const restaurante = restaurantes[Number(seleccion) - 1];
   if (!restaurante) throw new Error('Selecciona un restaurante válido');
   return restaurante;
@@ -146,14 +146,14 @@ async function cargarBundleCaSiesa() {
 async function main() {
   let pool;
   try {
-    console.log(`EasyPOS: ${API_BASE}`);
+    console.log(`POS: ${API_BASE}`);
     const restaurante = await elegirRestaurante();
     console.log(`Restaurante: ${restaurante?.nombre || 'base predeterminada'}`);
 
     const usuarioSiesa = process.env.SIESA_LOCAL_SQL_USER || (await preguntar('Usuario SQL Server [Carnesantacruz]: ')) || 'Carnesantacruz';
     const passwordSiesa = process.env.SIESA_LOCAL_SQL_PASSWORD || await preguntarSecreto('Contraseña SQL Server (no se mostrará): ');
-    const usuarioPos = process.env.EASYPOS_LOCAL_USER || await preguntar('Usuario de EasyPOS: ');
-    const passwordPos = process.env.EASYPOS_LOCAL_PASSWORD || await preguntarSecreto('Contraseña de EasyPOS (no se mostrará): ');
+    const usuarioPos = process.env.POS_LOCAL_USER || await preguntar('Usuario de POS: ');
+    const passwordPos = process.env.POS_LOCAL_PASSWORD || await preguntarSecreto('Contraseña de POS (no se mostrará): ');
     const caSiesa = await cargarBundleCaSiesa();
 
     pool = new sql.ConnectionPool({
@@ -192,8 +192,8 @@ async function main() {
     if (items.length === 0) throw new Error('Siesa no devolvió artículos para la compañía 4');
     validarReferencias(items);
     console.log(`Artículos consultados en Siesa, compañía 4: ${items.length}`);
-    if ((await preguntar('¿Enviar estos artículos a EasyPOS? (s/N): ')).toLowerCase() !== 's') {
-      console.log('Importación cancelada; no se modificó EasyPOS.');
+    if ((await preguntar('¿Enviar estos artículos a POS? (s/N): ')).toLowerCase() !== 's') {
+      console.log('Importación cancelada; no se modificó POS.');
       return;
     }
 

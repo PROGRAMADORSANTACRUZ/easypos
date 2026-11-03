@@ -1,4 +1,4 @@
-// EASYPOS - Esquema de base de datos
+// POS - Esquema de base de datos
 // Documentacion: https://pris.ly/d/prisma-schema
 
 generator client {

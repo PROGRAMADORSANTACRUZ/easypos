@@ -70,7 +70,6 @@ import { restringirModuloRestaurante } from './modulosRestaurante.js';
 const app = express();
 const corsOrigins = new Set([
   'https://pos.grupo-santacruz.com',
-  'https://easypos.grupo-santacruz.com',
   ...(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
 ]);
 app.use(cors({
@@ -90,7 +89,7 @@ app.use(mayusculas);
 app.use(resolverTenant);
 app.use(restringirModuloRestaurante);
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, servicio: 'EASYPOS API' }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, servicio: 'POS API' }));
 
 // Rutas protegidas: requieren sesion (JWT) y, cuando el modulo tiene permisos
 // definidos en el catalogo (ver server/src/tenantSeed.js), el permiso correspondiente.
@@ -168,7 +167,7 @@ app.use((err, _req, res, _next) => {
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`EASYPOS API escuchando en http://localhost:${PORT}`);
+  console.log(`POS API escuchando en http://localhost:${PORT}`);
   // Precalienta la conexion a la DB para que la primera consulta no pague el costo de conexion.
   prisma.$connect().catch((e) => console.error('No se pudo precalentar la DB:', e.message));
 });

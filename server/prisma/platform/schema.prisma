@@ -1,4 +1,4 @@
-// EASYPOS - Esquema de la base de PLATAFORMA (registro central de restaurantes/tenants)
+// POS - Esquema de la base de PLATAFORMA (registro central de restaurantes/tenants)
 // Cada restaurante tiene su propia base de datos (misma estructura que schema.prisma);
 // aqui solo se guarda el directorio de restaurantes y como conectarse a cada uno.
 

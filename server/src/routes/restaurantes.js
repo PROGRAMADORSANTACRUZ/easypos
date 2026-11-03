@@ -111,7 +111,7 @@ router.post('/', wrap(async (req, res) => {
     return res.status(409).json({ error: `Ya existe un restaurante con el identificador "${slug}"` });
   }
 
-  const dbNombre = `easypos_${slug.replace(/-/g, '_')}`;
+  const dbNombre = `pos_${slug.replace(/-/g, '_')}`;
   const dbUrl = construirDbUrl(process.env.DATABASE_URL, dbNombre);
 
   try {

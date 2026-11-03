@@ -1,4 +1,4 @@
-# EASYPOS 🍔
+# POS 🍔
 
 Punto de venta (POS) para restaurantes: toma pedidos por **mesa** y **mesera**, pasa
 de inmediato a **facturación**, maneja **inventario** y permite **armar kits** (recetas).
@@ -24,7 +24,7 @@ Ejemplo de kit: una hamburguesa = 1 bollo + 1 carne.
 ## Estructura
 
 ```
-EASYPOS/
+POS/
 ├─ docker-compose.yml      # PostgreSQL listo para usar
 ├─ server/                 # API REST (Express + Prisma)
 │  ├─ prisma/schema.prisma # Modelo de datos
@@ -75,7 +75,7 @@ Abre <http://localhost:5173> y empieza a tomar pedidos.
 La app de escritorio empaqueta el frontend con Electron y se conecta a la API
 de produccion en `https://pos.grupo-santacruz.com`. La conexion se hace por un
 proxy local para conservar la sesion segura por cookies. Requiere internet y
-una cuenta de EASYPOS; no instala una base de datos local.
+una cuenta de POS; no instala una base de datos local.
 
 Para generar el instalador NSIS x64, instala las dependencias del cliente y del
 empaquetador y ejecuta:
@@ -88,7 +88,7 @@ npm install
 npm run dist
 ```
 
-El instalador sin firma digital queda en `desktop/release/EASYPOS-Setup-1.0.0.exe`;
+El instalador sin firma digital queda en `desktop/release/POS-Setup-1.0.0.exe`;
 Windows puede mostrar una advertencia de SmartScreen al instalarlo.
 El asistente esta en espanol e incluye el logo del login, colores de marca,
 progreso real de instalacion y acceso para abrir el POS al finalizar.
@@ -103,7 +103,7 @@ El asistente declara compatibilidad DPI y usa ilustraciones a 4x (panel de
 con escalado de Windows. Los textos y controles se dibujan al DPI del sistema.
 La app oculta el menu y el titulo de Electron, conserva los controles nativos
 de minimizar, maximizar/restaurar y cerrar, y permite arrastrar la franja superior.
-Para apuntar la app a otra API, define `EASYPOS_API_URL` con el origen HTTP(S)
+Para apuntar la app a otra API, define `POS_API_URL` con el origen HTTP(S)
 de la API antes de iniciar la app (por defecto, `https://pos.grupo-santacruz.com`).
 
 ## Configuración
@@ -146,8 +146,7 @@ EXTERNA: crea primero un servidor Postgres aparte en Dokploy (app tipo
 2. Configura las variables de entorno del panel de Dokploy — ver `.env.example`
    (`DATABASE_URL`, `JWT_SECRET`, etc. — `PLATFORM_DATABASE_URL` se rellena
    solo con el mismo valor de `DATABASE_URL`, una sola base para todo).
-3. Configura el dominio principal `pos.grupo-santacruz.com`; `easypos.grupo-santacruz.com`
-   también queda disponible como alias en `docker-compose.yml` y `deploy.sh`.
+3. Configura el dominio principal `pos.grupo-santacruz.com`.
 4. En instalaciones con datos, deja `RUN_DB_INIT=false` y `RUN_SEED=false`
    también en el panel de Dokploy. El sembrado borra y recrea productos, y
    aplicar sucesivamente ambos esquemas con `prisma db push --accept-data-loss`

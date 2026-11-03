@@ -38,7 +38,7 @@ async function main() {
     create: {
       nombre: 'Administrador',
       usuario: 'admin',
-      correo: 'admin@easypos.local',
+      correo: 'admin@pos.local',
       passwordHash: bcrypt.hashSync('admin123', 10),
     },
   });

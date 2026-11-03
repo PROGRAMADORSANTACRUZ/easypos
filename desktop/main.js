@@ -1,4 +1,4 @@
-// App de escritorio de EASYPOS.
+// App de escritorio POS.
 // El backend (API JSON pura) y el frontend (estático) corren en procesos/puertos
 // separados: si el backend falla, la interfaz sigue sirviéndose y puede avisarle al
 // usuario en vez de dejar la ventana en blanco.
@@ -10,7 +10,7 @@ const { crearServidorEstatico } = require('./static-server.js');
 
 const API_PORT = process.env.PORT || 4010;
 const API_ORIGIN = app.isPackaged
-  ? (process.env.EASYPOS_API_URL || 'https://pos.grupo-santacruz.com').replace(/\/+$/, '')
+  ? (process.env.POS_API_URL || 'https://pos.grupo-santacruz.com').replace(/\/+$/, '')
   : `http://localhost:${API_PORT}`;
 const CLIENT_PORT = process.env.CLIENT_PORT || 4011;
 const CLIENT_URL = `http://127.0.0.1:${CLIENT_PORT}`;
@@ -24,13 +24,13 @@ let staticServer = null;
 let mainWindow = null;
 
 function startServer() {
-  serverProcess = spawn(process.env.EASYPOS_NODE || 'node', [path.join(serverDir, 'src', 'index.js')], {
+  serverProcess = spawn(process.env.POS_NODE || 'node', [path.join(serverDir, 'src', 'index.js')], {
     cwd: serverDir,
     env: { ...process.env, PORT: String(API_PORT) },
     stdio: 'inherit',
   });
   serverProcess.on('exit', (code) => {
-    console.log(`[EASYPOS] backend finalizado (code ${code})`);
+    console.log(`[POS] backend finalizado (code ${code})`);
   });
 }
 
@@ -61,7 +61,7 @@ function createWindow() {
     width: 1400,
     height: 900,
     show: false,
-    title: 'EASYPOS',
+    title: 'POS',
     icon: path.join(__dirname, 'build', 'icon.ico'),
     backgroundColor: '#141210',
     titleBarStyle: 'hidden',
@@ -93,7 +93,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
-  app.setAppUserModelId('com.gruposantacruz.easypos');
+  app.setAppUserModelId('com.gruposantacruz.pos');
   if (!app.isPackaged) startServer();
   staticServer = await crearServidorEstatico({
     clientDist,
@@ -105,7 +105,7 @@ app.whenReady().then(async () => {
     try {
       await waitForServer(API_ORIGIN);
     } catch (err) {
-      console.error('[EASYPOS]', err.message);
+      console.error('[POS]', err.message);
     }
   }
   createWindow();

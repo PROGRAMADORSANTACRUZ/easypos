@@ -22,7 +22,7 @@ function servirIndex(res, clientDist, apiUrl) {
   const html = fs.readFileSync(path.join(clientDist, 'index.html'), 'utf8');
   const inyectado = html.replace(
     '<head>',
-    `<head>\n    <script>window.EASYPOS_API_URL = ${JSON.stringify(apiUrl)}; window.EASYPOS_DESKTOP = true; document.documentElement.classList.add('desktop-app');</script>`,
+    `<head>\n    <script>window.POS_API_URL = ${JSON.stringify(apiUrl)}; window.POS_DESKTOP = true; document.documentElement.classList.add('desktop-app');</script>`,
   );
   res.writeHead(200, { 'Content-Type': MIME['.html'] });
   res.end(inyectado);
@@ -40,10 +40,10 @@ function proxyApi(req, res, apiProxyUrl) {
   });
 
   upstream.on('error', (error) => {
-    console.error('[EASYPOS] Error al conectar con la API:', error.message);
+    console.error('[POS] Error al conectar con la API:', error.message);
     if (!res.headersSent) {
       res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: 'No se pudo conectar con el servidor de EASYPOS' }));
+      res.end(JSON.stringify({ error: 'No se pudo conectar con el servidor de POS' }));
     }
   });
   req.pipe(upstream);
@@ -54,7 +54,7 @@ function crearServidorEstatico({ clientDist, apiUrl, apiProxyUrl, port }) {
   if (apiProxyUrl) {
     const target = new URL(apiProxyUrl);
     if (!['http:', 'https:'].includes(target.protocol)) {
-      throw new TypeError('EASYPOS_API_URL debe usar http o https');
+      throw new TypeError('POS_API_URL debe usar http o https');
     }
   }
 

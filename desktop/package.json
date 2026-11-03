@@ -1,7 +1,7 @@
 {
-  "name": "easypos-desktop",
+  "name": "pos-desktop",
   "version": "1.0.0",
-  "description": "App de escritorio de EASYPOS (Electron)",
+  "description": "App de escritorio POS (Electron)",
   "main": "main.js",
   "type": "commonjs",
   "scripts": {
@@ -19,8 +19,8 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.gruposantacruz.easypos",
-    "productName": "EASYPOS",
+    "appId": "com.gruposantacruz.pos",
+    "productName": "POS",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -47,7 +47,7 @@
       "perMachine": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "EASYPOS",
+      "shortcutName": "POS",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
       "installerIcon": "build/icon.ico",
@@ -59,6 +59,6 @@
       "installerLanguages": ["es_ES"],
       "language": "3082"
     },
-    "artifactName": "EASYPOS-Setup-${version}.${ext}"
+    "artifactName": "POS-Setup-${version}.${ext}"
   }
 }

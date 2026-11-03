@@ -35,6 +35,7 @@ const pedido = {
 const apertura = { id: 'ap-demo', estado: 'ABIERTA', valorInicial: 100000, fechaApertura: '2026-10-05T12:00:00Z', usuario: { usuario: 'demo.documentacion' } };
 const datos = {
   '/plataforma/restaurantes/publico': [],
+  '/usuarios/sesion': null,
   '/mesas': Array.from({ length: 8 }, (_, indice) => ({ id: indice + 1, numero: indice + 1, capacidad: 4, estado: indice === 1 ? 'OCUPADA' : 'LIBRE', pedidos: indice === 1 ? [pedido] : [] })),
   '/meseras': [personal], '/productos': productos,
   '/productos/categorias': [categoria, { id: 'cat-demo-2', nombre: 'Bebidas' }], '/pedidos': [pedido],
@@ -89,8 +90,8 @@ async function capturar(browser) {
   await page.screenshot({ path: path.join(carpeta, 'capturas', '01-acceso.png'), fullPage: true });
   await context.addInitScript(() => {
     const modulos = ['mesas', 'cocina', 'facturas', 'factura_venta', 'cortesias', 'pedidos', 'cuentas', 'clientes', 'caja', 'productos', 'inventario', 'bodegas', 'movimientos', 'compras', 'proveedores', 'resoluciones', 'notas_credito', 'notas_debito', 'retenciones', 'empresa', 'usuarios', 'roles', 'auditoria', 'reportes'];
-    localStorage.setItem('easypos_user', JSON.stringify({ id: 'demo-documentacion', nombre: 'Demostracion documental', usuario: 'demo.documentacion', roles: ['ADMIN'], permisos: [...modulos.flatMap(modulo => ['ver', 'crear', 'editar', 'eliminar'].map(accion => `${modulo}.${accion}`)), 'caja.abrir', 'caja.cerrar'], token: 'DEMO-NO-VALIDO' }));
-    localStorage.setItem('easypos_tema', 'light');
+    localStorage.setItem('pos_user', JSON.stringify({ id: 'demo-documentacion', nombre: 'Demostracion documental', usuario: 'demo.documentacion', roles: ['ADMIN'], permisos: [...modulos.flatMap(modulo => ['ver', 'crear', 'editar', 'eliminar'].map(accion => `${modulo}.${accion}`)), 'caja.abrir', 'caja.cerrar'], token: 'DEMO-NO-VALIDO' }));
+    localStorage.setItem('pos_tema', 'light');
   });
   for (const [ruta, archivo, texto] of pantallas.slice(1)) {
     await page.goto(`${origen}${ruta}`);

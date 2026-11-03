@@ -3,7 +3,7 @@ Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Sincronización Siesa - EasyPOS'
+$form.Text = 'Sincronización Siesa - POS'
 $form.StartPosition = 'CenterScreen'
 $form.ClientSize = New-Object System.Drawing.Size(440, 310)
 $form.FormBorderStyle = 'FixedDialog'
@@ -34,8 +34,8 @@ function AgregarCampo($titulo, $y, $secreto, $valorInicial = '') {
 
 $sqlUsuario = AgregarCampo 'Usuario SQL Server' 44 $false 'Carnesantacruz'
 $sqlPassword = AgregarCampo 'Contraseña SQL Server' 96 $true
-$posUsuario = AgregarCampo 'Usuario EasyPOS' 148 $false
-$posPassword = AgregarCampo 'Contraseña EasyPOS' 200 $true
+$posUsuario = AgregarCampo 'Usuario POS' 148 $false
+$posPassword = AgregarCampo 'Contraseña POS' 200 $true
 
 $aceptar = New-Object System.Windows.Forms.Button
 $aceptar.Text = 'Continuar'
@@ -64,8 +64,8 @@ if (-not $sqlUsuario.Text -or -not $sqlPassword.Text -or -not $posUsuario.Text -
 
 $env:SIESA_LOCAL_SQL_USER = $sqlUsuario.Text
 $env:SIESA_LOCAL_SQL_PASSWORD = $sqlPassword.Text
-$env:EASYPOS_LOCAL_USER = $posUsuario.Text
-$env:EASYPOS_LOCAL_PASSWORD = $posPassword.Text
+$env:POS_LOCAL_USER = $posUsuario.Text
+$env:POS_LOCAL_PASSWORD = $posPassword.Text
 $serverDir = Split-Path -Parent $PSScriptRoot
 $exitCode = 0
 Push-Location $serverDir
@@ -75,8 +75,8 @@ try {
 } finally {
   $env:SIESA_LOCAL_SQL_USER = $null
   $env:SIESA_LOCAL_SQL_PASSWORD = $null
-  $env:EASYPOS_LOCAL_USER = $null
-  $env:EASYPOS_LOCAL_PASSWORD = $null
+  $env:POS_LOCAL_USER = $null
+  $env:POS_LOCAL_PASSWORD = $null
   Pop-Location
 }
 exit $exitCode

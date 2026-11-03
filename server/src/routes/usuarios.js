@@ -84,7 +84,7 @@ router.post('/login', wrap(async (req, res) => {
   if (req.tenant) datos.restaurante = { id: req.tenant.id, slug: req.tenant.slug, nombre: req.tenant.nombre, modulos: req.tenant.modulos };
   const token = firmarToken(datos, { restauranteId: req.tenant?.id });
   establecerCookieSesion(req, res, token);
-  if (req.get('x-easypos-session') !== 'cookie') datos.token = token;
+  if (req.get('x-pos-session') !== 'cookie') datos.token = token;
   res.json(datos);
 }));
 

@@ -73,7 +73,7 @@ test('packaged window has only native overlay controls and the POS icon', async 
   vm.runInNewContext(fs.readFileSync(path.join(desktopDir, 'main.js'), 'utf8'), context);
   await ready();
   assert.equal(applicationMenu, null);
-  assert.equal(appId, 'com.gruposantacruz.easypos');
+  assert.equal(appId, 'com.gruposantacruz.pos');
   assert.equal(windowOptions.titleBarStyle, 'hidden');
   assert.equal(windowOptions.titleBarOverlay.height, 32);
   assert.equal(windowOptions.titleBarOverlay.color, '#1E1B18');
@@ -84,7 +84,7 @@ test('packaged window has only native overlay controls and the POS icon', async 
 });
 
 test('desktop shell injection preserves frontend routing and API cookie proxy', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'easypos-desktop-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pos-desktop-'));
   fs.writeFileSync(path.join(directory, 'index.html'), '<html><head></head><body>POS</body></html>');
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const upstream = http.createServer((req, res) => {
@@ -105,9 +105,9 @@ test('desktop shell injection preserves frontend routing and API cookie proxy', 
   const page = await fetch(`${base}/mesas`);
   assert.equal(page.status, 200);
   const html = await page.text();
-  assert.match(html, /window.EASYPOS_DESKTOP = true/);
+  assert.match(html, /window.POS_DESKTOP = true/);
   assert.match(html, /classList.add\('desktop-app'\)/);
-  assert.match(html, /window.EASYPOS_API_URL = "\/api"/);
+  assert.match(html, /window.POS_API_URL = "\/api"/);
   const api = await fetch(`${base}/api/health?desktop=1`, { headers: { cookie: 'session=current' } });
   assert.equal(api.status, 200);
   assert.match(api.headers.get('set-cookie'), /session=test; HttpOnly/);

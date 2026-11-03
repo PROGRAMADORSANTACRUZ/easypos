@@ -260,7 +260,7 @@ export default function Reportes() {
     const nCols = columnas.length;
     const lastCol = String.fromCharCode(64 + nCols); // A, B, C...
 
-    // Título EASYPOS
+    // Título POS
     ws.mergeCells(`A1:${lastCol}1`);
     const cMarca = ws.getCell('A1');
     cMarca.value = 'ASADOS SANTACRUZ';

@@ -7,7 +7,7 @@ Fecha de elaboracion: 5 de octubre de 2026. Documento basado en el codigo dispon
 
 SANTACRUZ POS es un sistema de informacion para la gestion de puntos de venta, con orientacion a restaurantes y operaciones comerciales. Integra pedidos, mesas, cocina, domicilios, facturacion, caja, cartera, productos, inventario, compras, reportes y administracion de accesos.
 
-En la estructura del repositorio, paquetes, rutas de despliegue y algunos textos del sistema aparece el identificador EASYPOS. En este documento se utiliza SANTACRUZ POS como la denominacion solicitada para el registro. Antes de presentar la solicitud, el titular debe confirmar la correspondencia de ambos nombres con la misma obra y la version entregada.
+El nombre del sistema, los paquetes y las rutas de despliegue utilizan la denominacion POS.
 
 El objetivo funcional es relacionar la operacion de venta con sus documentos, pagos y efectos sobre existencias, conservando registros estructurados para consultas administrativas y trazabilidad. La disponibilidad de funciones depende del rol, permisos, parametrizacion y servicios externos configurados.
 
@@ -127,7 +127,7 @@ Antes de radicar, completar y validar:
 - Version o identificador de entrega y referencia de revision del repositorio.
 - Fechas reales de creacion y publicacion, con sus soportes.
 - Relacion de aportes propios, dependencias de terceros y licencias aplicables.
-- Correspondencia entre SANTACRUZ POS, EASYPOS y la denominacion visible en las capturas.
+- Correspondencia entre POS y la marca comercial visible en las capturas.
 - Alcance de la cesion o contratos, cuando existan, y requisitos de la autoridad de registro.
 
 ### 12. Referencias verificables del repositorio

@@ -1,4 +1,4 @@
-// Componentes de UI reutilizables de EASYPOS.
+// Componentes de UI reutilizables de POS.
 // Consumen las clases globales del sistema de diseño (styles.css).
 // Uso: import { Button, PageHeader, EmptyState, Badge } from '../components/ui';
 import { useEffect } from 'react';

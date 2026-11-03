@@ -1,5 +1,5 @@
 #!/bin/bash
-# Aplica labels de Traefik por SSH/Swarm para EASYPOS (por si Dokploy no
+# Aplica labels de Traefik por SSH/Swarm para POS (por si Dokploy no
 # conserva los labels del docker-compose.yml sobre el servicio real).
 # Dominio: pos.grupo-santacruz.com (ajústalo si el dominio real es otro).
 #
@@ -13,18 +13,6 @@ set -euo pipefail
 SERVICE_NAME="posgruposantacruz-5wzjke"
 
 docker service update \
-  --label-rm 'traefik.http.routers.easypos.rule' \
-  --label-rm 'traefik.http.routers.easypos.entrypoints' \
-  --label-rm 'traefik.http.routers.easypos.tls' \
-  --label-rm 'traefik.http.routers.easypos.tls.certresolver' \
-  --label-rm 'traefik.http.routers.easypos.service' \
-  --label-rm 'traefik.http.services.easypos.loadbalancer.server.port' \
-  --label-rm 'traefik.http.routers.easypos-web.rule' \
-  --label-rm 'traefik.http.routers.easypos-web.entrypoints' \
-  --label-rm 'traefik.http.routers.easypos-web.middlewares' \
-  --label-rm 'traefik.http.routers.easypos-web.service' \
-  --label-rm 'traefik.http.middlewares.easypos-redirect-https.redirectscheme.scheme' \
-  --label-rm 'traefik.http.middlewares.easypos-redirect-https.redirectscheme.permanent' \
   --label-add 'traefik.enable=true' \
   --label-add 'traefik.docker.network=dokploy-network' \
   --label-add 'traefik.http.routers.pos.rule=Host(`pos.grupo-santacruz.com`)' \

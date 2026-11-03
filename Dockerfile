@@ -1,5 +1,5 @@
 # ============================================================
-# EASYPOS — Dockerfile de producción para Dokploy.
+# POS — Dockerfile de producción para Dokploy.
 # Un solo contenedor: Nginx en :80 sirve el build de client/ (React/Vite) y
 # hace proxy de /api → backend Express en :4000 (mismo contenedor).
 # La base de datos es externa (DATABASE_URL / PLATFORM_DATABASE_URL).

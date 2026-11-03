@@ -7,7 +7,7 @@ Edicion documental: 5 de octubre de 2026. Alcance: interfaz y funciones identifi
 
 Este manual explica las tareas habituales de administracion y operacion del punto de venta. Los menus y botones disponibles dependen de los permisos de cada usuario. La instalacion, las credenciales del proveedor electronico y la administracion de la base de datos corresponden al responsable tecnico.
 
-La interfaz fotografiada muestra la marca Asados Santacruz; los identificadores internos del proyecto utilizan EASYPOS. SANTACRUZ POS es la denominacion solicitada para este documento. El titular debe confirmar esa correspondencia antes de presentar el registro.
+El sistema se identifica como POS y puede mostrar la marca comercial Asados Santacruz en algunas pantallas.
 
 **Alcance de las imagenes:** las ocho capturas muestran la interfaz real del proyecto ejecutada localmente con datos ficticios suministrados en el navegador. No se conecto esta demostracion a PostgreSQL ni a Factus. Las imagenes no acreditan ventas, autenticacion contra el servidor ni aceptacion tributaria. Los ejemplos de distintas pantallas no constituyen una conciliacion contable.
 

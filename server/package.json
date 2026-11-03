@@ -1,7 +1,7 @@
 {
-  "name": "easypos-server",
+  "name": "pos-server",
   "version": "1.0.0",
-  "description": "API de EASYPOS: pedidos por mesa/mesera, facturacion, inventario y kits",
+  "description": "API POS: pedidos por mesa/mesera, facturacion, inventario y kits",
   "type": "module",
   "main": "src/index.js",
   "scripts": {

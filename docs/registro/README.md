@@ -20,7 +20,7 @@ Los HTML incluyen las imagenes y estilos dentro del propio archivo y se pueden a
 | Titular de derechos y soporte de adquisicion o cesion | Por completar y verificar |
 | Fecha real de creacion y primera publicacion | Por completar con sus evidencias |
 | Version de la obra presentada | Por confirmar; no confundir con fecha del documento |
-| Correspondencia SANTACRUZ POS / EASYPOS / Asados Santacruz | Por confirmar por el titular |
+| Correspondencia POS / Asados Santacruz | Verificar datos del titular antes de presentar |
 | Requisitos y anexos de la autoridad de registro | Por revisar antes de radicar |
 
 Esta documentacion se basa en la implementacion revisada. No constituye prueba independiente de autoria, certificacion tributaria, dictamen juridico ni auditoria de seguridad. Las dependencias de terceros deben identificarse como tales.
@@ -35,7 +35,7 @@ Las capturas se generan a 1440 x 1000 o con altura mayor si la pagina lo necesit
 
 Requisitos: Node.js compatible con las herramientas, npm, Microsoft Edge instalado y el cliente local en funcionamiento. Las dependencias de esta carpeta estan separadas de las del POS.
 
-Desde la raiz del repositorio `easypos`, inicie el cliente en una terminal:
+Desde la raiz del repositorio `POSGRUPOSANTACRUZ`, inicie el cliente en una terminal:
 
 ```powershell
 npm --prefix client run dev -- --host 127.0.0.1 --port 5173 --strictPort

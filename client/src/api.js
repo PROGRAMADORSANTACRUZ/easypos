@@ -1,25 +1,12 @@
-// Cliente HTTP minimo para la API de EASYPOS
+// Cliente HTTP minimo para la API POS.
 // BASE es relativo por defecto (funciona con el proxy de Vite en dev, o detrás de un
 // reverse proxy en producción). Si el frontend corre en un origen distinto al backend
 // (ej. la app de escritorio, que sirve cada uno en su propio puerto), se usa la URL
-// absoluta inyectada en window.EASYPOS_API_URL.
-const BASE = (typeof window !== 'undefined' && window.EASYPOS_API_URL) || '/api';
+// absoluta inyectada en window.POS_API_URL.
+const BASE = (typeof window !== 'undefined' && window.POS_API_URL) || '/api';
 
 let usuarioSesion = null;
 let tenantSesion = null;
-
-function limpiarPersistenciaLocalAnterior() {
-  try {
-    for (let indice = localStorage.length - 1; indice >= 0; indice -= 1) {
-      const clave = localStorage.key(indice);
-      if (clave?.startsWith('easypos_')) localStorage.removeItem(clave);
-    }
-  } catch {
-    // El almacenamiento local no es necesario para el funcionamiento de la app.
-  }
-}
-
-if (typeof window !== 'undefined') limpiarPersistenciaLocalAnterior();
 
 // Id del usuario en sesion, para que el backend registre la auditoria
 function usuarioIdActual() {
@@ -53,7 +40,7 @@ async function request(path, options = {}) {
       'Content-Type': 'application/json',
       ...(uid != null && { 'x-usuario-id': String(uid) }),
       ...(tenant && { 'x-tenant-id': tenant }),
-      ...(path === '/usuarios/login' && { 'x-easypos-session': 'cookie' }),
+      ...(path === '/usuarios/login' && { 'x-pos-session': 'cookie' }),
     },
     ...options,
   });

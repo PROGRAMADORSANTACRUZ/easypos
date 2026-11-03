@@ -1,4 +1,4 @@
-# EASYPOS para Dokploy. La base de datos es EXTERNA (Postgres, crear como app
+# POS para Dokploy. La base de datos es EXTERNA (Postgres, crear como app
 # "Database" aparte en Dokploy) — este stack solo trae el contenedor de la app
 # (nginx sirviendo el build de client/ + backend Express en :4000 dentro del
 # mismo contenedor). Para desarrollo local usar docker-compose.dev.yml en su lugar.
@@ -10,7 +10,7 @@ services:
       args:
         # Vacío = el frontend llama a /api en el mismo dominio (vía Nginx).
         VITE_API_URL: /api
-    container_name: easypos-app
+    container_name: pos-app
     restart: unless-stopped
     environment:
       NODE_ENV: production

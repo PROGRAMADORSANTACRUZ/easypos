@@ -27,7 +27,7 @@ export function permisosEfectivos(roles, asignados, permisosRol) {
 
 const SECRET = process.env.JWT_SECRET;
 const EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h';
-const COOKIE_NAME = 'easypos_session';
+const COOKIE_NAME = 'pos_session';
 
 if (!SECRET) {
   // Sin secreto no hay forma segura de firmar/verificar tokens: mejor fallar rapido al arrancar.
