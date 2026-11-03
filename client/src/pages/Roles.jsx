@@ -7,6 +7,7 @@ import { PageHeader, Modal, Button } from '../components/ui/index.jsx';
 
 const vacio = { nombre: '', descripcion: '', permisos: [] };
 const etiquetaPermiso = (codigo) => {
+  if (codigo === 'mesas.crear') return 'Nueva mesa';
   if (codigo === 'mesas.tomar_pedidos') return 'Tomar pedidos';
   const accion = codigo.split('.')[1];
   return codigo === 'pedidos.eliminar' ? 'cancelar' : accion;
