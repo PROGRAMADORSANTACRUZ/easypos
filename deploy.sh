@@ -13,20 +13,32 @@ set -euo pipefail
 SERVICE_NAME="posgruposantacruz-5wzjke"
 
 docker service update \
+  --label-rm 'traefik.http.routers.easypos.rule' \
+  --label-rm 'traefik.http.routers.easypos.entrypoints' \
+  --label-rm 'traefik.http.routers.easypos.tls' \
+  --label-rm 'traefik.http.routers.easypos.tls.certresolver' \
+  --label-rm 'traefik.http.routers.easypos.service' \
+  --label-rm 'traefik.http.services.easypos.loadbalancer.server.port' \
+  --label-rm 'traefik.http.routers.easypos-web.rule' \
+  --label-rm 'traefik.http.routers.easypos-web.entrypoints' \
+  --label-rm 'traefik.http.routers.easypos-web.middlewares' \
+  --label-rm 'traefik.http.routers.easypos-web.service' \
+  --label-rm 'traefik.http.middlewares.easypos-redirect-https.redirectscheme.scheme' \
+  --label-rm 'traefik.http.middlewares.easypos-redirect-https.redirectscheme.permanent' \
   --label-add 'traefik.enable=true' \
   --label-add 'traefik.docker.network=dokploy-network' \
-  --label-add 'traefik.http.routers.easypos.rule=Host(`pos.grupo-santacruz.com`)' \
-  --label-add 'traefik.http.routers.easypos.entrypoints=websecure' \
-  --label-add 'traefik.http.routers.easypos.tls=true' \
-  --label-add 'traefik.http.routers.easypos.tls.certresolver=letsencrypt' \
-  --label-add 'traefik.http.routers.easypos.service=easypos' \
-  --label-add 'traefik.http.services.easypos.loadbalancer.server.port=80' \
-  --label-add 'traefik.http.routers.easypos-web.rule=Host(`pos.grupo-santacruz.com`)' \
-  --label-add 'traefik.http.routers.easypos-web.entrypoints=web' \
-  --label-add 'traefik.http.routers.easypos-web.middlewares=easypos-redirect-https' \
-  --label-add 'traefik.http.routers.easypos-web.service=easypos' \
-  --label-add 'traefik.http.middlewares.easypos-redirect-https.redirectscheme.scheme=https' \
-  --label-add 'traefik.http.middlewares.easypos-redirect-https.redirectscheme.permanent=true' \
+  --label-add 'traefik.http.routers.pos.rule=Host(`pos.grupo-santacruz.com`)' \
+  --label-add 'traefik.http.routers.pos.entrypoints=websecure' \
+  --label-add 'traefik.http.routers.pos.tls=true' \
+  --label-add 'traefik.http.routers.pos.tls.certresolver=letsencrypt' \
+  --label-add 'traefik.http.routers.pos.service=pos' \
+  --label-add 'traefik.http.services.pos.loadbalancer.server.port=80' \
+  --label-add 'traefik.http.routers.pos-web.rule=Host(`pos.grupo-santacruz.com`)' \
+  --label-add 'traefik.http.routers.pos-web.entrypoints=web' \
+  --label-add 'traefik.http.routers.pos-web.middlewares=pos-redirect-https' \
+  --label-add 'traefik.http.routers.pos-web.service=pos' \
+  --label-add 'traefik.http.middlewares.pos-redirect-https.redirectscheme.scheme=https' \
+  --label-add 'traefik.http.middlewares.pos-redirect-https.redirectscheme.permanent=true' \
   "$SERVICE_NAME"
 
 echo "Labels aplicados correctamente a $SERVICE_NAME"
