@@ -6,8 +6,11 @@ import { CRUD_ENTIDADES } from '../crudConfig.js';
 import { PageHeader, Modal, Button } from '../components/ui/index.jsx';
 
 const vacio = { nombre: '', descripcion: '', permisos: [] };
+const PERMISOS_ADMIN_MESAS = new Set(['mesas.crear', 'mesas.editar', 'mesas.eliminar']);
 const etiquetaPermiso = (codigo) => {
   if (codigo === 'mesas.crear') return 'Nueva mesa';
+  if (codigo === 'mesas.editar') return 'Editar mesa';
+  if (codigo === 'mesas.eliminar') return 'Eliminar mesa';
   if (codigo === 'pedidos.crear') return 'Crear pedido';
   if (codigo === 'pedidos.editar') return 'Editar';
   if (codigo === 'pedidos.eliminar') return 'Cancelar';
@@ -72,8 +75,12 @@ export default function Roles() {
     const admin = NAV_GRUPOS.find((g) => g.id === 'admin');
     grupos.push(grupo(admin.id, admin.label, admin.items));
     const asignados = new Set(grupos.flatMap((g) => g.modulos.map((m) => m.modulo)));
-    grupos.push({ id: 'otros', label: 'Otros permisos', modulos: [...disponibles].filter((m) => !asignados.has(m)).map((m) => ({ modulo: m, label: m.replaceAll('_', ' ') })) });
-    return grupos.filter((g) => g.modulos.length);
+    const otrosModulos = [...disponibles]
+      .filter((modulo) => !asignados.has(modulo) && modulo !== 'mesas')
+      .map((modulo) => ({ modulo, label: modulo.replaceAll('_', ' ') }));
+    const permisosMesasOtros = (porModulo.mesas || []).filter((permiso) => PERMISOS_ADMIN_MESAS.has(permiso.codigo));
+    grupos.push({ id: 'otros', label: 'Otros permisos', modulos: otrosModulos, permisosDirectos: permisosMesasOtros });
+    return grupos.filter((g) => g.modulos.length || g.permisosDirectos?.length);
   }, [porModulo]);
 
   const togglePermiso = (codigo) => {
@@ -84,7 +91,8 @@ export default function Roles() {
           : f.permisos.filter((actual) => actual !== codigo);
         const modulo = codigo.split('.')[0];
         const quedanAcciones = restante.some((actual) => actual.startsWith(`${modulo}.`) && actual !== `${modulo}.ver`);
-        return { ...f, permisos: quedanAcciones ? restante : restante.filter((actual) => actual !== `${modulo}.ver`) };
+        const conservaLectura = modulo === 'mesas' || quedanAcciones;
+        return { ...f, permisos: conservaLectura ? restante : restante.filter((actual) => actual !== `${modulo}.ver`) };
       }
       return {
         ...f,
@@ -106,9 +114,11 @@ export default function Roles() {
   const toggleGrupo = (grupo, marcar) => {
     const codigos = grupo.modulos.map(({ modulo }) => `${modulo}.ver`);
     const modulos = grupo.modulos.map(({ modulo }) => modulo);
+    const permisosDirectos = (grupo.permisosDirectos || []).map(({ codigo }) => codigo);
+    const lecturasDirectas = [...new Set(permisosDirectos.map((codigo) => `${codigo.split('.')[0]}.ver`))];
     setForm((f) => ({ ...f, permisos: marcar
-      ? [...new Set([...f.permisos, ...codigos])]
-      : f.permisos.filter((codigo) => !modulos.some((modulo) => codigo.startsWith(`${modulo}.`))) }));
+      ? [...new Set([...f.permisos, ...codigos, ...permisosDirectos, ...lecturasDirectas])]
+      : f.permisos.filter((codigo) => !modulos.some((modulo) => codigo.startsWith(`${modulo}.`)) && !permisosDirectos.includes(codigo)) }));
   };
 
   const editar = (r) => {
@@ -214,7 +224,8 @@ export default function Roles() {
             <label style={{ display: 'block', margin: '10px 0 6px', fontWeight: 600 }}>Módulos y permisos</label>
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
               {gruposMenu.map((grupo) => {
-                const todos = grupo.modulos.every(({ modulo }) => form.permisos.includes(`${modulo}.ver`));
+                const todos = grupo.modulos.every(({ modulo }) => form.permisos.includes(`${modulo}.ver`))
+                  && (grupo.permisosDirectos || []).every(({ codigo }) => form.permisos.includes(codigo));
                 return (
                   <details key={grupo.id} style={{ borderBottom: '1px solid var(--border)', padding: '7px 0' }}>
                     <summary style={{ cursor: 'pointer', fontWeight: 700 }}>{grupo.label}</summary>
@@ -234,7 +245,7 @@ export default function Roles() {
                             </label>
                           )}
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, paddingLeft: 18 }}>
-                            {porModulo[modulo].filter((p) => p.codigo !== `${modulo}.ver`).map((p) => (
+                            {porModulo[modulo].filter((p) => p.codigo !== `${modulo}.ver` && !(modulo === 'mesas' && PERMISOS_ADMIN_MESAS.has(p.codigo))).map((p) => (
                               <label key={p.codigo} className="mini" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <input type="checkbox" checked={form.permisos.includes(p.codigo)} onChange={() => togglePermiso(p.codigo)} />
                                 {etiquetaPermiso(p.codigo)}
@@ -243,6 +254,19 @@ export default function Roles() {
                           </div>
                         </div>
                       ))}
+                      {grupo.permisosDirectos?.length > 0 && (
+                        <div style={{ borderTop: '1px solid var(--border)', padding: '7px 0' }}>
+                          <strong style={{ display: 'block', marginBottom: 6 }}>Mesas</strong>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, paddingLeft: 18 }}>
+                            {grupo.permisosDirectos.map((permiso) => (
+                              <label key={permiso.codigo} className="mini" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <input type="checkbox" checked={form.permisos.includes(permiso.codigo)} onChange={() => togglePermiso(permiso.codigo)} />
+                                {etiquetaPermiso(permiso.codigo)}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </details>
                 );
