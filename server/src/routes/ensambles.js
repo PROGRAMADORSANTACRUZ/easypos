@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { normalizarEnsamble, validarExistenciasEnsamble } from '../ensamble.js';
+import { ajustarStockEnBodega, buscarBodegaCompras } from '../inventarioKits.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -53,8 +54,14 @@ router.post('/', wrap(async (req, res) => {
   let resultado;
   try {
     resultado = await prisma.$transaction(async (tx) => {
+      const bodega = await buscarBodegaCompras(tx);
       const ids = [ensamble.outputItemId, ...ensamble.inputs.map((input) => input.itemId)];
-      const items = await tx.inventarioItem.findMany({ where: { id: { in: ids } } });
+      const [itemsBase, existencias] = await Promise.all([
+        tx.inventarioItem.findMany({ where: { id: { in: ids } } }),
+        tx.inventarioItemBodega.findMany({ where: { itemId: { in: ids }, bodegaId: bodega.id } }),
+      ]);
+      const stockPorItem = new Map(existencias.map((existencia) => [existencia.itemId, existencia.stock]));
+      const items = itemsBase.map((item) => ({ ...item, stock: stockPorItem.get(item.id) || 0 }));
       const itemSalida = items.find((item) => item.id === ensamble.outputItemId);
       if (!itemSalida) {
         const error = new Error('El insumo que vas a producir no existe');
@@ -71,24 +78,16 @@ router.post('/', wrap(async (req, res) => {
       }
 
       for (const input of ensamble.inputs) {
-        const actualizado = await tx.inventarioItem.updateMany({
-          where: { id: input.itemId, stock: { gte: input.quantity } },
-          data: { stock: { decrement: input.quantity } },
-        });
-        if (actualizado.count !== 1) {
-          const item = itemsPorId.get(input.itemId);
-          const error = new Error(`El stock de "${item.nombre}" cambió; revisa la existencia e intenta de nuevo`);
-          error.status = 409;
-          throw error;
-        }
+        await ajustarStockEnBodega(tx, input.itemId, bodega.id, -input.quantity);
       }
 
-      const salidaActualizada = await tx.inventarioItem.update({
-        where: { id: ensamble.outputItemId },
-        data: { stock: { increment: ensamble.outputQuantity } },
+      await ajustarStockEnBodega(tx, ensamble.outputItemId, bodega.id, ensamble.outputQuantity);
+      const salidaActualizada = await tx.inventarioItemBodega.findUnique({
+        where: { itemId_bodegaId: { itemId: ensamble.outputItemId, bodegaId: bodega.id } },
       });
       const movimientos = ensamble.inputs.map((input) => ({
         itemId: input.itemId,
+        bodegaId: bodega.id,
         tipoMovimiento: 'ENSAMBLE_SALIDA',
         cantidad: input.quantity,
         costoUnitario: itemsPorId.get(input.itemId).costo,
@@ -96,6 +95,7 @@ router.post('/', wrap(async (req, res) => {
       }));
       movimientos.push({
         itemId: ensamble.outputItemId,
+        bodegaId: bodega.id,
         tipoMovimiento: 'ENSAMBLE_ENTRADA',
         cantidad: ensamble.outputQuantity,
         costoUnitario: itemSalida.costo,

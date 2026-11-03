@@ -242,6 +242,7 @@ model Bodega {
   sucursalId  String?      @db.Uuid @map("SucursalId")
   sucursal    Sucursal?    @relation(fields: [sucursalId], references: [id], onDelete: SetNull)
   existencias Inventario[]
+  existenciasInsumos InventarioItemBodega[]
   movimientos MovimientoInventario[]
 }
 
@@ -424,7 +425,20 @@ model InventarioItem {
   componentes KitComponente[]
   comprasDetalle CompraDetalle[]
   movimientos MovimientoInventario[]
+  existenciasBodega InventarioItemBodega[]
   createdAt  DateTime        @default(now())
+}
+
+model InventarioItemBodega {
+  itemId   Int             @map("ItemId")
+  bodegaId String          @db.Uuid @map("BodegaId")
+  stock    Float           @default(0) @map("Stock")
+  item     InventarioItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  bodega   Bodega          @relation(fields: [bodegaId], references: [id], onDelete: Restrict)
+
+  @@id([itemId, bodegaId])
+  @@index([bodegaId])
+  @@map("InventarioItemsBodegas")
 }
 
 // Unidades de medida (Kilogramo, Unidad, Mililitro...). factorConversion indica cuantas
@@ -515,6 +529,7 @@ model Pedido {
   tipo      String       @default("MESA") // MESA | DOMICILIO (pedido en linea del cliente)
   metodoPago String?     // forma de pago elegida por el cliente en pedidos en linea
   estado    String       @default("ABIERTO") // ABIERTO | FACTURADO | CANCELADO
+  inventarioDescontado Boolean @default(false) @map("InventarioDescontado")
   editado   Boolean      @default(false)
   cambios   String?      // log de ediciones (una linea por reenvio)
   observaciones String?  // nota general del pedido (ej. "sin cebolla", "para llevar") visible en cocina y prefactura

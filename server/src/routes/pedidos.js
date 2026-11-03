@@ -227,7 +227,6 @@ router.post('/', wrap(async (req, res) => {
           reservaClienteId: null,
         },
       });
-      await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${nuevo.id}` });
       await sincronizarCocina(tx, nuevo.id);
       return nuevo;
     }, { timeout: 15000 });
@@ -328,7 +327,6 @@ router.post('/online', wrap(async (req, res) => {
       },
       include: pedidoInclude,
     });
-    await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${nuevo.id}` });
     return nuevo;
     }, { timeout: 15000 });
   } catch (e) {
@@ -425,6 +423,8 @@ router.post('/:id/items', wrap(async (req, res) => {
 
   try {
     await prisma.$transaction(async (tx) => {
+      const pedido = await tx.pedido.findUnique({ where: { id: pedidoId }, select: { inventarioDescontado: true } });
+      if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
       await validarStockSuficiente(tx, requeridos);
       const existente = await tx.pedidoItem.findFirst({
         where: { pedidoId, productoId: String(productoId) },
@@ -445,7 +445,9 @@ router.post('/:id/items', wrap(async (req, res) => {
           },
         });
       }
-      await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${pedidoId}` });
+      if (pedido.inventarioDescontado) {
+        await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${pedidoId}` });
+      }
       await sincronizarCocina(tx, pedidoId, { soloNuevosItems: true });
     });
   } catch (e) {
@@ -461,7 +463,10 @@ router.post('/:id/items', wrap(async (req, res) => {
 router.put('/:id/items/:itemId', wrap(async (req, res) => {
   const cant = Number(req.body.cantidad);
   const itemId = Number(req.params.itemId);
-  const actual = await prisma.pedidoItem.findUnique({ where: { id: itemId }, include: { producto: { include: { componentes: true } } } });
+  const actual = await prisma.pedidoItem.findUnique({
+    where: { id: itemId },
+    include: { producto: { include: { componentes: true } }, pedido: { select: { inventarioDescontado: true } } },
+  });
   if (!actual) return res.status(404).json({ error: 'Item no encontrado' });
 
   const diferencia = (cant && cant > 0 ? cant : 0) - actual.cantidad; // positivo: consume mas, negativo: devuelve
@@ -470,8 +475,10 @@ router.put('/:id/items/:itemId', wrap(async (req, res) => {
       if (diferencia > 0) {
         const requeridos = calcularInsumosRequeridos([{ productoId: actual.productoId, cantidad: diferencia }], [actual.producto]);
         await validarStockSuficiente(tx, requeridos);
-        await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${actual.pedidoId}` });
-      } else if (diferencia < 0) {
+        if (actual.pedido.inventarioDescontado) {
+          await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${actual.pedidoId}` });
+        }
+      } else if (diferencia < 0 && actual.pedido.inventarioDescontado) {
         const requeridos = calcularInsumosRequeridos([{ productoId: actual.productoId, cantidad: -diferencia }], [actual.producto]);
         await revertirInsumos(tx, requeridos, { documentoReferencia: `Pedido #${actual.pedidoId}` });
       }
@@ -491,11 +498,16 @@ router.put('/:id/items/:itemId', wrap(async (req, res) => {
 // Quitar item (devuelve sus insumos al inventario)
 router.delete('/:id/items/:itemId', wrap(async (req, res) => {
   const itemId = Number(req.params.itemId);
-  const actual = await prisma.pedidoItem.findUnique({ where: { id: itemId }, include: { producto: { include: { componentes: true } } } });
+  const actual = await prisma.pedidoItem.findUnique({
+    where: { id: itemId },
+    include: { producto: { include: { componentes: true } }, pedido: { select: { inventarioDescontado: true } } },
+  });
   if (!actual) return res.status(404).json({ error: 'Item no encontrado' });
   const requeridos = calcularInsumosRequeridos([{ productoId: actual.productoId, cantidad: actual.cantidad }], [actual.producto]);
   await prisma.$transaction(async (tx) => {
-    await revertirInsumos(tx, requeridos, { documentoReferencia: `Pedido #${actual.pedidoId}` });
+    if (actual.pedido.inventarioDescontado) {
+      await revertirInsumos(tx, requeridos, { documentoReferencia: `Pedido #${actual.pedidoId}` });
+    }
     await tx.pedidoItem.delete({ where: { id: itemId } });
   });
   const pedido = await prisma.pedido.findUnique({ where: { id: Number(req.params.id) }, include: pedidoInclude });
@@ -582,7 +594,9 @@ router.post('/:id/cancelar', wrap(async (req, res) => {
   const requeridos = calcularInsumosRequeridos(itemsNorm, actual.items.map((it) => it.producto));
 
   const pedido = await prisma.$transaction(async (tx) => {
-    await revertirInsumos(tx, requeridos, { documentoReferencia: `Pedido #${id} (cancelado)` });
+    if (actual.inventarioDescontado) {
+      await revertirInsumos(tx, requeridos, { documentoReferencia: `Pedido #${id} (cancelado)` });
+    }
     const p = await tx.pedido.update({ where: { id }, data: { estado: 'CANCELADO' } });
     if (p.mesaId) await tx.mesa.update({ where: { id: p.mesaId }, data: { estado: 'LIBRE' } });
     return p;

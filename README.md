@@ -156,6 +156,11 @@ EXTERNA: crea primero un servidor Postgres aparte en Dokploy (app tipo
 5. Si Dokploy no conserva los labels de Traefik tras un redeploy, correr
    `./deploy.sh <nombre-real-del-servicio>` (ver el id real en el panel).
 
+Antes de desplegar el inventario de insumos por bodega, haz un respaldo y aplica
+en cada base existente `server/prisma/migrations/20261103120000_inventario_insumos_bodega/migration.sql`.
+Esta migración copia el stock actual a Compras y marca pedidos abiertos que ya
+habían descontado inventario. Aplica la migración antes de desplegar la aplicación.
+
 Antes de desplegar la asignación de submódulos de facturación, aplica la migración
 `20260926180000_modulos_facturacion_usuario` a la base activa. En Usuarios, ADMIN
 puede marcar excepciones individuales; en Roles administra módulos, submódulos

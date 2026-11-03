@@ -28,6 +28,8 @@ const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>':
 // Propina sugerida: 10% del total (editable por el cajero/cliente).
 export const sugPropina = (total) => Math.round((total || 0) * 0.1);
 const CENTROS_VACIOS = [];
+const centroPreferidoFacturas = (centros) => centros.find((centro) =>
+  `${centro.nombre || ''} ${centro.descripcion || ''}`.toUpperCase().includes('VITRINA')) || centros[0];
 
 // Permite a otras pantallas (ej. Cotizaciones/Factura de venta) compartir los datos
 // del emisor y del Tipo de documento activo para poder imprimir el mismo ticket legal.
@@ -590,7 +592,7 @@ export default function Facturas({ electronica = true }) {
   const formatoRecibo = electronica ? 'formatoFactura' : 'formatoFacturaVenta';
   const { user } = useAuth();
   const centrosAsignados = (user?.centrosOperacion || CENTROS_VACIOS).filter((centro) => centro.estado === 'Activo');
-  const [centroOperacionCodigo, setCentroOperacionCodigo] = useState(() => centrosAsignados[0]?.codigo || '');
+  const [centroOperacionCodigo, setCentroOperacionCodigo] = useState(() => centroPreferidoFacturas(centrosAsignados)?.codigo || '');
   const [centroSeleccionadoManualmente, setCentroSeleccionadoManualmente] = useState(false);
   const centroFacturacion = centrosAsignados.find((centro) => centro.codigo === centroOperacionCodigo) || null;
   const contextoDocumento = {
@@ -640,7 +642,7 @@ export default function Facturas({ electronica = true }) {
   useEffect(() => {
     const centroActualValido = centrosAsignados.some((centro) => centro.codigo === centroOperacionCodigo);
     if (!centroActualValido && centrosAsignados.length) {
-      setCentroOperacionCodigo(centrosAsignados[0].codigo);
+      setCentroOperacionCodigo(centroPreferidoFacturas(centrosAsignados).codigo);
     } else if (!centrosAsignados.length && centroOperacionCodigo) {
       setCentroOperacionCodigo('');
     }

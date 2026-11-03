@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { inicioDiaColombia, finDiaColombia } from '../fechaColombia.js';
+import { ajustarStockEnBodega, buscarBodegaCompras } from '../inventarioKits.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -22,19 +23,22 @@ const normalizarLineas = (detalle) =>
 
 // Suma (o resta con factor -1) el stock de los insumos de un conjunto de lineas.
 async function aplicarStock(tx, lineas, factor = 1) {
+  const bodega = await buscarBodegaCompras(tx);
   for (const l of lineas) {
     if (l.itemId == null || !l.cantidad) continue;
-    await tx.inventarioItem.update({ where: { id: l.itemId }, data: { stock: { increment: factor * l.cantidad } } });
+    await ajustarStockEnBodega(tx, l.itemId, bodega.id, factor * l.cantidad);
   }
+  return bodega.id;
 }
 
 // Registra un movimiento de ENTRADA por cada linea, ligado a la compra por documentoReferencia.
-async function registrarMovimientos(tx, lineas, compraId) {
+async function registrarMovimientos(tx, lineas, compraId, bodegaId) {
   for (const l of lineas) {
     if (l.itemId == null || !l.cantidad) continue;
     await tx.movimientoInventario.create({
       data: {
         itemId: l.itemId,
+        bodegaId,
         tipoMovimiento: 'ENTRADA',
         cantidad: l.cantidad,
         costoUnitario: l.costoUnitario,
@@ -85,8 +89,8 @@ router.post('/', wrap(async (req, res) => {
       },
       include: conRelaciones,
     });
-    await aplicarStock(tx, lineas, 1);
-    await registrarMovimientos(tx, lineas, creada.id);
+    const bodegaId = await aplicarStock(tx, lineas, 1);
+    await registrarMovimientos(tx, lineas, creada.id, bodegaId);
     return creada;
   });
   await auditar({ req, accion: 'CREAR', entidad: 'compra', entidadId: compra.id, detalle: `Total ${compra.total || ''} · ${lineas.length} líneas`.trim() });
@@ -122,8 +126,10 @@ router.put('/:id', wrap(async (req, res) => {
         },
         include: conRelaciones,
       });
-      if (cambiaDetalle) await aplicarStock(tx, lineas, 1);
-      if (cambiaDetalle) await registrarMovimientos(tx, lineas, id);
+      if (cambiaDetalle) {
+        const bodegaId = await aplicarStock(tx, lineas, 1);
+        await registrarMovimientos(tx, lineas, id, bodegaId);
+      }
       return actualizada;
     });
     await auditar({ req, accion: 'EDITAR', entidad: 'compra', entidadId: compra.id, detalle: `Total ${compra.total || ''}`.trim() });

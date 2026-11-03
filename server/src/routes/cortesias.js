@@ -3,6 +3,7 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
 import { centroPermitido } from '../centrosUsuario.js';
+import { ajustarStockEnBodega, buscarBodegaCompras, validarStockSuficiente } from '../inventarioKits.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -71,19 +72,11 @@ router.post('/', wrap(async (req, res) => {
     }
   }
 
-  // Validar stock disponible de insumos antes de descontar
+  // Leer costos para conservarlos en la trazabilidad del movimiento.
   const itemIds = [...requeridos.keys()];
   const insumos = itemIds.length
     ? await prisma.inventarioItem.findMany({ where: { id: { in: itemIds } } })
     : [];
-  for (const insumo of insumos) {
-    const req_ = requeridos.get(insumo.id) || 0;
-    if (insumo.stock < req_) {
-      return res.status(409).json({
-        error: `Inventario insuficiente de "${insumo.nombre}" (disponible ${insumo.stock}, requerido ${req_})`,
-      });
-    }
-  }
   const costoPorItem = new Map(insumos.map((i) => [i.id, i.costo]));
 
   const subtotal = redondear(lineas.reduce((s, l) => s + l.producto.precio * l.cantidad, 0));
@@ -91,14 +84,17 @@ router.post('/', wrap(async (req, res) => {
   const cli = clienteId ? await prisma.cliente.findUnique({ where: { id: String(clienteId) } }) : null;
 
   const cortesia = await prisma.$transaction(async (tx) => {
+    await validarStockSuficiente(tx, requeridos);
+    const bodega = requeridos.size ? await buscarBodegaCompras(tx) : null;
     const { consecutivo, numero } = await siguienteConsecutivo(tx, companiaCodigo, centroOperacionCodigo);
 
     // Descontar insumos y dejar trazabilidad como movimiento de inventario (SALIDA)
     for (const [itemId, cantidad] of requeridos.entries()) {
-      await tx.inventarioItem.update({ where: { id: itemId }, data: { stock: { decrement: cantidad } } });
+      await ajustarStockEnBodega(tx, itemId, bodega.id, -cantidad);
       await tx.movimientoInventario.create({
         data: {
           itemId,
+          bodegaId: bodega.id,
           tipoMovimiento: 'SALIDA',
           cantidad,
           costoUnitario: costoPorItem.get(itemId) || 0,

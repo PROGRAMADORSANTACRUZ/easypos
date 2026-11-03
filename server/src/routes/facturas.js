@@ -4,6 +4,7 @@ import { auditar } from '../auditoria.js';
 import { crearFacturaFactus } from '../factus.js';
 import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
 import { centroPermitido, filtroParesCentros } from '../centrosUsuario.js';
+import { calcularInsumosRequeridos, descontarInsumos, validarStockSuficiente } from '../inventarioKits.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -378,13 +379,17 @@ router.post('/dividir', wrap(async (req, res) => {
 
   const pedido = await prisma.pedido.findUnique({
     where: { id },
-    include: { mesa: true, items: { include: { producto: { include: { unidad: true } } } } },
+    include: { mesa: true, items: { include: { producto: { include: { unidad: true, componentes: true } } } } },
   });
   if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
   if (pedido.estado !== 'ABIERTO') return res.status(400).json({ error: 'El pedido no está abierto' });
   if (!pedido.items.length) return res.status(400).json({ error: 'El pedido no tiene productos' });
   const apertura = await aperturaActiva(req.headers['x-usuario-id']);
   if (!apertura) return res.status(409).json({ error: 'Debes abrir la caja antes de facturar' });
+  const requeridos = calcularInsumosRequeridos(
+    pedido.items.map((item) => ({ productoId: item.productoId, cantidad: item.cantidad })),
+    pedido.items.map((item) => item.producto),
+  );
 
   const propinaTotal = electronica ? Math.max(0, Number(propina) || 0) : 0;
   let partes;
@@ -442,6 +447,11 @@ router.post('/dividir', wrap(async (req, res) => {
       data: { estado: 'FACTURADO', cliente: cliente.nombre, clienteId: cliente.clienteId },
     });
     if (!cerrado.count) throw Object.assign(new Error('El pedido ya fue facturado'), { status: 409 });
+    if (!pedido.inventarioDescontado) {
+      await validarStockSuficiente(tx, requeridos);
+      await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${id}` });
+      await tx.pedido.update({ where: { id }, data: { inventarioDescontado: true } });
+    }
     if (pedido.mesaId) await tx.mesa.update({ where: { id: pedido.mesaId }, data: { estado: 'LIBRE' } });
 
     const division = await tx.divisionCuenta.create({
@@ -539,6 +549,10 @@ router.post('/', wrap(async (req, res) => {
   if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
   if (pedido.estado !== 'ABIERTO') return res.status(400).json({ error: 'El pedido no esta abierto' });
   if (pedido.items.length === 0) return res.status(400).json({ error: 'El pedido no tiene items' });
+  const requeridos = calcularInsumosRequeridos(
+    pedido.items.map((item) => ({ productoId: item.productoId, cantidad: item.cantidad })),
+    pedido.items.map((item) => item.producto),
+  );
 
   // Debe existir una caja abierta (con base) para poder facturar y dar vueltos
   const apertura = await aperturaActiva(req.headers['x-usuario-id']);
@@ -561,6 +575,11 @@ router.post('/', wrap(async (req, res) => {
       data: { estado: 'FACTURADO', cliente: cli.nombre, clienteId: cli.clienteId },
     });
     if (!cerrado.count) throw Object.assign(new Error('El pedido ya fue facturado'), { status: 409 });
+    if (!pedido.inventarioDescontado) {
+      await validarStockSuficiente(tx, requeridos);
+      await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${id}` });
+      await tx.pedido.update({ where: { id }, data: { inventarioDescontado: true } });
+    }
     if (pedido.mesaId) {
       await tx.mesa.update({ where: { id: pedido.mesaId }, data: { estado: 'LIBRE' } });
     }
@@ -669,16 +688,6 @@ router.post('/directa', wrap(async (req, res) => {
     }
   }
 
-  const insumos = await prisma.inventarioItem.findMany({ where: { id: { in: [...requeridos.keys()] } } });
-  for (const insumo of insumos) {
-    const req_ = requeridos.get(insumo.id) || 0;
-    if (insumo.stock < req_) {
-      return res.status(409).json({
-        error: `Inventario insuficiente de "${insumo.nombre}" (disponible ${insumo.stock}, requerido ${req_})`,
-      });
-    }
-  }
-
   const precioProductos = redondear(items.reduce((s, i) => s + buscar(i.productoId).precio * Number(i.cantidad), 0));
   const impuesto = redondear(items.reduce((s, i) => {
     const prod = buscar(i.productoId);
@@ -693,14 +702,12 @@ router.post('/directa', wrap(async (req, res) => {
   catch (error) { if (error.status) return res.status(error.status).json({ error: error.message }); throw error; }
 
   const factura = await prisma.$transaction(async (tx) => {
-    for (const [itemId, cantidad] of requeridos.entries()) {
-      await tx.inventarioItem.update({ where: { id: itemId }, data: { stock: { decrement: cantidad } } });
-    }
     const pedido = await tx.pedido.create({
       data: {
         cliente: cli.nombre,
         clienteId: cli.clienteId,
         estado: 'FACTURADO',
+        inventarioDescontado: true,
         items: {
           create: items.map((i) => ({
             productoId: String(i.productoId),
@@ -710,6 +717,8 @@ router.post('/directa', wrap(async (req, res) => {
         },
       },
     });
+    await validarStockSuficiente(tx, requeridos);
+    await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${pedido.id}` });
     const num = await asignarNumeracion(tx, electronica !== false, companiaCodigo, centroOperacionCodigo);
     const modeloFactura = electronica === false ? tx.facturaVenta : tx.factura;
     return modeloFactura.create({

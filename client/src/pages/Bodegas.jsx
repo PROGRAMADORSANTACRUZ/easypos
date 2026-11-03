@@ -17,6 +17,7 @@ export default function Bodegas() {
   const [bodegas, setBodegas] = useState([]);
   const [productos, setProductos] = useState([]);
   const [existencias, setExistencias] = useState([]);
+  const [insumosBodega, setInsumosBodega] = useState([]);
 
   // Form de bodega
   const [nombreBodega, setNombreBodega] = useState('');
@@ -36,16 +37,25 @@ export default function Bodegas() {
       const [bs, ps] = await Promise.all([api.get('/bodegas'), api.get('/productos')]);
       setBodegas(bs);
       setProductos(ps);
-      if (!bodegaSel && bs.length) setBodegaSel(bs[0].id);
+      if (!bodegaSel && bs.length) {
+        const compras = bs.find((bodega) => bodega.nombre.trim().toLocaleLowerCase('es') === 'compras');
+        setBodegaSel((compras || bs[0]).id);
+      }
     } catch (e) {
       notify(e.message, 'err');
     }
   };
 
   const cargarExistencias = async (bodegaId) => {
-    if (!bodegaId) { setExistencias([]); return; }
+    if (!bodegaId) { setExistencias([]); setInsumosBodega([]); return; }
     try {
-      setExistencias(await api.get(`/existencias?bodegaId=${bodegaId}`));
+      const query = `bodegaId=${encodeURIComponent(bodegaId)}`;
+      const [productosEnBodega, insumosEnBodega] = await Promise.all([
+        api.get(`/existencias?${query}`),
+        api.get(`/inventario?${query}`),
+      ]);
+      setExistencias(productosEnBodega);
+      setInsumosBodega(insumosEnBodega);
     } catch (e) {
       notify(e.message, 'err');
     }
@@ -141,7 +151,7 @@ export default function Bodegas() {
     <div>
       <PageHeader
         title="Bodegas y existencias"
-        subtitle="Gestiona tus bodegas y el stock de productos en cada una."
+        subtitle="Gestiona productos terminados e insumos por bodega."
         actions={puedeCrear && <Button variant="primary" icon="add" onClick={nuevaBodega} title="Nueva bodega" />}
       />
       <div className="grid-aside">
@@ -179,27 +189,43 @@ export default function Bodegas() {
           {!bodegaSel && <EmptyState icon="bodegas" title="Selecciona una bodega" description="Elige una bodega de la izquierda para ver y gestionar sus existencias." />}
 
           {bodegaSel && (
-            <table>
-              <thead><tr><th>Producto</th><th style={{ textAlign: 'right' }}>Cantidad</th><th></th></tr></thead>
-              <tbody>
-                {existencias.map((ex) => (
-                  <tr key={ex.id}>
-                    <td>{ex.producto?.nombre || '—'}</td>
-                    <td style={{ textAlign: 'right' }}>{ex.cantidad}</td>
-                    <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                      {puedeEditar && (
-                        <>
-                          <button className="btn btn-sm" title="-1" onClick={() => ajustar(ex, -1)}>−</button>{' '}
-                          <button className="btn btn-sm" title="+1" onClick={() => ajustar(ex, 1)}>＋</button>{' '}
-                        </>
-                      )}
-                      {puedeEliminar && <button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminarExistencia(ex)}><Icon name="delete" size={16} /></button>}
-                    </td>
-                  </tr>
-                ))}
-                {!existencias.length && <tr><td colSpan={3} className="empty">Sin existencias en esta bodega.</td></tr>}
-              </tbody>
-            </table>
+            <>
+              <table>
+                <thead><tr><th>Producto</th><th style={{ textAlign: 'right' }}>Cantidad</th><th></th></tr></thead>
+                <tbody>
+                  {existencias.map((ex) => (
+                    <tr key={ex.id}>
+                      <td>{ex.producto?.nombre || '—'}</td>
+                      <td style={{ textAlign: 'right' }}>{ex.cantidad}</td>
+                      <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                        {puedeEditar && (
+                          <>
+                            <button className="btn btn-sm" title="-1" onClick={() => ajustar(ex, -1)}>−</button>{' '}
+                            <button className="btn btn-sm" title="+1" onClick={() => ajustar(ex, 1)}>＋</button>{' '}
+                          </>
+                        )}
+                        {puedeEliminar && <button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminarExistencia(ex)}><Icon name="delete" size={16} /></button>}
+                      </td>
+                    </tr>
+                  ))}
+                  {!existencias.length && <tr><td colSpan={3} className="empty">Sin productos en esta bodega.</td></tr>}
+                </tbody>
+              </table>
+              <h3 style={{ margin: '20px 0 8px' }}>Insumos almacenados</h3>
+              <table>
+                <thead><tr><th>Insumo</th><th>Unidad</th><th style={{ textAlign: 'right' }}>Cantidad</th></tr></thead>
+                <tbody>
+                  {insumosBodega.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.codigo ? `${item.codigo} · ` : ''}{item.nombre}</td>
+                      <td>{item.unidad}</td>
+                      <td style={{ textAlign: 'right' }}>{item.stock}</td>
+                    </tr>
+                  ))}
+                  {!insumosBodega.length && <tr><td colSpan={3} className="empty">Sin insumos en esta bodega.</td></tr>}
+                </tbody>
+              </table>
+            </>
           )}
         </div>
       </div>
