@@ -64,7 +64,7 @@ import auditoriaRouter from './routes/auditoria.js';
 import restaurantesRouter from './routes/restaurantes.js';
 import { resolverTenant } from './middleware/tenant.js';
 import { mayusculas } from './middleware/mayusculas.js';
-import { requireAuth, permisoPorMetodo, permisoModuloFacturacion, permisoSegunFactura } from './middleware/auth.js';
+import { requireAuth, permisoPorMetodo, permisoModuloFacturacion, permisoSegunFactura, puedeLeerCatalogoParaPedidos } from './middleware/auth.js';
 import { restringirModuloRestaurante } from './modulosRestaurante.js';
 
 const app = express();
@@ -99,7 +99,11 @@ app.use('/api/mesas', requireAuth, permisoPorMetodo('mesas'), mesasRouter);
 app.use('/api/meseras', requireAuth, meserasRouter);
 app.use('/api/cocineros', requireAuth, cocinerosRouter);
 app.use('/api/preparacion-cocina', requireAuth, preparacionCocinaRouter);
-app.use('/api/productos', requireAuth, permisoPorMetodo('productos'), productosRouter);
+app.use('/api/productos', requireAuth, (req, res, next) => {
+  const soloMenuPedidos = puedeLeerCatalogoParaPedidos(req.method, req.path, req.usuario?.permisos || []);
+  if (soloMenuPedidos) return next();
+  return permisoPorMetodo('productos')(req, res, next);
+}, productosRouter);
 app.use('/api/inventario', requireAuth, permisoPorMetodo('inventario'), inventarioRouter);
 app.use('/api/ensambles', requireAuth, permisoPorMetodo('inventario'), ensamblesRouter);
 app.use('/api/bodegas', requireAuth, permisoPorMetodo('bodegas'), bodegasRouter);

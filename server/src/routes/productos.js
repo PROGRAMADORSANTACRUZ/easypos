@@ -20,8 +20,11 @@ function disponibilidadKit(producto) {
 }
 
 // Listar productos con su receta y disponibilidad
-router.get('/', wrap(async (_req, res) => {
+router.get('/', wrap(async (req, res) => {
+  const permisos = req.usuario?.permisos || [];
+  const soloMenuPedidos = permisos.includes('pedidos.ver') && !permisos.includes('productos.ver');
   const productos = await prisma.producto.findMany({
+    ...(soloMenuPedidos && { where: { activo: true, precio: { gt: 0 } } }),
     orderBy: { nombre: 'asc' },
     include: {
       categoria: true,

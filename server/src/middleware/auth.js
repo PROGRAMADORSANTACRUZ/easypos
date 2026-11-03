@@ -19,6 +19,10 @@ export function permisosEfectivos(permisosRol) {
   return [...new Set(permisosRol)];
 }
 
+export function puedeLeerCatalogoParaPedidos(metodo, ruta, permisos) {
+  return ['GET', 'HEAD'].includes(metodo) && ruta === '/' && permisos.includes('pedidos.ver');
+}
+
 const SECRET = process.env.JWT_SECRET;
 const EXPIRES_IN = process.env.JWT_EXPIRES_IN || '12h';
 const COOKIE_NAME = 'pos_session';

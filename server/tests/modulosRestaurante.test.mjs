@@ -17,11 +17,14 @@ function evaluar(path, modulos, { method = 'GET', query = {}, body = {} } = {}) 
 
 test('los permisos efectivos provienen de roles e ignoran submódulos guardados en usuario', async () => {
   process.env.JWT_SECRET ||= 'test-secret-for-role-permissions';
-  const { permisosEfectivos } = await import('../src/middleware/auth.js');
+  const { permisosEfectivos, puedeLeerCatalogoParaPedidos } = await import('../src/middleware/auth.js');
   assert.deepEqual(permisosEfectivos(['facturas.ver', 'pedidos.crear'], ['factura_venta', 'cortesias']), [
     'facturas.ver',
     'pedidos.crear',
   ]);
+  assert.equal(puedeLeerCatalogoParaPedidos('GET', '/', ['pedidos.ver']), true);
+  assert.equal(puedeLeerCatalogoParaPedidos('GET', '/categorias', ['pedidos.ver']), false);
+  assert.equal(puedeLeerCatalogoParaPedidos('POST', '/', ['pedidos.ver']), false);
 });
 
 test('bloquea endpoints de grupos deshabilitados', () => {
