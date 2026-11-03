@@ -143,7 +143,7 @@ async function sembrarRolesYPermisos() {
   // Modulos del sistema y las acciones que soportan
   const MODULOS = {
     pedidos: ['ver', 'crear', 'editar', 'eliminar'],
-    mesas: ['ver', 'crear', 'editar', 'eliminar'],
+    mesas: ['ver', 'crear', 'editar', 'eliminar', 'tomar_pedidos'],
     cocina: ['ver'],
     facturas: ['ver', 'crear', 'anular'],
     factura_venta: ['ver', 'crear'],
@@ -213,7 +213,7 @@ async function sembrarRolesYPermisos() {
     },
     MESERO: {
       descripcion: 'Toma de pedidos por mesa',
-      permisos: ['pedidos.ver', 'pedidos.crear', 'pedidos.editar', 'pedidos.eliminar', 'mesas.ver'],
+      permisos: ['mesas.ver', 'mesas.tomar_pedidos'],
     },
   };
 

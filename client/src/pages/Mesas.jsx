@@ -8,6 +8,7 @@ import { LoadingState, Modal, Button } from '../components/ui/index.jsx';
 export default function Mesas() {
   const { user } = useAuth();
   const puede = (codigo) => user?.__dev === true || (user?.permisos || []).includes(codigo);
+  const puedeTomarPedidos = puede('mesas.tomar_pedidos') || puede('pedidos.crear');
   const [mesas, setMesas] = useState([]);
   const [filtroEstado, setFiltroEstado] = useState('TOTAL');
   const [cargando, setCargando] = useState(true);
@@ -179,7 +180,7 @@ export default function Mesas() {
           footer={(
             <>
               {puede('mesas.editar') && <Button variant="secondary" onClick={() => cancelarReserva(detalleReserva)}>Cancelar reserva</Button>}
-              {puede('pedidos.crear') && <Button variant="primary" onClick={() => navigate(`/mesas/${detalleReserva.id}/pedido`)}>Iniciar pedido</Button>}
+              {puedeTomarPedidos && <Button variant="primary" onClick={() => navigate(`/mesas/${detalleReserva.id}/pedido`)}>Iniciar pedido</Button>}
             </>
           )}
         >
@@ -224,9 +225,10 @@ export default function Mesas() {
               <div
                 key={mesa.id}
                 className={`card mesa ${mesa.estado}${listo ? ' LISTO' : ''}`}
-                onClick={() => mesa.estado === 'RESERVADA'
+                onClick={puedeTomarPedidos ? () => mesa.estado === 'RESERVADA'
                   ? setDetalleReserva(mesa)
-                  : navigate(`/mesas/${mesa.id}/pedido`)}
+                  : navigate(`/mesas/${mesa.id}/pedido`) : undefined}
+                style={{ cursor: puedeTomarPedidos ? 'pointer' : 'default' }}
               >
                 <div className="num">{mesa.numero}</div>
                 <div className="estado">{listo ? 'Plato listo' : mesa.estado}</div>

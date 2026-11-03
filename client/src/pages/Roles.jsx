@@ -6,6 +6,11 @@ import { CRUD_ENTIDADES } from '../crudConfig.js';
 import { PageHeader, Modal, Button } from '../components/ui/index.jsx';
 
 const vacio = { nombre: '', descripcion: '', permisos: [] };
+const etiquetaPermiso = (codigo) => {
+  if (codigo === 'mesas.tomar_pedidos') return 'Tomar pedidos';
+  const accion = codigo.split('.')[1];
+  return codigo === 'pedidos.eliminar' ? 'cancelar' : accion;
+};
 
 export default function Roles() {
   const { user } = useAuth();
@@ -209,7 +214,7 @@ export default function Roles() {
                             {porModulo[modulo].filter((p) => p.codigo !== `${modulo}.ver`).map((p) => (
                               <label key={p.codigo} className="mini" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <input type="checkbox" checked={form.permisos.includes(p.codigo)} onChange={() => togglePermiso(p.codigo)} />
-                                {p.codigo.split('.')[1]}
+                                {etiquetaPermiso(p.codigo)}
                               </label>
                             ))}
                           </div>

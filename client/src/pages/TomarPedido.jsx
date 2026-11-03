@@ -167,11 +167,12 @@ export default function TomarPedido() {
   const navigate = useNavigate();
   const notify = useToast();
   const puede = (codigo) => user?.__dev === true || (user?.permisos || []).includes(codigo);
-  const puedeCrearPedido = puede('pedidos.crear');
-  const puedeEditarPedido = puede('pedidos.editar');
-  const puedeCancelarPedido = puede('pedidos.eliminar');
+  const puedeTomarPedidos = puede('mesas.tomar_pedidos');
+  const puedeCrearPedido = puedeTomarPedidos || puede('pedidos.crear');
+  const puedeEditarPedido = puedeTomarPedidos || puede('pedidos.editar');
+  const puedeCancelarPedido = puedeTomarPedidos || puede('pedidos.eliminar');
   const puedeEditarMesa = puede('mesas.editar');
-  const puedeVerPedido = puede('pedidos.ver');
+  const puedeVerPedido = puedeTomarPedidos || puede('pedidos.ver');
 
   const [mesa, setMesa] = useState(null);
   const [meseras, setMeseras] = useState([]);
