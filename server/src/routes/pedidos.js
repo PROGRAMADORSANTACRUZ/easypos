@@ -1,14 +1,15 @@
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../prisma.js';
+import { auditar } from '../auditoria.js';
 import { calcularInsumosRequeridos, validarStockSuficiente, descontarInsumos, revertirInsumos } from '../inventarioKits.js';
 import { imprimirComandaPorEstacion } from '../impresionCocina.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
-const exigirPermiso = (codigo, permitirTomarPedidos = false) => (req, res, next) => {
+const exigirPermiso = (codigo) => (req, res, next) => {
   const permisos = req.usuario?.permisos || [];
-  if (permisos.includes(codigo) || (permitirTomarPedidos && permisos.includes('mesas.tomar_pedidos'))) return next();
+  if (permisos.includes(codigo)) return next();
   return res.status(403).json({ error: `No tienes permiso para ${codigo}` });
 };
 
@@ -168,8 +169,9 @@ router.get('/:id', wrap(async (req, res) => {
 
 // Crear pedido y ocupar la mesa
 // body: { mesaId, meseraId, items: [{ productoId, cantidad, notas? }] }
-router.post('/', exigirPermiso('pedidos.crear', true), wrap(async (req, res) => {
+router.post('/', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
   const { mesaId, meseraId, items = [], observaciones } = req.body;
+  const puedeGuardarObservaciones = req.usuario?.permisos?.includes('pedidos.observaciones');
   if (!mesaId || !meseraId) return res.status(400).json({ error: 'mesaId y meseraId son requeridos' });
   if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Agrega al menos un producto' });
 
@@ -207,7 +209,7 @@ router.post('/', exigirPermiso('pedidos.crear', true), wrap(async (req, res) => 
           meseraId: Number(meseraId),
           clienteId: mesa.reservaClienteId,
           cliente: mesa.reservaCliente?.razonSocial || mesa.reservaCliente?.nombre || null,
-          observaciones: observaciones ? String(observaciones).trim() || null : null,
+          observaciones: puedeGuardarObservaciones && observaciones ? String(observaciones).trim() || null : null,
           items: {
             create: itemsNorm.map((item) => ({
               productoId: item.productoId,
@@ -417,7 +419,7 @@ router.post('/:id/ubicacion', exigirPermiso('pedidos.editar'), wrap(async (req, 
 }));
 
 // Agregar item a un pedido abierto (si ya existe el producto, suma cantidad)
-router.post('/:id/items', exigirPermiso('pedidos.editar', true), wrap(async (req, res) => {
+router.post('/:id/items', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
   const { productoId, cantidad, notas } = req.body;
   const pedidoId = Number(req.params.id);
   const producto = await prisma.producto.findUnique({ where: { id: String(productoId) }, include: { componentes: true, categoria: true } });
@@ -465,7 +467,7 @@ router.post('/:id/items', exigirPermiso('pedidos.editar', true), wrap(async (req
 
 
 // Cambiar la cantidad de un item (si llega a 0 o menos, se elimina). Ajusta el inventario por la diferencia.
-router.put('/:id/items/:itemId', exigirPermiso('pedidos.editar', true), wrap(async (req, res) => {
+router.put('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
   const cant = Number(req.body.cantidad);
   const itemId = Number(req.params.itemId);
   const actual = await prisma.pedidoItem.findUnique({
@@ -501,7 +503,7 @@ router.put('/:id/items/:itemId', exigirPermiso('pedidos.editar', true), wrap(asy
 }));
 
 // Quitar item (devuelve sus insumos al inventario)
-router.delete('/:id/items/:itemId', exigirPermiso('pedidos.editar', true), wrap(async (req, res) => {
+router.delete('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
   const itemId = Number(req.params.itemId);
   const actual = await prisma.pedidoItem.findUnique({
     where: { id: itemId },
@@ -519,12 +521,32 @@ router.delete('/:id/items/:itemId', exigirPermiso('pedidos.editar', true), wrap(
   res.json(pedido);
 }));
 
+router.put('/:id/observaciones', exigirPermiso('pedidos.observaciones'), wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  const actual = await prisma.pedido.findUnique({ where: { id }, select: { id: true, estado: true, cambios: true } });
+  if (!actual) return res.status(404).json({ error: 'Pedido no encontrado' });
+  if (actual.estado !== 'ABIERTO') return res.status(400).json({ error: 'Solo se pueden cambiar observaciones de pedidos abiertos' });
+
+  const observaciones = req.body?.observaciones ? String(req.body.observaciones).trim() || null : null;
+  const linea = `[${new Date().toLocaleString('es-CO')}] Observaciones actualizadas`;
+  const cambios = [actual.cambios, linea].filter(Boolean).join('\n');
+  const pedido = await prisma.$transaction(async (tx) => {
+    await tx.pedido.update({ where: { id }, data: { observaciones, editado: true, cambios } });
+    await tx.pedidoMesa.updateMany({ where: { pedidoId: id }, data: { editado: true, cambios } });
+    await tx.preparacionCocina.updateMany({ where: { pedidoId: id }, data: { listo: false, fechaListo: null } });
+    return tx.pedido.findUnique({ where: { id }, include: pedidoInclude });
+  });
+  await auditar({ req, accion: 'EDITAR', entidad: 'pedido', entidadId: id, detalle: 'Observaciones actualizadas' });
+  res.json(pedido);
+}));
+
 // Reenviar pedido editado: registra en el log qué cambió
 // body: { cambios: "texto" }
-router.post('/:id/reenviar', exigirPermiso('pedidos.editar', true), wrap(async (req, res) => {
+router.post('/:id/reenviar', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
   const id = Number(req.params.id);
   const texto = (req.body?.cambios || '').trim();
   const { observaciones } = req.body;
+  const puedeEditarObservaciones = req.usuario?.permisos?.includes('pedidos.observaciones');
   const actual = await prisma.pedido.findUnique({ where: { id } });
   if (!actual) return res.status(404).json({ error: 'Pedido no encontrado' });
 
@@ -537,7 +559,7 @@ router.post('/:id/reenviar', exigirPermiso('pedidos.editar', true), wrap(async (
       data: {
         editado: true,
         cambios: cambios || null,
-        ...(observaciones !== undefined && { observaciones: observaciones ? String(observaciones).trim() || null : null }),
+        ...(observaciones !== undefined && puedeEditarObservaciones && { observaciones: observaciones ? String(observaciones).trim() || null : null }),
       },
       include: pedidoInclude,
     });
@@ -586,7 +608,7 @@ router.post('/:id/cambiar-mesa', exigirPermiso('mesas.editar'), wrap(async (req,
 }));
 
 // Cancelar pedido, devolver los insumos consumidos al inventario y liberar la mesa
-router.post('/:id/cancelar', exigirPermiso('pedidos.eliminar', true), wrap(async (req, res) => {
+router.post('/:id/cancelar', exigirPermiso('pedidos.eliminar'), wrap(async (req, res) => {
   const id = Number(req.params.id);
   const actual = await prisma.pedido.findUnique({
     where: { id },

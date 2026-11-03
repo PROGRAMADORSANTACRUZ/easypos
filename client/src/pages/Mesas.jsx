@@ -8,7 +8,7 @@ import { LoadingState, Modal, Button } from '../components/ui/index.jsx';
 export default function Mesas() {
   const { user } = useAuth();
   const puede = (codigo) => user?.__dev === true || (user?.permisos || []).includes(codigo);
-  const puedeTomarPedidos = puede('mesas.tomar_pedidos') || puede('pedidos.crear');
+  const puedeTomarPedidos = puede('pedidos.crear');
   const [mesas, setMesas] = useState([]);
   const [filtroEstado, setFiltroEstado] = useState('TOTAL');
   const [cargando, setCargando] = useState(true);

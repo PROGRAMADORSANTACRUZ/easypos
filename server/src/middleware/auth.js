@@ -139,14 +139,14 @@ export function requireAuth(req, res, next) {
 
 // Autorizacion basica por modulo: GET exige "<modulo>.ver"; escrituras exigen
 // cualquier permiso de escritura del modulo. Debe usarse siempre despues de requireAuth.
-export function permisoPorMetodo(modulo, permisosAlternos = []) {
+export function permisoPorMetodo(modulo) {
   return (req, res, next) => {
     const permisos = req.usuario?.permisos || [];
     if (req.method === 'GET' || req.method === 'HEAD') {
-      if (permisos.includes(`${modulo}.ver`) || permisosAlternos.some((codigo) => permisos.includes(codigo))) return next();
+      if (permisos.includes(`${modulo}.ver`)) return next();
     } else {
       const tieneEscritura = permisos.some((p) => p.startsWith(`${modulo}.`) && p !== `${modulo}.ver`);
-      if (tieneEscritura || permisosAlternos.some((codigo) => permisos.includes(codigo))) return next();
+      if (tieneEscritura) return next();
     }
     return res.status(403).json({ error: 'No tienes permiso para esta acción' });
   };

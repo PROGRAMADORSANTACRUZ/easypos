@@ -8,9 +8,12 @@ import { PageHeader, Modal, Button } from '../components/ui/index.jsx';
 const vacio = { nombre: '', descripcion: '', permisos: [] };
 const etiquetaPermiso = (codigo) => {
   if (codigo === 'mesas.crear') return 'Nueva mesa';
-  if (codigo === 'mesas.tomar_pedidos') return 'Tomar pedidos';
-  const accion = codigo.split('.')[1];
-  return codigo === 'pedidos.eliminar' ? 'cancelar' : accion;
+  if (codigo === 'pedidos.crear') return 'Crear pedido';
+  if (codigo === 'pedidos.editar') return 'Editar';
+  if (codigo === 'pedidos.eliminar') return 'Cancelar';
+  if (codigo === 'pedidos.prefactura') return 'Prefactura';
+  if (codigo === 'pedidos.observaciones') return 'Observaciones';
+  return codigo.split('.')[1];
 };
 
 export default function Roles() {
@@ -41,6 +44,10 @@ export default function Roles() {
       const m = p.modulo || 'otros';
       (map[m] = map[m] || []).push(p);
     }
+    const ordenPedidos = ['pedidos.crear', 'pedidos.editar', 'pedidos.eliminar', 'pedidos.prefactura', 'pedidos.observaciones', 'pedidos.ver'];
+    if (map.pedidos) {
+      map.pedidos.sort((a, b) => ordenPedidos.indexOf(a.codigo) - ordenPedidos.indexOf(b.codigo));
+    }
     return map;
   }, [permisos]);
 
@@ -52,7 +59,10 @@ export default function Roles() {
         const modulo = item.permiso.split('.')[0];
         if (!disponibles.has(modulo)) continue;
         const anterior = modulos.get(modulo);
-        modulos.set(modulo, { modulo, label: anterior ? `${anterior.label} / ${item.label}` : item.label });
+        const label = modulo === 'pedidos'
+          ? 'Pedidos por mesa'
+          : anterior ? `${anterior.label} / ${item.label}` : item.label;
+        modulos.set(modulo, { modulo, label });
       }
       return { id, label, modulos: [...modulos.values()] };
     };
@@ -67,12 +77,20 @@ export default function Roles() {
   }, [porModulo]);
 
   const togglePermiso = (codigo) => {
-    setForm((f) => ({
-      ...f,
-      permisos: f.permisos.includes(codigo)
-        ? f.permisos.filter((c) => codigo.endsWith('.ver') ? !c.startsWith(`${codigo.split('.')[0]}.`) : c !== codigo)
-        : [...new Set([...f.permisos, codigo, ...(codigo.endsWith('.ver') ? [] : [`${codigo.split('.')[0]}.ver`])])],
-    }));
+    setForm((f) => {
+      if (f.permisos.includes(codigo)) {
+        const restante = codigo.endsWith('.ver')
+          ? f.permisos.filter((actual) => !actual.startsWith(`${codigo.split('.')[0]}.`))
+          : f.permisos.filter((actual) => actual !== codigo);
+        const modulo = codigo.split('.')[0];
+        const quedanAcciones = restante.some((actual) => actual.startsWith(`${modulo}.`) && actual !== `${modulo}.ver`);
+        return { ...f, permisos: quedanAcciones ? restante : restante.filter((actual) => actual !== `${modulo}.ver`) };
+      }
+      return {
+        ...f,
+        permisos: [...new Set([...f.permisos, codigo, ...(codigo.endsWith('.ver') ? [] : [`${codigo.split('.')[0]}.ver`])])],
+      };
+    });
   };
 
   const toggleModulo = (modulo, marcar) => {
@@ -207,10 +225,14 @@ export default function Roles() {
                     <div style={{ paddingLeft: 12 }}>
                       {grupo.modulos.map(({ modulo, label }) => (
                         <div key={modulo} style={{ borderTop: '1px solid var(--border)', padding: '7px 0' }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <input type="checkbox" checked={form.permisos.includes(`${modulo}.ver`)} onChange={() => toggleModulo(modulo, !form.permisos.includes(`${modulo}.ver`))} />
-                            {label}
-                          </label>
+                          {modulo === 'pedidos' ? (
+                            <strong style={{ display: 'block', marginBottom: 6 }}>{label}</strong>
+                          ) : (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input type="checkbox" checked={form.permisos.includes(`${modulo}.ver`)} onChange={() => toggleModulo(modulo, !form.permisos.includes(`${modulo}.ver`))} />
+                              {label}
+                            </label>
+                          )}
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, paddingLeft: 18 }}>
                             {porModulo[modulo].filter((p) => p.codigo !== `${modulo}.ver`).map((p) => (
                               <label key={p.codigo} className="mini" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

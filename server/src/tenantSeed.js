@@ -1,8 +1,8 @@
 // Roles y permisos base para un restaurante recien creado (mismo catalogo que prisma/seed.js).
 // Se reutiliza tanto en el seed original como en el aprovisionamiento de nuevos restaurantes.
 const MODULOS = {
-  pedidos: ['ver', 'crear', 'editar', 'eliminar'],
-  mesas: ['ver', 'crear', 'editar', 'eliminar', 'tomar_pedidos'],
+  pedidos: ['ver', 'crear', 'editar', 'eliminar', 'prefactura', 'observaciones'],
+  mesas: ['ver', 'crear', 'editar', 'eliminar'],
   cocina: ['ver'],
   facturas: ['ver', 'crear', 'anular'],
   factura_venta: ['ver', 'crear'],

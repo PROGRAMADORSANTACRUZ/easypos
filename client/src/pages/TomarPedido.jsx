@@ -167,17 +167,18 @@ export default function TomarPedido() {
   const navigate = useNavigate();
   const notify = useToast();
   const puede = (codigo) => user?.__dev === true || (user?.permisos || []).includes(codigo);
-  const puedeTomarPedidos = puede('mesas.tomar_pedidos');
-  const puedeCrearPedido = puedeTomarPedidos || puede('pedidos.crear');
-  const puedeEditarPedido = puedeTomarPedidos || puede('pedidos.editar');
-  const puedeCancelarPedido = puedeTomarPedidos || puede('pedidos.eliminar');
+  const puedeCrearPedido = puede('pedidos.crear');
+  const puedeEditarPedido = puede('pedidos.editar');
+  const puedeCancelarPedido = puede('pedidos.eliminar');
+  const puedePrefactura = puede('pedidos.prefactura');
+  const puedeEditarObservaciones = puede('pedidos.observaciones');
   const puedeEditarMesa = puede('mesas.editar');
-  const puedeVerPedido = puedeTomarPedidos || puede('pedidos.ver');
 
   const [mesa, setMesa] = useState(null);
   const [meseras, setMeseras] = useState([]);
   const [productos, setProductos] = useState([]);
   const [pedido, setPedido] = useState(null);      // pedido abierto existente
+  const [editandoObservaciones, setEditandoObservaciones] = useState(false);
   const [carrito, setCarrito] = useState([]);       // items locales para pedido nuevo
   const [meseraId, setMeseraId] = useState('');
   const [editando, setEditando] = useState(true); // un pedido enviado inicia bloqueado
@@ -217,7 +218,9 @@ export default function TomarPedido() {
       if (abierto) {
         setMeseraId(String(abierto.meseraId));
         setObservaciones(abierto.observaciones || '');
+        setEditandoObservaciones(false);
       } else {
+        setEditandoObservaciones(false);
         const prepedido = (m?.reservaItems || []).map((linea) => {
           const producto = ps.find((productoCatalogo) => productoCatalogo.id === linea.productoId);
           return producto ? { producto, cantidad: Number(linea.cantidad) || 1, notas: linea.notas || '' } : null;
@@ -353,7 +356,7 @@ export default function TomarPedido() {
         mesaId: Number(mesaId),
         meseraId: Number(meseraId),
         items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad, notas: c.notas || null })),
-        observaciones: observaciones.trim() || null,
+        ...(puedeEditarObservaciones && { observaciones: observaciones.trim() || null }),
       });
       setPedido(nuevo);
       setCarrito([]);
@@ -441,16 +444,20 @@ export default function TomarPedido() {
 
   const reenviarPedido = async () => {
     const cambios = calcularCambios();
-    const obsCambio = observaciones.trim() !== (pedido.observaciones || '').trim();
+    const obsCambio = puedeEditarObservaciones && observaciones.trim() !== (pedido.observaciones || '').trim();
     if (!cambios && !obsCambio) {
       setEditando(false);
       return notify('No hubo cambios');
     }
     setProcesando(true);
     try {
-      const actualizado = await api.post(`/pedidos/${pedido.id}/reenviar`, { cambios, observaciones: observaciones.trim() || null });
+      const actualizado = await api.post(`/pedidos/${pedido.id}/reenviar`, {
+        cambios,
+        ...(puedeEditarObservaciones && { observaciones: observaciones.trim() || null }),
+      });
       setPedido(actualizado);
       setEditando(false);
+      setEditandoObservaciones(false);
       imprimirComanda(actualizado, { reimpresion: true, cambios });
       notify('Pedido reenviado a facturación');
     } catch (e) {
@@ -458,6 +465,25 @@ export default function TomarPedido() {
     } finally {
       setProcesando(false);
     }
+  };
+
+  const guardarObservaciones = async () => {
+    setProcesando(true);
+    try {
+      const actualizado = await api.put(`/pedidos/${pedido.id}/observaciones`, { observaciones: observaciones.trim() || null });
+      setPedido(actualizado);
+      setEditandoObservaciones(false);
+      notify('Observaciones actualizadas');
+    } catch (e) {
+      notify(e.message, 'err');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const cancelarEdicionObservaciones = () => {
+    setObservaciones(pedido?.observaciones || '');
+    setEditandoObservaciones(false);
   };
 
   const cancelar = () => {
@@ -614,17 +640,19 @@ export default function TomarPedido() {
             </table>
           )}
 
-          <div style={{ marginTop: 14 }}>
-            <label className="mini" style={{ color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Observaciones</label>
-            <textarea
-              rows={2}
-              placeholder="Ej. sin cebolla, para llevar…"
-              value={observaciones}
-              onChange={(e) => setObservaciones(e.target.value)}
-              disabled={!puedeEditar}
-              style={{ width: '100%', resize: 'vertical' }}
-            />
-          </div>
+          {puedeEditarObservaciones && (
+            <div style={{ marginTop: 14 }}>
+              <label className="mini" style={{ color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Observaciones</label>
+              <textarea
+                rows={2}
+                placeholder="Ej. sin cebolla, para llevar…"
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+                disabled={!!pedido && !editando && !editandoObservaciones}
+                style={{ width: '100%', resize: 'vertical' }}
+              />
+            </div>
+          )}
 
           <div style={{ marginTop: 14 }}>
             <div className="total-line grand"><span>Subtotal</span><span>{money(subtotal)}</span></div>
@@ -647,16 +675,24 @@ export default function TomarPedido() {
                 )}
                 {puedeCrearPedido && <button className="btn btn-primary" style={{ flex: 1 }} disabled={procesando} onClick={enviarPedido}>Enviar pedido</button>}
               </>
-            ) : editando ? (
-              puedeEditarPedido && <button className="btn btn-green" style={{ flex: 1 }} disabled={procesando} onClick={reenviarPedido}>
+            ) : editando && puedeEditarPedido ? (
+              <button className="btn btn-green" style={{ flex: 1 }} disabled={procesando} onClick={reenviarPedido}>
                 <Icon name="reload" size={16} /> Reenviar pedido
               </button>
+            ) : editandoObservaciones ? (
+              <>
+                <button className="btn" style={{ flex: 1 }} disabled={procesando} onClick={cancelarEdicionObservaciones}>Descartar</button>
+                <button className="btn btn-primary" style={{ flex: 1 }} disabled={procesando} onClick={guardarObservaciones}>Guardar observaciones</button>
+              </>
             ) : (
               <>
                 {puedeEditarPedido && <button className="btn btn-primary" style={{ flex: 1 }} onClick={entrarEdicion}>
-                  <Icon name="edit" size={16} /> Editar
+                  <Icon name="edit" size={16} /> Editar pedido
                 </button>}
-                {puedeVerPedido && <button className="btn btn-green" style={{ flex: 1 }} onClick={() => imprimirPrefactura(pedido)}>
+                {puedeEditarObservaciones && <button className="btn" style={{ flex: 1 }} onClick={() => setEditandoObservaciones(true)}>
+                  Editar observaciones
+                </button>}
+                {puedePrefactura && <button className="btn btn-green" style={{ flex: 1 }} onClick={() => imprimirPrefactura(pedido)}>
                   <Icon name="receipt" size={16} /> Prefactura
                 </button>}
               </>
