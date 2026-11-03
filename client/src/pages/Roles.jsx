@@ -61,11 +61,13 @@ export default function Roles() {
       for (const item of items) {
         const modulo = item.permiso.split('.')[0];
         if (!disponibles.has(modulo)) continue;
+        if (modulo === 'pedidos' && modulos.has('mesas')) {
+          modulos.get('mesas').incluirPedidos = true;
+          continue;
+        }
         const anterior = modulos.get(modulo);
-        const label = modulo === 'pedidos'
-          ? 'Pedidos por mesa'
-          : anterior ? `${anterior.label} / ${item.label}` : item.label;
-        modulos.set(modulo, { modulo, label });
+        const label = anterior ? `${anterior.label} / ${item.label}` : item.label;
+        modulos.set(modulo, { modulo, label, incluirPedidos: false });
       }
       return { id, label, modulos: [...modulos.values()] };
     };
@@ -74,7 +76,7 @@ export default function Roles() {
     grupos.push(grupo('maestros', 'Maestros / DIAN', CRUD_ENTIDADES.map((e) => ({ permiso: `${e.modulo}.ver`, label: e.label }))));
     const admin = NAV_GRUPOS.find((g) => g.id === 'admin');
     grupos.push(grupo(admin.id, admin.label, admin.items));
-    const asignados = new Set(grupos.flatMap((g) => g.modulos.map((m) => m.modulo)));
+    const asignados = new Set(grupos.flatMap((g) => g.modulos.flatMap((m) => m.incluirPedidos ? [m.modulo, 'pedidos'] : [m.modulo])));
     const otrosModulos = [...disponibles]
       .filter((modulo) => !asignados.has(modulo) && modulo !== 'mesas')
       .map((modulo) => ({ modulo, label: modulo.replaceAll('_', ' ') }));
@@ -224,7 +226,8 @@ export default function Roles() {
             <label style={{ display: 'block', margin: '10px 0 6px', fontWeight: 600 }}>Módulos y permisos</label>
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
               {gruposMenu.map((grupo) => {
-                const todos = grupo.modulos.every(({ modulo }) => form.permisos.includes(`${modulo}.ver`))
+                const todos = grupo.modulos.every(({ modulo, incluirPedidos }) => form.permisos.includes(`${modulo}.ver`)
+                  && (!incluirPedidos || form.permisos.includes('pedidos.ver')))
                   && (grupo.permisosDirectos || []).every(({ codigo }) => form.permisos.includes(codigo));
                 return (
                   <details key={grupo.id} style={{ borderBottom: '1px solid var(--border)', padding: '7px 0' }}>
@@ -234,18 +237,17 @@ export default function Roles() {
                       {grupo.label}
                     </label>
                     <div style={{ paddingLeft: 12 }}>
-                      {grupo.modulos.map(({ modulo, label }) => (
+                      {grupo.modulos.map(({ modulo, label, incluirPedidos }) => (
                         <div key={modulo} style={{ borderTop: '1px solid var(--border)', padding: '7px 0' }}>
-                          {modulo === 'pedidos' ? (
-                            <strong style={{ display: 'block', marginBottom: 6 }}>{label}</strong>
-                          ) : (
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <input type="checkbox" checked={form.permisos.includes(`${modulo}.ver`)} onChange={() => toggleModulo(modulo, !form.permisos.includes(`${modulo}.ver`))} />
-                              {label}
-                            </label>
-                          )}
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input type="checkbox" checked={form.permisos.includes(`${modulo}.ver`)} onChange={() => toggleModulo(modulo, !form.permisos.includes(`${modulo}.ver`))} />
+                            {label}
+                          </label>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, paddingLeft: 18 }}>
-                            {porModulo[modulo].filter((p) => p.codigo !== `${modulo}.ver` && !(modulo === 'mesas' && PERMISOS_ADMIN_MESAS.has(p.codigo))).map((p) => (
+                            {[
+                              ...(porModulo[modulo] || []).filter((p) => p.codigo !== `${modulo}.ver` && !(modulo === 'mesas' && PERMISOS_ADMIN_MESAS.has(p.codigo))),
+                              ...(incluirPedidos ? (porModulo.pedidos || []).filter((p) => p.codigo !== 'pedidos.ver') : []),
+                            ].map((p) => (
                               <label key={p.codigo} className="mini" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <input type="checkbox" checked={form.permisos.includes(p.codigo)} onChange={() => togglePermiso(p.codigo)} />
                                 {etiquetaPermiso(p.codigo)}
