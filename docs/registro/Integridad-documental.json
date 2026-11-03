@@ -1,38 +1,38 @@
 {
-  "generadoEn": "2026-10-05T15:08:13.360Z",
-  "revisionCodigoConsultado": "241f2adc03adab2ccd27d725ea76b1df21e11885",
+  "generadoEn": "2026-11-03T18:49:44.560Z",
+  "revisionCodigoConsultado": "550ea2588571e18e983d0105db3189e5f25ef02e",
   "modalidad": "Interfaz real con sesion y respuestas ficticias; sin API, base de datos ni emision DIAN",
   "advertencia": "Los hashes permiten comprobar integridad; no acreditan autoria ni fecha de creacion de la obra.",
   "archivos": [
     {
       "archivo": "Descripcion-tecnica-SANTACRUZ-POS.md",
-      "bytes": 14899,
-      "sha256": "b3329daf83c80d94574f7b8fac61a7ebb0cb62fdaa7ab5f56a86ec50b544f1db"
+      "bytes": 14618,
+      "sha256": "b41398e064b111e5391c060beb0f4f067b360dc6ed9c46464900ae9ab497b040"
     },
     {
       "archivo": "Descripcion-tecnica-SANTACRUZ-POS.html",
-      "bytes": 191643,
-      "sha256": "76f16fc164038645892bfff2a9b29e094796614625abab37a84a6da3457b11c2"
+      "bytes": 191362,
+      "sha256": "6ff480660d4397d52928c18f9742afd437389bb6ab719cfc0462cd2533358250"
     },
     {
       "archivo": "Descripcion-tecnica-SANTACRUZ-POS.pdf",
-      "bytes": 256626,
-      "sha256": "bd1db9556af2d915e376c0501f6bbaa5cc84d55bb1a801c9056df02a6388a97f"
+      "bytes": 255701,
+      "sha256": "cd4cba028d5fcf896c6fb20f53d77a3614442d235a9739762b20f569e9e1729b"
     },
     {
       "archivo": "Manual-de-usuario-SANTACRUZ-POS.md",
-      "bytes": 22208,
-      "sha256": "970b58c910d528d4c36ddc7bcfda2e8e97bb6b8b1cb58d2a01f0b42d3970695c"
+      "bytes": 22053,
+      "sha256": "471190766575a23a663630b3ded71ccc7a308a4b145a763638366703672836e8"
     },
     {
       "archivo": "Manual-de-usuario-SANTACRUZ-POS.html",
-      "bytes": 1685354,
-      "sha256": "7f5eaca2b45f13c43daae7da50e3b4adc155fc6cea232c16ab35e0382fb9d514"
+      "bytes": 1685199,
+      "sha256": "35a9cf34f2bf9d94d3e7a4942960e0a55c3aa310fa8f3c014a7c55fed7f2dc63"
     },
     {
       "archivo": "Manual-de-usuario-SANTACRUZ-POS.pdf",
-      "bytes": 1497062,
-      "sha256": "acab6480e62818b2d1c0285af0f4722c0548feebaf6819f1fffeb82726f2caeb"
+      "bytes": 1496458,
+      "sha256": "50a4bece9ee0f46598b865ea26649b2bcc0ae9144b207dab3357f725489dacee"
     },
     {
       "archivo": "capturas/01-acceso.png",

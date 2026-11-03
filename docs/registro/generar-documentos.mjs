@@ -54,6 +54,28 @@ const datos = {
   '/cuentas-contables': [], '/impuestos': [], '/unidades-medida': [], '/clientes': [], '/facturas': [],
   '/reportes/pedidos-mesa': [], '/reportes/cocina': [],
 };
+const sesionDemo = {
+  id: 'demo-documentacion',
+  nombre: 'Demostracion documental',
+  usuario: 'demo.documentacion',
+  activo: true,
+  roles: ['ADMIN'],
+  permisos: [...new Set(Object.keys(datos).flatMap(() => []))],
+  centrosOperacion: [],
+  modulosFacturacion: [],
+};
+sesionDemo.permisos = [
+  'mesas.ver', 'pedidos.ver', 'cocina.ver', 'facturas.ver', 'facturas.crear',
+  'factura_venta.ver', 'factura_venta.crear', 'cortesias.ver', 'cortesias.crear',
+  'cuentas.ver', 'clientes.ver', 'caja.ver', 'productos.ver', 'inventario.ver',
+  'bodegas.ver', 'movimientos.ver', 'compras.ver', 'proveedores.ver',
+  'resoluciones.ver', 'notas_credito.ver', 'notas_debito.ver', 'retenciones.ver',
+  'empresa.ver', 'usuarios.ver', 'roles.ver', 'auditoria.ver', 'reportes.ver',
+  'sucursales.ver', 'listas_precios.ver', 'promociones.ver', 'comisiones.ver',
+  'remisiones.ver', 'metodos_pago.ver', 'pagos.ver', 'terceros.ver',
+  'centros_costo.ver', 'cuentas_contables.ver', 'impuestos.ver',
+  'unidades_medida.ver', 'eventos_dian.ver', 'logs_integraciones.ver',
+];
 
 async function comprobarFuentes() {
   for (const documento of documentos) {
@@ -71,6 +93,7 @@ async function comprobarFuentes() {
 }
 
 async function capturar(browser) {
+  let sesionActiva = false;
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1, locale: 'es-CO', timezoneId: 'America/Bogota', serviceWorkers: 'block' });
   await context.route('**/*', async route => {
     const url = new URL(route.request().url());
@@ -78,6 +101,9 @@ async function capturar(browser) {
     if (!url.pathname.startsWith('/api/')) return route.continue();
     const consulta = route.request().method() === 'GET';
     const ruta = url.pathname.replace(/^\/api/, '');
+    if (consulta && ruta === '/usuarios/sesion') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sesionActiva ? sesionDemo : null) });
+    }
     assert.ok(!consulta || Object.hasOwn(datos, ruta), `Consulta sin ejemplo definido: ${ruta}`);
     await route.fulfill({ status: consulta ? 200 : 403, contentType: 'application/json', body: JSON.stringify(consulta ? datos[ruta] : { error: 'Demostracion de solo lectura' }) });
   });
@@ -88,9 +114,8 @@ async function capturar(browser) {
   await page.getByRole('button', { name: 'Ingresar', exact: true }).waitFor();
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: path.join(carpeta, 'capturas', '01-acceso.png'), fullPage: true });
+  sesionActiva = true;
   await context.addInitScript(() => {
-    const modulos = ['mesas', 'cocina', 'facturas', 'factura_venta', 'cortesias', 'pedidos', 'cuentas', 'clientes', 'caja', 'productos', 'inventario', 'bodegas', 'movimientos', 'compras', 'proveedores', 'resoluciones', 'notas_credito', 'notas_debito', 'retenciones', 'empresa', 'usuarios', 'roles', 'auditoria', 'reportes'];
-    localStorage.setItem('pos_user', JSON.stringify({ id: 'demo-documentacion', nombre: 'Demostracion documental', usuario: 'demo.documentacion', roles: ['ADMIN'], permisos: [...modulos.flatMap(modulo => ['ver', 'crear', 'editar', 'eliminar'].map(accion => `${modulo}.${accion}`)), 'caja.abrir', 'caja.cerrar'], token: 'DEMO-NO-VALIDO' }));
     localStorage.setItem('pos_tema', 'light');
   });
   for (const [ruta, archivo, texto] of pantallas.slice(1)) {
@@ -193,7 +218,10 @@ async function verificar() {
 if (process.argv.includes('--check')) {
   await verificar();
 } else {
-  assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(new URL(origen).hostname), 'Solo se permiten interfaces locales para documentacion');
+  const soloDocumentos = process.argv.includes('--documents-only');
+  if (!soloDocumentos) {
+    assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(new URL(origen).hostname), 'Solo se permiten interfaces locales para documentacion');
+  }
   for (const documento of documentos) {
     const archivo = path.join(carpeta, `${documento}.md`);
     const texto = await readFile(archivo, 'utf8');
@@ -203,7 +231,7 @@ if (process.argv.includes('--check')) {
   await mkdir(path.join(carpeta, 'capturas'), { recursive: true });
   const browser = await chromium.launch({ channel: process.env.DOCS_BROWSER_CHANNEL || 'msedge', headless: true });
   try {
-    await capturar(browser);
+    if (!soloDocumentos) await capturar(browser);
     await comprobarFuentes();
     await generar(browser);
     await registrarIntegridad();
