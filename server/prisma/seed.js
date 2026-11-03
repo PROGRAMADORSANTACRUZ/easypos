@@ -213,7 +213,7 @@ async function sembrarRolesYPermisos() {
     },
     MESERO: {
       descripcion: 'Toma de pedidos por mesa',
-      permisos: ['pedidos.ver', 'pedidos.crear', 'pedidos.editar', 'mesas.ver', 'mesas.editar', 'cocina.ver'],
+      permisos: ['pedidos.ver', 'pedidos.crear', 'pedidos.editar', 'pedidos.eliminar', 'mesas.ver'],
     },
   };
 
@@ -223,6 +223,7 @@ async function sembrarRolesYPermisos() {
       update: { descripcion: def.descripcion },
       create: { nombre, descripcion: def.descripcion },
     });
+    if (nombre === 'MESERO') await prisma.rolPermiso.deleteMany({ where: { rolId: rol.id } });
     for (const codigo of def.permisos) {
       const permisoId = permisosPorCodigo[codigo];
       if (!permisoId) continue;

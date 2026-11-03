@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
-import { useToast } from '../App.jsx';
+import { useAuth, useToast } from '../App.jsx';
 import { LoadingState, overlayCierre, Modal, Button } from '../components/ui/index.jsx';
 import { LOGO_RECIBO } from '../logoRecibo.js';
 import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir } from '../print.js';
@@ -163,8 +163,15 @@ async function imprimirPrefacturaAsync(pedido) {
 
 export default function TomarPedido() {
   const { mesaId } = useParams();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const notify = useToast();
+  const puede = (codigo) => user?.__dev === true || (user?.permisos || []).includes(codigo);
+  const puedeCrearPedido = puede('pedidos.crear');
+  const puedeEditarPedido = puede('pedidos.editar');
+  const puedeCancelarPedido = puede('pedidos.eliminar');
+  const puedeEditarMesa = puede('mesas.editar');
+  const puedeVerPedido = puede('pedidos.ver');
 
   const [mesa, setMesa] = useState(null);
   const [meseras, setMeseras] = useState([]);
@@ -278,9 +285,10 @@ export default function TomarPedido() {
   }, [pedido, carrito]);
 
   const subtotal = items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0);
-  const puedeEditar = !pedido || editando; // carrito nuevo o pedido en modo edicion
+  const puedeEditar = !pedido ? puedeCrearPedido : editando && puedeEditarPedido;
 
   const agregarProducto = async (producto) => {
+    if (!puedeEditar) return;
     if (producto.disponibles === 0) {
       notify(`${producto.nombre} sin inventario`, 'err');
       return;
@@ -496,7 +504,7 @@ export default function TomarPedido() {
           </p>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          {pedido && (
+          {pedido && puedeEditarMesa && (
             <button className="btn" onClick={() => setMoviendo(true)}><Icon name="swap" size={16} /> Cambiar mesa</button>
           )}
           <button className="btn" onClick={() => navigate('/mesas')}><Icon name="back" size={16} /> Volver a mesas</button>
@@ -530,7 +538,7 @@ export default function TomarPedido() {
                   key={p.id}
                   className={`producto-card${p.foto ? ' con-foto' : ''} ${p.disponibles === 0 ? 'agotado' : ''}`}
                   onClick={() => agregarProducto(p)}
-                  disabled={p.disponibles === 0 || (pedido && !editando)}
+                  disabled={p.disponibles === 0 || !puedeEditar}
                 >
                   {p.foto && <img src={p.foto} alt={p.nombre} className="pc-foto" />}
                   <div className="pc-cat">{p.categoria?.nombre || 'Sin categoría'}</div>
@@ -612,7 +620,7 @@ export default function TomarPedido() {
               placeholder="Ej. sin cebolla, para llevar…"
               value={observaciones}
               onChange={(e) => setObservaciones(e.target.value)}
-              disabled={!!pedido && !editando}
+              disabled={!puedeEditar}
               style={{ width: '100%', resize: 'vertical' }}
             />
           </div>
@@ -624,7 +632,7 @@ export default function TomarPedido() {
           <div className="row" style={{ marginTop: 14 }}>
             {!pedido ? (
               <>
-                {mesa.estado === 'LIBRE' && (
+                {puedeEditarMesa && mesa.estado === 'LIBRE' && (
                   <button className="btn" style={{ flex: 1 }} disabled={procesando} onClick={() => {
                     setDatosReserva(CLIENTE_RESERVA_VACIO);
                     setDepartamentoReserva('');
@@ -636,25 +644,25 @@ export default function TomarPedido() {
                     <Icon name="clientes" size={16} /> Reservar mesa
                   </button>
                 )}
-                <button className="btn btn-primary" style={{ flex: 1 }} disabled={procesando} onClick={enviarPedido}>
-                  Enviar pedido
-                </button>
+                {puedeCrearPedido && <button className="btn btn-primary" style={{ flex: 1 }} disabled={procesando} onClick={enviarPedido}>Enviar pedido</button>}
               </>
             ) : editando ? (
-              <button className="btn btn-green" style={{ flex: 1 }} disabled={procesando} onClick={reenviarPedido}>
+              puedeEditarPedido && <button className="btn btn-green" style={{ flex: 1 }} disabled={procesando} onClick={reenviarPedido}>
                 <Icon name="reload" size={16} /> Reenviar pedido
               </button>
             ) : (
               <>
-                <button className="btn btn-primary" style={{ flex: 1 }} onClick={entrarEdicion}>
+                {puedeEditarPedido && <button className="btn btn-primary" style={{ flex: 1 }} onClick={entrarEdicion}>
                   <Icon name="edit" size={16} /> Editar
-                </button>
-                <button className="btn btn-green" style={{ flex: 1 }} onClick={() => imprimirPrefactura(pedido)}>
+                </button>}
+                {puedeVerPedido && <button className="btn btn-green" style={{ flex: 1 }} onClick={() => imprimirPrefactura(pedido)}>
                   <Icon name="receipt" size={16} /> Prefactura
-                </button>
+                </button>}
               </>
             )}
-            <button className="btn btn-red" onClick={cancelar}>Cancelar</button>
+            {(!pedido && puedeCrearPedido) || (pedido && puedeCancelarPedido)
+              ? <button className="btn btn-red" onClick={cancelar}>Cancelar pedido</button>
+              : null}
           </div>
         </div>
       </div>

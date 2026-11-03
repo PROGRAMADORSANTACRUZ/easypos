@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
-import { useToast } from '../App.jsx';
+import { useAuth, useToast } from '../App.jsx';
 import { LoadingState, Modal, Button } from '../components/ui/index.jsx';
 
 export default function Mesas() {
+  const { user } = useAuth();
+  const puede = (codigo) => user?.__dev === true || (user?.permisos || []).includes(codigo);
   const [mesas, setMesas] = useState([]);
   const [filtroEstado, setFiltroEstado] = useState('TOTAL');
   const [cargando, setCargando] = useState(true);
@@ -97,10 +99,12 @@ export default function Mesas() {
           <p className="subtitle" style={{ margin: 0 }}>Toca una mesa para tomar el pedido o continuar la cuenta.</p>
         </div>
         <div className="page-header__actions">
-          <Button variant="secondary" icon="cart" onClick={() => navigate('/facturas', { state: { abrirDirecta: true } })}>
-            Factura directa
-          </Button>
-          <Button variant="primary" icon="add" onClick={() => setMostrarForm(true)} title="Agregar mesa" />
+          {(puede('facturas.crear') || puede('factura_venta.crear')) && (
+            <Button variant="secondary" icon="cart" onClick={() => navigate('/facturas', { state: { abrirDirecta: true } })}>
+              Factura directa
+            </Button>
+          )}
+          {puede('mesas.crear') && <Button variant="primary" icon="add" onClick={() => setMostrarForm(true)} title="Agregar mesa" />}
         </div>
       </div>
 
@@ -174,8 +178,8 @@ export default function Mesas() {
           size="sm"
           footer={(
             <>
-              <Button variant="secondary" onClick={() => cancelarReserva(detalleReserva)}>Cancelar reserva</Button>
-              <Button variant="primary" onClick={() => navigate(`/mesas/${detalleReserva.id}/pedido`)}>Iniciar pedido</Button>
+              {puede('mesas.editar') && <Button variant="secondary" onClick={() => cancelarReserva(detalleReserva)}>Cancelar reserva</Button>}
+              {puede('pedidos.crear') && <Button variant="primary" onClick={() => navigate(`/mesas/${detalleReserva.id}/pedido`)}>Iniciar pedido</Button>}
             </>
           )}
         >
