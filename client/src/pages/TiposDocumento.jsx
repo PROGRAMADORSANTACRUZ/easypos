@@ -170,7 +170,7 @@ export default function TiposDocumento() {
                 <th>Electrónico</th>
                 <th>Razón social</th>
                 <th>Centro de operaciones</th>
-                <th>C.O</th>
+                <th>Tipo de documento</th>
                 <th>Cons inicial</th>
                 <th>Cons final</th>
                 <th>Cons próximo</th>
@@ -287,17 +287,11 @@ export default function TiposDocumento() {
                   : 'No: es un documento interno de la empresa, no se envía a la DIAN ni a Factus.'}
               </div>
             </div>
-            <div className="grid grid-2">
+            <div className="grid form-3col">
               <div className="field">
-                <label>C.O (código)</label>
+                <label>Tipo de documento</label>
                 <input placeholder="Ej. 402" value={form.codigo} onChange={(e) => set('codigo', e.target.value)} />
               </div>
-              <div className="field">
-                <label>Prefijo</label>
-                <input placeholder="Ej. MA1C" value={form.prefijo} onChange={(e) => set('prefijo', e.target.value.toUpperCase())} style={{ textTransform: 'uppercase' }} />
-              </div>
-            </div>
-            <div className="grid grid-2">
               <div className="field">
                 <label>Cons inicial</label>
                 <input type="number" value={form.consInicial} onChange={(e) => set('consInicial', e.target.value)} />
@@ -306,39 +300,37 @@ export default function TiposDocumento() {
                 <label>Cons final</label>
                 <input type="number" value={form.consFinal} onChange={(e) => set('consFinal', e.target.value)} />
               </div>
-            </div>
-            <div className="grid grid-2">
               <div className="field">
-                <label>Cons próximo</label>
+                <label>Cons. próximo</label>
                 <input type="number" value={form.consProximo} onChange={(e) => set('consProximo', e.target.value)} />
               </div>
               <div className="field">
-                <label>Nro max items</label>
-                <input type="number" value={form.nroMaxItems} onChange={(e) => set('nroMaxItems', e.target.value)} />
+                <label>Nro. resolución</label>
+                <input placeholder="Ej. 18764103045112" value={form.nroResolucion} onChange={(e) => set('nroResolucion', e.target.value)} />
               </div>
-            </div>
-            <div className="field">
-              <label>Nro resolución</label>
-              <input placeholder="Ej. 18764103045112" value={form.nroResolucion} onChange={(e) => set('nroResolucion', e.target.value)} />
-            </div>
-            <div className="grid grid-2">
               <div className="field">
                 <label>Fecha resolución</label>
                 <input type="date" value={form.fechaResolucion} onChange={(e) => set('fechaResolucion', e.target.value)} />
               </div>
               <div className="field">
-                <label>Fecha resolución vcto</label>
+                <label>Fecha vcto</label>
                 <input type="date" value={form.fechaResolucionVcto} onChange={(e) => set('fechaResolucionVcto', e.target.value)} />
               </div>
-            </div>
-            <div className="grid grid-2">
               <div className="field">
                 <label>Días aviso vcto</label>
                 <input type="number" value={form.diasAvisoVcto} onChange={(e) => set('diasAvisoVcto', e.target.value)} />
               </div>
               <div className="field">
-                <label>Cons formato</label>
+                <label>Cons. aviso</label>
                 <input value={form.consFormato} onChange={(e) => set('consFormato', e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Nro. máximo items</label>
+                <input type="number" value={form.nroMaxItems} onChange={(e) => set('nroMaxItems', e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Prefijo</label>
+                <input placeholder="Ej. MA1C" value={form.prefijo} onChange={(e) => set('prefijo', e.target.value.toUpperCase())} style={{ textTransform: 'uppercase' }} />
               </div>
             </div>
             <div className="field">
