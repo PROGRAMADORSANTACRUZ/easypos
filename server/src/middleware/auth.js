@@ -15,14 +15,8 @@
 import jwt from 'jsonwebtoken';
 import { prisma } from '../prisma.js';
 
-export const MODULOS_FACTURACION = ['facturas', 'factura_venta', 'cortesias'];
-
-export function permisosEfectivos(roles, asignados, permisosRol) {
-  const individuales = roles.includes('ADMIN') ? MODULOS_FACTURACION : asignados;
-  return [...new Set([
-    ...permisosRol,
-    ...individuales.flatMap((modulo) => [`${modulo}.ver`, `${modulo}.crear`]),
-  ])];
+export function permisosEfectivos(permisosRol) {
+  return [...new Set(permisosRol)];
 }
 
 const SECRET = process.env.JWT_SECRET;
@@ -97,7 +91,6 @@ export function requireAuth(req, res, next) {
       usuario: true,
       nombre: true,
       activo: true,
-      modulosFacturacion: true,
       roles: { include: { rol: { include: { permisos: { include: { permiso: true } } } } } },
       centrosOperacion: {
         include: {
@@ -120,8 +113,6 @@ export function requireAuth(req, res, next) {
     }
     const roles = usuario.roles.map((asignacion) => asignacion.rol.nombre);
     const permisos = permisosEfectivos(
-      roles,
-      usuario.modulosFacturacion,
       usuario.roles.flatMap((asignacion) => asignacion.rol.permisos.map((rolPermiso) => rolPermiso.permiso.codigo)),
     );
     req.usuario = {
@@ -157,14 +148,12 @@ export function permisoModuloFacturacion(modulo) {
     try {
       const usuario = await prisma.usuario.findUnique({
         where: { id: req.usuario.id },
-        select: { activo: true, modulosFacturacion: true, roles: { include: { rol: { include: { permisos: { include: { permiso: true } } } } } } },
+        select: { activo: true, roles: { include: { rol: { include: { permisos: { include: { permiso: true } } } } } } },
       });
       if (!usuario?.activo) {
         return res.status(403).json({ error: 'No tienes acceso a este módulo' });
       }
       req.usuario.permisos = permisosEfectivos(
-        usuario.roles.map((ur) => ur.rol.nombre),
-        usuario.modulosFacturacion,
         usuario.roles.flatMap((ur) => ur.rol.permisos.map((rp) => rp.permiso.codigo)),
       );
       return permisoPorMetodo(modulo)(req, res, next);

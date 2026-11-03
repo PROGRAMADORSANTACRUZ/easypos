@@ -15,6 +15,15 @@ function evaluar(path, modulos, { method = 'GET', query = {}, body = {} } = {}) 
   return { siguiente, status, cuerpo };
 }
 
+test('los permisos efectivos provienen de roles e ignoran submódulos guardados en usuario', async () => {
+  process.env.JWT_SECRET ||= 'test-secret-for-role-permissions';
+  const { permisosEfectivos } = await import('../src/middleware/auth.js');
+  assert.deepEqual(permisosEfectivos(['facturas.ver', 'pedidos.crear'], ['factura_venta', 'cortesias']), [
+    'facturas.ver',
+    'pedidos.crear',
+  ]);
+});
+
 test('bloquea endpoints de grupos deshabilitados', () => {
   const resultado = evaluar('/api/mesas', ['inventario']);
   assert.equal(resultado.siguiente, false);

@@ -4,12 +4,7 @@ import { Icon } from '../icons.jsx';
 import { useAuth, useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, EmptyState } from '../components/ui/index.jsx';
 
-const uVacio = { nombre: '', usuario: '', correo: '', password: '', roles: [], modulosFacturacion: [], centrosOperacionCodigos: [], activo: true };
-const modulosVenta = [
-  { codigo: 'facturas', nombre: 'Facturas' },
-  { codigo: 'factura_venta', nombre: 'Factura de venta' },
-  { codigo: 'cortesias', nombre: 'Cortesías' },
-];
+const uVacio = { nombre: '', usuario: '', correo: '', password: '', roles: [], centrosOperacionCodigos: [], activo: true };
 
 const resumirCentros = (centros) => {
   const grupos = new Map();
@@ -77,7 +72,6 @@ export default function Usuarios() {
       correo: u.correo || '',
       password: '',
       roles: u.roles || [],
-      modulosFacturacion: u.modulosFacturacion || [],
       centrosOperacionCodigos: (u.centrosOperacion || []).filter((centro) => centro.estado === 'Activo').map((centro) => centro.codigo),
       activo: u.activo,
     });
@@ -394,18 +388,6 @@ export default function Usuarios() {
                     </fieldset>
                   );
                 })}
-              </div>
-            </div>
-            <div className="field">
-              <label>Submódulos de facturación</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                {modulosVenta.map(({ codigo, nombre }) => (
-                  <label key={codigo} className="mini" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <input type="checkbox" checked={uForm.roles.includes('ADMIN') || uForm.modulosFacturacion.includes(codigo)} disabled={uForm.roles.includes('ADMIN')}
-                      onChange={() => setUForm((form) => ({ ...form, modulosFacturacion: form.modulosFacturacion.includes(codigo) ? form.modulosFacturacion.filter((modulo) => modulo !== codigo) : [...form.modulosFacturacion, codigo] }))} />
-                    {nombre}
-                  </label>
-                ))}
               </div>
             </div>
             {editId && (
