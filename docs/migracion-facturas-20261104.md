@@ -1,6 +1,6 @@
 # Cabeceras de facturacion con clave compuesta
 
-Estado: migracion preparada; no aplicada a bases reales por este cambio.
+El estado de cada ejecucion debe comprobarse en la base y en el manifiesto del respaldo; este procedimiento no implica que una base ya este migrada.
 
 ## Estructura
 
@@ -33,10 +33,16 @@ El adaptador de persistencia realiza las escrituras de cabecera y operacion dent
 4. Verificar documentos con tipo documental y usuario existentes, numeros enteros positivos dentro del rango de PostgreSQL y claves sin duplicados. Numeros como `DVP184` se rechazan; no se recortan automaticamente.
 5. Si faltan compania, centro o prefijo, solo se recuperan del tipo documental asociado. Si existe un valor contradictorio, falta usuario/tipo o difieren Numero y Consecutivo, la migracion cancela todo. Resolver esos casos con datos verificados, sin inventarlos.
 
+Excepciones historicas: solo con autorizacion explicita, la sesion puede configurar `pos.facturas_desvincular_tipo` con un array JSON de objetos `tabla`, `id`, `compania`, `centro`, `tipo`, `numero` y `tipo_id` original. Cada campo debe coincidir exactamente con el documento actual; de lo contrario se cancela la migracion. Para esos documentos se deja nulo solamente `TipoDocumentoId` en la tabla operativa; no se cambia ningun valor de la cabecera fiscal. El respaldo conserva el enlace original.
+
 No usar `prisma db push`, `migrate reset` ni el seed sobre una base existente para aplicar este cambio.
 El historial del repositorio no constituye una inicializacion completa de una base vacia: comprobar primero el estado de migraciones de cada base y sus diferencias pendientes.
 
 ## Aplicacion Coordinada
+
+Si no se puede verificar la detencion de la API anterior, `server/scripts/pausar-facturacion.sql` bloquea temporalmente INSERT/UPDATE/DELETE sobre ambas tablas. Requiere respaldo verificado y ventana de mantenimiento; no reinicia ni detiene PostgreSQL. La sesion de migracion debe configurar `pos.migracion_facturas=20261104` para permitir sus propias escrituras. Tras el cambio, eliminar los triggers `_pos_facturas_mantenimiento_20261104` de ambas tablas operativas y la funcion `public._pos_facturas_mantenimiento_20261104()`. Si se cancela antes de migrar, retirar los mismos triggers de las tablas originales y la funcion. No dejar una pausa abandonada.
+
+La API nueva anuncia `estructuraFacturas: "20261104"` en `/api/health`. Verificar esa respuesta sin cache antes de aplicar la migracion original y retirar la pausa. Durante la ventana, no reabrir facturacion hasta validar esquema y lecturas con el cliente nuevo.
 
 Con la aplicacion detenida y el respaldo verificado, ejecutar desde `server` el archivo
 `prisma/migrations/20261104120000_facturas_cabeceras_clave_compuesta/migration.sql` con `psql -v ON_ERROR_STOP=1` sobre la base seleccionada.

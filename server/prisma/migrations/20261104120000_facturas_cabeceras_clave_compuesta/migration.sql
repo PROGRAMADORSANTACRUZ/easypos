@@ -35,16 +35,39 @@ FROM "FacturaVenta" f
 LEFT JOIN "TiposDocumento" t ON t."Id" = f."TipoDocumentoId"
 LEFT JOIN "Usuarios" u ON u."Id" = f."UsuarioId";
 
+CREATE TEMP TABLE "_facturas_excepciones" ON COMMIT DROP AS
+SELECT * FROM jsonb_to_recordset(COALESCE(NULLIF(current_setting('pos.facturas_desvincular_tipo', true), ''), '[]')::jsonb)
+AS excepcion(tabla text, id uuid, compania text, centro text, tipo text, numero text, tipo_id uuid);
+ALTER TABLE "_facturas_origen" ADD COLUMN desvincular_tipo boolean NOT NULL DEFAULT false;
+UPDATE "_facturas_origen" origen SET desvincular_tipo = true
+FROM "_facturas_excepciones" excepcion
+WHERE origen.tabla = excepcion.tabla AND origen.id = excepcion.id
+  AND origen.compania = excepcion.compania AND origen.centro = excepcion.centro
+  AND origen.tipo = excepcion.tipo AND origen.numero_texto = excepcion.numero
+  AND origen.datos->>'TipoDocumentoId' = excepcion.tipo_id::text;
+
 DO $$
 DECLARE
   invalida record;
 BEGIN
+  IF EXISTS (
+    SELECT 1 FROM "_facturas_excepciones" excepcion
+    WHERE NOT EXISTS (
+      SELECT 1 FROM "_facturas_origen" origen WHERE origen.desvincular_tipo
+        AND origen.tabla = excepcion.tabla AND origen.id = excepcion.id
+        AND origen.compania = excepcion.compania AND origen.centro = excepcion.centro
+        AND origen.tipo = excepcion.tipo AND origen.numero_texto = excepcion.numero
+        AND origen.datos->>'TipoDocumentoId' = excepcion.tipo_id::text
+    )
+  ) THEN
+    RAISE EXCEPTION 'Una excepcion autorizada no coincide exactamente con su documento original';
+  END IF;
   SELECT tabla, id INTO invalida FROM "_facturas_origen"
   WHERE compania IS NULL OR btrim(compania) = ''
     OR centro IS NULL OR btrim(centro) = '' OR tipo IS NULL OR btrim(tipo) = ''
-    OR usuario IS NULL OR btrim(usuario) = '' OR tipo_id IS NULL
-    OR compania IS DISTINCT FROM tipo_compania
-    OR centro IS DISTINCT FROM tipo_centro OR tipo IS DISTINCT FROM tipo_codigo
+    OR usuario IS NULL OR btrim(usuario) = ''
+    OR (NOT desvincular_tipo AND (tipo_id IS NULL OR compania IS DISTINCT FROM tipo_compania
+      OR centro IS DISTINCT FROM tipo_centro OR tipo IS DISTINCT FROM tipo_codigo))
     OR numero_texto IS NULL OR numero_texto !~ '^[0-9]+$'
     OR CASE WHEN numero_texto ~ '^[0-9]+$'
       THEN numero_texto::numeric NOT BETWEEN 1 AND 2147483647 ELSE false END
@@ -175,7 +198,8 @@ BEGIN
     IF copia_distinta THEN
       RAISE EXCEPTION 'La copia de % no coincide con los documentos originales', tabla;
     END IF;
-    EXECUTE format('UPDATE %I f SET "CompaniaCodigo" = o.compania, "CentroOperacionCodigo" = o.centro, "Prefijo" = o.tipo
+    EXECUTE format('UPDATE %I f SET "CompaniaCodigo" = o.compania, "CentroOperacionCodigo" = o.centro, "Prefijo" = o.tipo,
+      "TipoDocumentoId" = CASE WHEN o.desvincular_tipo THEN NULL ELSE f."TipoDocumentoId" END
       FROM "_facturas_origen" o WHERE o.tabla = %L AND o.id = f."Id"', tabla || 'Operacion', tabla);
     EXECUTE format('ALTER TABLE %I RENAME COLUMN %I TO numero', tabla || 'Operacion',
       CASE WHEN tabla = 'Factura' THEN 'NumeroFactura' ELSE 'Numero' END);

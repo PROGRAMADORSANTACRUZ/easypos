@@ -9,6 +9,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { crearAdaptadorFacturas } from '../src/facturasPersistencia.js';
 
 const migracion = await readFile(new URL('../prisma/migrations/20261104120000_facturas_cabeceras_clave_compuesta/migration.sql', import.meta.url), 'utf8');
+const pausa = await readFile(new URL('../scripts/pausar-facturacion.sql', import.meta.url), 'utf8');
 const usuario = '00000000-0000-4000-8000-000000000001';
 const tipo = '00000000-0000-4000-8000-000000000002';
 const facturaId = '00000000-0000-4000-8000-000000000003';
@@ -133,6 +134,54 @@ for (const [nombre, preparar, mensaje] of [
     } finally { await db.close(); }
   });
 }
+
+for (const coincide of [true, false]) {
+  test(`la desvinculacion autorizada ${coincide ? 'conserva la cabecera historica' : 'rechaza un documento diferente'}`, async () => {
+    const db = await baseAnterior();
+    const tipoIncorrecto = '00000000-0000-4000-8000-000000000088';
+    try {
+      await db.exec(`INSERT INTO "TiposDocumento" VALUES ('${tipoIncorrecto}', '004', '420', 'FEV');
+        UPDATE "Factura" SET "TipoDocumentoId" = '${tipoIncorrecto}'`);
+      await db.query('SELECT set_config($1,$2,false)', ['pos.facturas_desvincular_tipo', JSON.stringify([{
+        tabla: 'Factura', id: facturaId, compania: '006', centro: '606', tipo: 'DVP',
+        numero: coincide ? '184' : '185', tipo_id: tipoIncorrecto,
+      }])]);
+      if (!coincide) {
+        await assert.rejects(db.exec(migracion), /no coincide exactamente/);
+        await db.exec('ROLLBACK');
+        assert.equal((await db.query('SELECT "TipoDocumentoId" FROM "Factura"')).rows[0].TipoDocumentoId, tipoIncorrecto);
+        return;
+      }
+      await db.exec(migracion);
+      const { rows: [cabecera] } = await db.query('SELECT * FROM "Factura"');
+      assert.equal(cabecera.CompaniaCodigo, '006');
+      assert.equal(cabecera.CentroOperacionCodigo, '606');
+      assert.equal(cabecera.TipoDocumento, 'DVP');
+      assert.equal(cabecera.numero, 184);
+      assert.equal(cabecera.Total, 119);
+      assert.equal(cabecera.CUFE, 'cufe-historico');
+      assert.equal((await db.query('SELECT "TipoDocumentoId" FROM "FacturaOperacion"')).rows[0].TipoDocumentoId, null);
+      assert.equal((await db.query('SELECT "TipoDocumentoId" FROM respaldo_facturas_20261104."Factura"')).rows[0].TipoDocumentoId, tipoIncorrecto);
+      assert.equal((await db.query('SELECT "TipoDocumentoId" FROM "FacturaVentaOperacion"')).rows[0].TipoDocumentoId, tipo);
+    } finally { await db.close(); }
+  });
+}
+
+test('la pausa bloquea escrituras ordinarias pero permite la sesion de migracion', async () => {
+  const db = await baseAnterior();
+  try {
+    await db.exec(pausa);
+    await assert.rejects(db.exec('UPDATE "Factura" SET "Total" = "Total"'), { code: '55000' });
+    await assert.rejects(db.exec('UPDATE "FacturaVenta" SET "Total" = "Total"'), { code: '55000' });
+    await db.query('SELECT set_config($1,$2,false)', ['pos.migracion_facturas', '20261104']);
+    await db.exec(migracion);
+    await db.query('SELECT set_config($1,$2,false)', ['pos.migracion_facturas', '']);
+    await assert.rejects(db.exec('UPDATE "FacturaOperacion" SET "pedidoId" = "pedidoId"'), { code: '55000' });
+    assert.equal((await db.query('SELECT count(*)::int AS cantidad FROM "Factura"')).rows[0].cantidad, 1);
+    await db.exec('DROP TRIGGER _pos_facturas_mantenimiento_20261104 ON "FacturaOperacion"; DROP TRIGGER _pos_facturas_mantenimiento_20261104 ON "FacturaVentaOperacion"; DROP FUNCTION public._pos_facturas_mantenimiento_20261104()');
+    await db.exec('UPDATE "FacturaOperacion" SET "pedidoId" = "pedidoId"');
+  } finally { await db.close(); }
+});
 
 test('el cliente Prisma nuevo lee y actualiza las dos tablas migradas', async () => {
   const db = await baseAnterior();
