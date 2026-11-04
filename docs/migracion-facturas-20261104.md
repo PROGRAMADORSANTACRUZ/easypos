@@ -2,9 +2,11 @@
 
 El estado de cada ejecucion debe comprobarse en la base y en el manifiesto del respaldo; este procedimiento no implica que una base ya este migrada.
 
-## Estructura
+La actualizacion posterior de [cuatro medios de pago](migracion-pagos-20261104.md) reemplaza `metodoPago` por `metodopago1` a `metodopago4`; el esquema vigente pasa de 28 a 31 columnas.
 
-Las tablas fisicas `Factura` y `FacturaVenta` tienen exactamente estas 28 columnas, en este orden:
+## Estructura Inicial
+
+La migracion inicial dejo las tablas fisicas `Factura` y `FacturaVenta` con estas 28 columnas, antes de la actualizacion de pagos:
 
 ```text
 CompaniaCodigo, CentroOperacionCodigo, TipoDocumento, fecha, numero,

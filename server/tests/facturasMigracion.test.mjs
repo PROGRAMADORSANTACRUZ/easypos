@@ -7,9 +7,12 @@ import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { crearAdaptadorFacturas } from '../src/facturasPersistencia.js';
+import { separarMetodosPago } from '../src/pagosFactura.js';
 
 const migracion = await readFile(new URL('../prisma/migrations/20261104120000_facturas_cabeceras_clave_compuesta/migration.sql', import.meta.url), 'utf8');
 const pausa = await readFile(new URL('../scripts/pausar-facturacion.sql', import.meta.url), 'utf8');
+const migracionPagos = await readFile(new URL('../prisma/migrations/20261104130000_facturas_cuatro_metodos_pago/migration.sql', import.meta.url), 'utf8');
+const retirarMetodoAnterior = await readFile(new URL('../prisma/migrations/20261104140000_facturas_retirar_metodo_pago_anterior/migration.sql', import.meta.url), 'utf8');
 const usuario = '00000000-0000-4000-8000-000000000001';
 const tipo = '00000000-0000-4000-8000-000000000002';
 const facturaId = '00000000-0000-4000-8000-000000000003';
@@ -189,6 +192,8 @@ test('el cliente Prisma nuevo lee y actualiza las dos tablas migradas', async ()
   let cliente;
   try {
     await db.exec(migracion);
+    await db.exec(migracionPagos);
+    await db.exec(retirarMetodoAnterior);
     await socket.start();
     cliente = new PrismaClient({ datasources: { db: {
       url: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?connection_limit=1&sslmode=disable`,
@@ -252,6 +257,8 @@ test('Prisma real crea, consulta, actualiza y revierte facturas con el esquema c
     assert.equal(factura.usuario.usuario, 'cajero606');
     assert.equal(factura.numeroFactura, '184');
     assert.equal(factura.consecutivo, 184);
+    assert.equal(factura.metodoPago1, '0');
+    assert.equal(factura.metodoPago4, '0');
     const tipoElectronico = await prisma.tipoDocumento.create({ data: {
       clase: 'FACTURA ELECTRONICA DE VENTA', esElectronico: true,
       codigo: '606', prefijo: 'FE', companiaCodigo: '006', centroOperacionCodigo: '606',
@@ -285,9 +292,88 @@ test('Prisma real crea, consulta, actualiza y revierte facturas con el esquema c
     assert.equal(await cliente.facturaVentaCabecera.count(), 1);
     await assert.rejects(prisma.facturaVenta.create({ data: datos }), /Unique constraint/);
     assert.equal(await cliente.facturaVentaCabecera.count(), 1);
+    const mixta = await prisma.facturaVenta.create({ data: {
+      ...datos, numeroFactura: '186', credito: false, propina: 3, metodoPago: 'TARJETA + TRANSFERENCIA',
+      pagos: { create: [{ formaPago: 'TARJETA', monto: 100 }, { formaPago: 'TRANSFERENCIA', monto: 22 }] },
+    }, include: { pagos: true } });
+    assert.equal(mixta.metodoPago1, 'TARJETA $100');
+    assert.equal(mixta.metodoPago2, 'TRANSFERENCIA $22');
+    assert.equal(mixta.metodoPago3, '0');
+    assert.equal(mixta.metodoPago4, '0');
+    assert.equal(mixta.metodoPago, 'TARJETA $100 + TRANSFERENCIA $22');
+    assert.equal(mixta.pagos.reduce((suma, pago) => suma + pago.monto, 0), 122);
+    const pagoActualizado = await prisma.facturaVenta.update({ where: { id: mixta.id }, data: { metodoPago: 'EFECTIVO' } });
+    assert.equal(pagoActualizado.metodoPago1, 'EFECTIVO $122');
+    assert.equal(pagoActualizado.metodoPago2, '0');
   } finally {
     if (cliente) await cliente.$disconnect();
     await socket.stop();
     await db.close();
   }
 });
+
+test('migra pagos simples y mixtos con propina sin cambiar importes ni etiquetas compatibles', async () => {
+  const db = await baseAnterior();
+  try {
+    await db.exec(migracion);
+    await db.exec(`UPDATE "Factura" SET "metodoPago" = 'EFECTIVO $${String.fromCharCode(160)}10.000 + TARJETA $${String.fromCharCode(160)}10.000 + TRANSFERENCIA $${String.fromCharCode(160)}17.400',
+      "Total" = 34000, "Propina" = 3400, credito = false;
+      UPDATE "FacturaVenta" SET "metodoPago" = 'CRÉDITO 30 días', credito = true, "Propina" = 0`);
+    await db.exec(migracionPagos);
+    await db.exec(retirarMetodoAnterior);
+    for (const tabla of ['Factura', 'FacturaVenta']) {
+      const { rows: [cabecera] } = await db.query(`SELECT * FROM "${tabla}"`);
+      assert.equal(Object.keys(cabecera).length, 31);
+      assert.equal(cabecera.metodoPago, undefined);
+      const original = (await db.query(`SELECT * FROM respaldo_pagos_20261104."${tabla}"`)).rows[0];
+      const esperados = separarMetodosPago({ total: original.Total, propina: original.Propina, credito: original.credito, metodoPago: original.metodoPago });
+      for (let indice = 1; indice <= 4; indice++) assert.equal(cabecera[`metodopago${indice}`], esperados[`metodoPago${indice}`]);
+      assert.equal(cabecera.Total, original.Total);
+      assert.equal(cabecera.CUFE, original.CUFE);
+      assert.equal((await db.query(`SELECT "metodoPago" FROM "${tabla}Operacion"`)).rows[0].metodoPago, original.metodoPago);
+    }
+  } finally { await db.close(); }
+});
+
+test('cancela la migracion de pagos si un mixto no tiene importes verificables', async () => {
+  const db = await baseAnterior();
+  try {
+    await db.exec(migracion);
+    await db.exec(`UPDATE "Factura" SET "metodoPago" = 'EFECTIVO + TARJETA', credito = false`);
+    await assert.rejects(db.exec(migracionPagos), /sin medio e importe verificables/);
+    await db.exec('ROLLBACK');
+    assert.equal((await db.query(`SELECT to_regnamespace('respaldo_pagos_20261104') AS esquema`)).rows[0].esquema, null);
+    assert.equal((await db.query('SELECT "metodoPago" FROM "Factura"')).rows[0].metodoPago, 'EFECTIVO + TARJETA');
+  } finally { await db.close(); }
+});
+
+for (const coincide of [true, false]) {
+  test(`la excepcion de pagos ${coincide ? 'preserva los importes historicos exactos' : 'rechaza otra factura'}`, async () => {
+    const db = await baseAnterior();
+    const metodo = 'EFECTIVO $10.000 + TARJETA $10.000 + TRANSFERENCIA $17.400';
+    try {
+      await db.exec(migracion);
+      await db.query('UPDATE "Factura" SET "metodoPago"=$1,"Total"=36720,"Propina"=3400,credito=false', [metodo]);
+      await db.query('SELECT set_config($1,$2,false)', ['pos.pagos_conservar_diferencia', JSON.stringify([{
+        tabla: 'Factura', compania: '006', centro: '606', tipo: 'DVP', numero: coincide ? 184 : 185,
+        total: 36720, propina: 3400, metodo,
+      }])]);
+      if (!coincide) {
+        await assert.rejects(db.exec(migracionPagos), /no coincide exactamente/);
+        await db.exec('ROLLBACK');
+        assert.equal((await db.query('SELECT "metodoPago" FROM "Factura"')).rows[0].metodoPago, metodo);
+        return;
+      }
+      await db.exec(migracionPagos);
+      await db.exec(retirarMetodoAnterior);
+      const { rows: [factura] } = await db.query('SELECT * FROM "Factura"');
+      assert.equal(factura.metodopago1, 'EFECTIVO $10.000');
+      assert.equal(factura.metodopago2, 'TARJETA $10.000');
+      assert.equal(factura.metodopago3, 'TRANSFERENCIA $17.400');
+      assert.equal(factura.metodopago4, '0');
+      assert.equal(factura.Total, 36720);
+      assert.equal(factura.Propina, 3400);
+      assert.equal(factura.CUFE, 'cufe-historico');
+    } finally { await db.close(); }
+  });
+}

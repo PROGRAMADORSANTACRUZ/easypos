@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
+import { desglosarFactura } from '../pagosFactura.js';
+
+export { desglosarFactura } from '../pagosFactura.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -13,33 +16,6 @@ const conRelaciones = { caja: true, usuario: true };
 // - Pago simple: el total al método indicado
 // La propina se recibe de contado: se suma al efectivo (o al método único si es
 // tarjeta/transferencia sin efectivo).
-export function desglosarFactura(f) {
-  const m = String(f.metodoPago || '').trim();
-  const propina = f.propina || 0;
-  if (f.credito) {
-    const partes = [{ metodo: 'CRÉDITO', monto: f.total || 0 }];
-    if (propina) partes.push({ metodo: 'EFECTIVO', monto: propina });
-    return partes;
-  }
-  if (m.includes(' + ')) {
-    const partes = [];
-    for (const parte of m.split(' + ')) {
-      const txt = parte.trim();
-      const monto = Number(txt.replace(/[^0-9,]/g, '').replace(',', '.')) || 0;
-      const metodo = txt.replace(/\s*\$?\s*[0-9.,]+\s*$/, '').trim().toUpperCase() || 'OTRO';
-      partes.push({ metodo, monto });
-    }
-    const totalPagos = partes.reduce((suma, parte) => suma + parte.monto, 0);
-    if (propina && Math.abs(totalPagos - (f.total || 0)) < 0.01) {
-      const ef = partes.find((p) => /^efectivo/i.test(p.metodo));
-      if (ef) ef.monto += propina; else partes.push({ metodo: 'EFECTIVO', monto: propina });
-    }
-    return partes;
-  }
-  const metodo = (m || 'OTRO').toUpperCase();
-  return [{ metodo, monto: (f.total || 0) + propina }];
-}
-
 // Efectivo que aporta una factura al cajon (para el cuadre).
 function efectivoDeFactura(f) {
   return desglosarFactura(f)

@@ -68,8 +68,11 @@ test('crea cabecera y operacion en la misma transaccion con usuario de acceso', 
   assert.equal(llamadas.filter(([nombre]) => nombre === 'transaccion').length, 1);
   assert.equal(llamadas[1][1].usuarioNombre, 'cajero606');
   assert.equal(llamadas[1][1].numeroFactura, 184);
+  assert.equal(llamadas[1][1].metodoPago1, 'EFECTIVO $25.000');
+  assert.equal(llamadas[1][1].metodoPago4, '0');
   assert.equal(llamadas[1][1].pedidoId, undefined);
   assert.equal(llamadas[2][1].total, undefined);
+  assert.equal(llamadas[2][1].metodoPago, 'EFECTIVO');
   assert.equal(llamadas[2][1].detalle.create.length, 1);
   assert.equal(factura.consecutivo, 184);
   assert.equal(factura.numeroFactura, '184');

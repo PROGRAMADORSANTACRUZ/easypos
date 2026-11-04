@@ -1,9 +1,11 @@
+import { camposMetodoPago, separarMetodosPago } from './pagosFactura.js';
+
 const modelosFactura = new Set(['Factura', 'FacturaVenta']);
 const claves = ['companiaCodigo', 'centroOperacionCodigo', 'prefijo', 'numeroFactura'];
 const camposCabecera = new Set([
   'createdAt', 'numeroDocumentoCliente', 'nombreCliente', 'sucursalCliente',
   'telefonoCliente', 'direccionCliente', 'barrioCliente', 'ciudadCliente', 'emailCliente',
-  'subtotal', 'impuestoPct', 'impuesto', 'total', 'propina', 'metodoPago',
+  'subtotal', 'impuestoPct', 'impuesto', 'total', 'propina', ...camposMetodoPago,
   'credito', 'creditoDias', 'vence', 'cufe', 'numeroFactus', 'xmlPath', 'pdfPath',
   'estadoDIAN', 'usuarioNombre',
 ]);
@@ -161,6 +163,16 @@ export function crearAdaptadorFacturas(modelos) {
         || tipo.prefijo !== datos.prefijo) {
         throw Object.assign(new Error('El tipo de documento no corresponde a la compania, centro y codigo de la factura.'), { status: 409 });
       }
+      datos.metodoPago ||= 'EFECTIVO';
+      const pagos = datos.pagos?.create;
+      Object.assign(datosCabecera, separarMetodosPago(
+        { ...datosCabecera, metodoPago: datos.metodoPago },
+        pagos ? (Array.isArray(pagos) ? pagos : [pagos]) : [],
+      ));
+      if (pagos && !datosCabecera.credito) {
+        const aplicados = camposMetodoPago.map((campo) => datosCabecera[campo]).filter((pago) => pago !== '0');
+        datos.metodoPago = aplicados.length === 1 ? aplicados[0].split(' $')[0] : aplicados.join(' + ');
+      }
       await cabeceras.create({ data: { ...datosCabecera, ...Object.fromEntries(claves.map((campo) => [campo, datos[campo]])) } });
       const consulta = argumentos(modelo, { ...originales, data: datos });
       return presentar(modelo, await tabla.create(consulta), originales);
@@ -173,6 +185,12 @@ export function crearAdaptadorFacturas(modelos) {
       select: Object.fromEntries(claves.map((campo) => [campo, true])),
     });
     const clave = Object.fromEntries(claves.map((campo) => [campo, existente[campo]]));
+    if (['metodoPago', 'total', 'propina', 'credito'].some((campo) => originales.data?.[campo] !== undefined)) {
+      const actual = await tabla.findUniqueOrThrow({ where: donde(modelo, originales.where), include: { cabecera: true } });
+      Object.assign(datosCabecera, separarMetodosPago({
+        ...actual.cabecera, ...datosCabecera, metodoPago: datos.metodoPago ?? actual.metodoPago,
+      }));
+    }
     if (Object.keys(datosCabecera).length) await cabeceras.update({ where: { [nombreClave]: clave }, data: datosCabecera });
     const consulta = argumentos(modelo, originales);
     const resultado = Object.keys(datos).length

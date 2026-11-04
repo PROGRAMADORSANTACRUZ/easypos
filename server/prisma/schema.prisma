@@ -626,6 +626,7 @@ model Factura {
   tipoDocumento TipoDocumento? @relation(fields: [tipoDocumentoId], references: [id], onDelete: SetNull)
   numeroFactura Int      @map("numero")
   prefijo       String   @db.VarChar(20) @map("TipoDocumento")
+  metodoPago    String   @default("EFECTIVO")
   cabecera      FacturaCabecera @relation(fields: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], references: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], onDelete: Cascade, onUpdate: Cascade, map: "FacturaOperacion_cabecera_fkey")
   id            String    @id @default(uuid()) @db.Uuid @map("Id")
   pedidoId      Int
@@ -660,6 +661,7 @@ model FacturaVenta {
   tipoDocumento TipoDocumento? @relation(fields: [tipoDocumentoId], references: [id], onDelete: SetNull)
   numeroFactura Int      @map("numero")
   prefijo       String   @db.VarChar(20) @map("TipoDocumento")
+  metodoPago    String   @default("EFECTIVO")
   cabecera      FacturaVentaCabecera @relation(fields: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], references: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], onDelete: Cascade, onUpdate: Cascade, map: "FacturaVentaOperacion_cabecera_fkey")
   id            String    @id @default(uuid()) @db.Uuid @map("Id")
   estado        String    @default("FACTURADA") @db.VarChar(20) @map("Estado")
@@ -703,7 +705,10 @@ model FacturaCabecera {
   impuesto Float @map("IVA")
   total Float @map("Total")
   propina Float @default(0) @map("Propina")
-  metodoPago String @default("EFECTIVO")
+  metodoPago1 String @default("0") @map("metodopago1")
+  metodoPago2 String @default("0") @map("metodopago2")
+  metodoPago3 String @default("0") @map("metodopago3")
+  metodoPago4 String @default("0") @map("metodopago4")
   credito Boolean @default(false)
   creditoDias Int?
   vence DateTime?
@@ -738,7 +743,10 @@ model FacturaVentaCabecera {
   impuesto Float @map("IVA")
   total Float @map("Total")
   propina Float @default(0) @map("Propina")
-  metodoPago String @default("EFECTIVO")
+  metodoPago1 String @default("0") @map("metodopago1")
+  metodoPago2 String @default("0") @map("metodopago2")
+  metodoPago3 String @default("0") @map("metodopago3")
+  metodoPago4 String @default("0") @map("metodopago4")
   credito Boolean @default(false)
   creditoDias Int?
   vence DateTime?

@@ -89,7 +89,7 @@ app.use(mayusculas);
 app.use(resolverTenant);
 app.use(restringirModuloRestaurante);
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, servicio: 'POS API', estructuraFacturas: '20261104' }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, servicio: 'POS API', estructuraFacturas: '20261104', metodosPago: 4 }));
 
 // Rutas protegidas: requieren sesion (JWT) y, cuando el modulo tiene permisos
 // definidos en el catalogo (ver server/src/tenantSeed.js), el permiso correspondiente.

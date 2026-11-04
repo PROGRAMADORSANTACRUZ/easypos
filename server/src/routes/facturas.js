@@ -462,9 +462,9 @@ router.post('/dividir', wrap(async (req, res) => {
       const numero = await asignarNumeracion(tx, electronica, companiaCodigo, centroOperacionCodigo);
       const modelo = electronica ? tx.factura : tx.facturaVenta;
       const pagosFactura = emision === 'UNA' ? pagos : [pagos[parte.numero - 1]];
-      const basePago = pagosFactura.map((pago, indice) => ({
+      const basePago = pagosFactura.map((pago) => ({
         formaPago: pago.formaPago,
-        monto: emision === 'UNA' ? partes[indice].total : parte.total,
+        monto: Number(pago.monto),
       }));
       const factura = await modelo.create({
         data: {
