@@ -625,9 +625,10 @@ model Factura {
   tipoDocumentoId String?  @db.Uuid @map("TipoDocumentoId")
   tipoDocumento TipoDocumento? @relation(fields: [tipoDocumentoId], references: [id], onDelete: SetNull)
   numeroFactura Int      @map("numero")
-  prefijo       String   @db.VarChar(20) @map("TipoDocumento")
+  tipoDocumentoCodigo String @db.VarChar(20) @map("TipoDocumento")
+  prefijo       String   @db.VarChar(20) @map("Prefijo")
   metodoPago    String   @default("EFECTIVO")
-  cabecera      FacturaCabecera @relation(fields: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], references: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], onDelete: Cascade, onUpdate: Cascade, map: "FacturaOperacion_cabecera_fkey")
+  cabecera      FacturaCabecera @relation(fields: [companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numeroFactura], references: [companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numeroFactura], onDelete: Cascade, onUpdate: Cascade, map: "FacturaOperacion_cabecera_fkey")
   id            String    @id @default(uuid()) @db.Uuid @map("Id")
   pedidoId      Int
   pedido        Pedido    @relation(fields: [pedidoId], references: [id])
@@ -647,7 +648,7 @@ model Factura {
   pagos         Pago[]
   comisiones    ComisionVendedor[]
   eventosDIAN   EventoDIAN[]
-  @@unique([companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], map: "FacturaOperacion_documento_key")
+  @@unique([companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numeroFactura], map: "FacturaOperacion_documento_key")
   @@index([pedidoId])
   @@map("FacturaOperacion")
 }
@@ -660,9 +661,10 @@ model FacturaVenta {
   tipoDocumentoId String?  @db.Uuid @map("TipoDocumentoId")
   tipoDocumento TipoDocumento? @relation(fields: [tipoDocumentoId], references: [id], onDelete: SetNull)
   numeroFactura Int      @map("numero")
-  prefijo       String   @db.VarChar(20) @map("TipoDocumento")
+  tipoDocumentoCodigo String @db.VarChar(20) @map("TipoDocumento")
+  prefijo       String   @db.VarChar(20) @map("Prefijo")
   metodoPago    String   @default("EFECTIVO")
-  cabecera      FacturaVentaCabecera @relation(fields: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], references: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], onDelete: Cascade, onUpdate: Cascade, map: "FacturaVentaOperacion_cabecera_fkey")
+  cabecera      FacturaVentaCabecera @relation(fields: [companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numeroFactura], references: [companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numeroFactura], onDelete: Cascade, onUpdate: Cascade, map: "FacturaVentaOperacion_cabecera_fkey")
   id            String    @id @default(uuid()) @db.Uuid @map("Id")
   estado        String    @default("FACTURADA") @db.VarChar(20) @map("Estado")
   validezDias   Int?      @map("ValidezDias")
@@ -681,7 +683,7 @@ model FacturaVenta {
   detalle       FacturaVentaDetalle[]
   pagos         Pago[]
   comisiones    ComisionVendedor[]
-  @@unique([companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], map: "FacturaVentaOperacion_documento_key")
+  @@unique([companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numeroFactura], map: "FacturaVentaOperacion_documento_key")
   @@index([pedidoId])
   @@map("FacturaVentaOperacion")
 }
@@ -689,7 +691,8 @@ model FacturaVenta {
 model FacturaCabecera {
   companiaCodigo String @db.VarChar(3) @map("CompaniaCodigo")
   centroOperacionCodigo String @db.VarChar(10) @map("CentroOperacionCodigo")
-  prefijo String @db.VarChar(20) @map("TipoDocumento")
+  tipoDocumentoCodigo String @db.VarChar(20) @map("TipoDocumento")
+  prefijo String @db.VarChar(20) @map("Prefijo")
   createdAt DateTime @default(now()) @map("fecha")
   numeroFactura Int @map("numero")
   numeroDocumentoCliente String? @map("NumeroDocumentoCliente")
@@ -724,14 +727,15 @@ model FacturaCabecera {
   usuarioNombre String @db.VarChar(50) @map("Usuario")
   operacion Factura?
 
-  @@id([companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura])
+  @@id([companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numeroFactura])
   @@map("Factura")
 }
 
 model FacturaVentaCabecera {
   companiaCodigo String @db.VarChar(3) @map("CompaniaCodigo")
   centroOperacionCodigo String @db.VarChar(10) @map("CentroOperacionCodigo")
-  prefijo String @db.VarChar(20) @map("TipoDocumento")
+  tipoDocumentoCodigo String @db.VarChar(20) @map("TipoDocumento")
+  prefijo String @db.VarChar(20) @map("Prefijo")
   createdAt DateTime @default(now()) @map("fecha")
   numeroFactura Int @map("numero")
   numeroDocumentoCliente String? @map("NumeroDocumentoCliente")
@@ -766,7 +770,7 @@ model FacturaVentaCabecera {
   usuarioNombre String @db.VarChar(50) @map("Usuario")
   operacion FacturaVenta?
 
-  @@id([companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura])
+  @@id([companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numeroFactura])
   @@map("FacturaVenta")
 }
 

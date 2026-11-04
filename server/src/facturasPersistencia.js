@@ -1,7 +1,7 @@
 import { camposMetodoPago, camposValorPago, separarMetodosPago, separarValoresPago } from './pagosFactura.js';
 
 const modelosFactura = new Set(['Factura', 'FacturaVenta']);
-const claves = ['companiaCodigo', 'centroOperacionCodigo', 'prefijo', 'numeroFactura'];
+const claves = ['companiaCodigo', 'centroOperacionCodigo', 'tipoDocumentoCodigo', 'numeroFactura'];
 const camposCabecera = new Set([
   'createdAt', 'numeroDocumentoCliente', 'nombreCliente', 'sucursalCliente',
   'telefonoCliente', 'direccionCliente', 'barrioCliente', 'ciudadCliente', 'emailCliente',
@@ -157,17 +157,18 @@ export function crearAdaptadorFacturas(modelos) {
       if (originales.data.consecutivo != null && Number(originales.data.consecutivo) !== datos.numeroFactura) {
         throw Object.assign(new Error('El consecutivo no coincide con el numero de la factura.'), { status: 400 });
       }
-      if (claves.some((campo) => datos[campo] == null || datos[campo] === '')) {
-        throw Object.assign(new Error('La clave de la factura requiere compania, centro, tipo y numero.'), { status: 400 });
-      }
       const tipo = datos.tipoDocumentoId
         ? await cliente.tipoDocumento.findUnique({
           where: { id: datos.tipoDocumentoId },
-          select: { companiaCodigo: true, centroOperacionCodigo: true, prefijo: true },
+          select: { codigo: true, companiaCodigo: true, centroOperacionCodigo: true, prefijo: true },
         }) : null;
-      if (!tipo || tipo.companiaCodigo !== datos.companiaCodigo || tipo.centroOperacionCodigo !== datos.centroOperacionCodigo
-        || tipo.prefijo !== datos.prefijo) {
+      if (!tipo?.codigo || tipo.companiaCodigo !== datos.companiaCodigo || tipo.centroOperacionCodigo !== datos.centroOperacionCodigo
+        || tipo.prefijo !== datos.prefijo || (datos.tipoDocumentoCodigo != null && datos.tipoDocumentoCodigo !== tipo.codigo)) {
         throw Object.assign(new Error('El tipo de documento no corresponde a la compania, centro y codigo de la factura.'), { status: 409 });
+      }
+      datos.tipoDocumentoCodigo = tipo.codigo;
+      if (claves.some((campo) => datos[campo] == null || datos[campo] === '')) {
+        throw Object.assign(new Error('La clave de la factura requiere compania, centro, tipo y numero.'), { status: 400 });
       }
       datos.metodoPago ||= 'EFECTIVO';
       const pagos = datos.pagos?.create;
@@ -180,11 +181,11 @@ export function crearAdaptadorFacturas(modelos) {
         const aplicados = camposMetodoPago.map((campo) => metodosConImporte[campo]).filter((pago) => pago !== '0');
         datos.metodoPago = aplicados.length === 1 ? aplicados[0].split(' $')[0] : aplicados.join(' + ');
       }
-      await cabeceras.create({ data: { ...datosCabecera, ...Object.fromEntries(claves.map((campo) => [campo, datos[campo]])) } });
+      await cabeceras.create({ data: { ...datosCabecera, prefijo: datos.prefijo, ...Object.fromEntries(claves.map((campo) => [campo, datos[campo]])) } });
       const consulta = argumentos(modelo, { ...originales, data: datos });
       return presentar(modelo, await tabla.create(consulta), originales);
     }
-    if (claves.some((campo) => datos[campo] !== undefined) || originales.data?.consecutivo !== undefined) {
+    if ([...claves, 'prefijo'].some((campo) => datos[campo] !== undefined) || originales.data?.consecutivo !== undefined) {
       throw Object.assign(new Error('La clave de una factura emitida no se puede modificar.'), { status: 409 });
     }
     const existente = await tabla.findUniqueOrThrow({

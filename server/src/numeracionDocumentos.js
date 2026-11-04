@@ -8,7 +8,7 @@ export async function reservarNumeroDocumento(tx, clase, { companiaCodigo, centr
       where: { clase, esElectronico, activo: true, companiaCodigo, centroOperacionCodigo },
       orderBy: { createdAt: 'asc' },
     });
-    if (!tipo || !tipo.prefijo || tipo.consInicial == null || tipo.consFinal == null) {
+    if (!tipo || !tipo.codigo || !tipo.prefijo || tipo.consInicial == null || tipo.consFinal == null) {
       throw Object.assign(new Error(`La compañía ${companiaCodigo} y el centro ${centroOperacionCodigo} no tienen configurado el tipo de documento ${clase} con rango.`), { status: 409 });
     }
     const consecutivo = tipo.consProximo ?? tipo.consInicial;
@@ -23,7 +23,7 @@ export async function reservarNumeroDocumento(tx, clase, { companiaCodigo, centr
       return {
         prefijo: tipo.prefijo,
         consecutivo,
-        tipoDocumento: tipo.prefijo,
+        tipoDocumento: tipo.codigo,
         numero: consecutivo,
         tipoDocumentoId: tipo.id,
         companiaCodigo: tipo.companiaCodigo,

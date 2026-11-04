@@ -8,7 +8,7 @@ const modelos = [
   { name: 'Pedido', fields: [{ name: 'facturas', kind: 'object', type: 'Factura' }] },
 ];
 const adaptar = crearAdaptadorFacturas(modelos);
-const clave = { companiaCodigo: '006', centroOperacionCodigo: '606', prefijo: 'DVP', numeroFactura: 184 };
+const clave = { companiaCodigo: '006', centroOperacionCodigo: '606', tipoDocumentoCodigo: 'FEV', prefijo: 'DVP', numeroFactura: 184 };
 
 test('proyecta campos de cabecera y mantiene el identificador de la API', async () => {
   let consulta;
@@ -53,7 +53,7 @@ test('crea cabecera y operacion en la misma transaccion con usuario de acceso', 
   const llamadas = [];
   const transaccion = {
     usuario: { async findUnique() { return { usuario: 'cajero606' }; } },
-    tipoDocumento: { async findUnique() { return { ...clave }; } },
+    tipoDocumento: { async findUnique() { return { ...clave, codigo: clave.tipoDocumentoCodigo }; } },
     facturaVentaCabecera: { async create({ data }) { llamadas.push(['cabecera', data]); } },
     facturaVenta: { async create({ data }) {
       llamadas.push(['operacion', data]);
@@ -68,6 +68,8 @@ test('crea cabecera y operacion en la misma transaccion con usuario de acceso', 
   assert.equal(llamadas.filter(([nombre]) => nombre === 'transaccion').length, 1);
   assert.equal(llamadas[1][1].usuarioNombre, 'cajero606');
   assert.equal(llamadas[1][1].numeroFactura, 184);
+  assert.equal(llamadas[1][1].tipoDocumentoCodigo, 'FEV');
+  assert.equal(llamadas[1][1].prefijo, 'DVP');
   assert.equal(llamadas[1][1].metodoPago1, 'EFECTIVO');
   assert.equal(llamadas[1][1].valor1, 25000);
   assert.equal(llamadas[1][1].metodoPago4, '0');
@@ -104,7 +106,10 @@ test('actualiza estado DIAN en cabecera dentro de la transaccion', async () => {
   const cliente = adaptar({ factura: transaccion.factura, async $transaction(trabajo) { return trabajo(transaccion); } });
   const factura = await cliente.factura.update({ where: { id: 'uuid' }, data: { estadoDIAN: 'ACEPTADA' } });
   assert.deepEqual(actualizacion, {
-    where: { companiaCodigo_centroOperacionCodigo_prefijo_numeroFactura: clave }, data: { estadoDIAN: 'ACEPTADA' },
+    where: { companiaCodigo_centroOperacionCodigo_tipoDocumentoCodigo_numeroFactura: {
+      companiaCodigo: clave.companiaCodigo, centroOperacionCodigo: clave.centroOperacionCodigo,
+      tipoDocumentoCodigo: clave.tipoDocumentoCodigo, numeroFactura: clave.numeroFactura,
+    } }, data: { estadoDIAN: 'ACEPTADA' },
   });
   assert.equal(factura.estadoDIAN, 'ACEPTADA');
 });

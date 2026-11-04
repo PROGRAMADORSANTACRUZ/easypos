@@ -4,6 +4,8 @@ El estado de cada ejecucion debe comprobarse en la base y en el manifiesto del r
 
 La actualizacion posterior de [cuatro medios de pago](migracion-pagos-20261104.md) reemplaza `metodoPago` por `metodopago1` a `metodopago4`; el esquema vigente pasa de 28 a 31 columnas.
 
+La [separacion de tipo y prefijo](migracion-tipo-prefijo-20261104.md) corrige la confusion inicial: `TipoDocumento` guarda el codigo del maestro y `Prefijo` va inmediatamente despues. Junto con los cuatro valores numericos, las cabeceras actuales tienen 36 columnas.
+
 ## Estructura Inicial
 
 La migracion inicial dejo las tablas fisicas `Factura` y `FacturaVenta` con estas 28 columnas, antes de la actualizacion de pagos:
@@ -17,7 +19,7 @@ vence, CUFE, NumeroFactus, XmlPath, PdfPath, EstadoDIAN, Usuario
 ```
 
 La clave primaria es `(CompaniaCodigo, CentroOperacionCodigo, TipoDocumento, numero)`.
-`TipoDocumento` conserva el codigo configurado en el campo prefijo del tipo documental, por ejemplo `DVP`.
+La version inicial confundia el codigo documental con el prefijo. La actualizacion de tipo y prefijo los separa sin alterar el prefijo historico.
 `numero` es un entero positivo, no un texto ni un numero con prefijo. `Usuario` conserva el nombre de acceso al facturar.
 `EstadoDIAN` aparece una sola vez. No hay `Id` ni otros campos fisicos en las cabeceras.
 

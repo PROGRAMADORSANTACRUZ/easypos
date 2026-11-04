@@ -15,6 +15,8 @@ const migracionPagos = await readFile(new URL('../prisma/migrations/202611041300
 const retirarMetodoAnterior = await readFile(new URL('../prisma/migrations/20261104140000_facturas_retirar_metodo_pago_anterior/migration.sql', import.meta.url), 'utf8');
 const migracionValoresPago = await readFile(new URL('../prisma/migrations/20261104150000_facturas_valores_pago/migration.sql', import.meta.url), 'utf8');
 const migracionNombresPago = await readFile(new URL('../prisma/migrations/20261104160000_facturas_nombres_pago/migration.sql', import.meta.url), 'utf8');
+const migracionColumnaPrefijo = await readFile(new URL('../prisma/migrations/20261104170000_facturas_columna_prefijo/migration.sql', import.meta.url), 'utf8');
+const migracionCodigoDocumental = await readFile(new URL('../prisma/migrations/20261104180000_facturas_codigo_documental/migration.sql', import.meta.url), 'utf8');
 const usuario = '00000000-0000-4000-8000-000000000001';
 const tipo = '00000000-0000-4000-8000-000000000002';
 const facturaId = '00000000-0000-4000-8000-000000000003';
@@ -32,11 +34,11 @@ async function baseAnterior() {
     CREATE TABLE "Compania" ("Codigo" varchar(3) PRIMARY KEY);
     CREATE TABLE "CentrosOperaciones" ("Codigo" varchar(10) PRIMARY KEY);
     CREATE TABLE "Usuarios" ("Id" uuid PRIMARY KEY, "Usuario" varchar(50));
-    CREATE TABLE "TiposDocumento" ("Id" uuid PRIMARY KEY, "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10), "Prefijo" varchar(20));
+    CREATE TABLE "TiposDocumento" ("Id" uuid PRIMARY KEY, "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10), "Prefijo" varchar(20), "Codigo" varchar(20) NOT NULL DEFAULT 'FEV', "EsElectronico" boolean NOT NULL DEFAULT true);
     INSERT INTO "Compania" VALUES ('006');
     INSERT INTO "CentrosOperaciones" VALUES ('606');
     INSERT INTO "Usuarios" VALUES ('${usuario}', 'cajero606');
-    INSERT INTO "TiposDocumento" VALUES ('${tipo}', '006', '606', 'DVP');
+    INSERT INTO "TiposDocumento" ("Id", "CompaniaCodigo", "CentroOperacionCodigo", "Prefijo") VALUES ('${tipo}', '006', '606', 'DVP');
   `);
   for (const tabla of ['Factura', 'FacturaVenta']) {
     const venta = tabla === 'FacturaVenta';
@@ -145,7 +147,7 @@ for (const coincide of [true, false]) {
     const db = await baseAnterior();
     const tipoIncorrecto = '00000000-0000-4000-8000-000000000088';
     try {
-      await db.exec(`INSERT INTO "TiposDocumento" VALUES ('${tipoIncorrecto}', '004', '420', 'FEV');
+      await db.exec(`INSERT INTO "TiposDocumento" ("Id", "CompaniaCodigo", "CentroOperacionCodigo", "Prefijo") VALUES ('${tipoIncorrecto}', '004', '420', 'FEV');
         UPDATE "Factura" SET "TipoDocumentoId" = '${tipoIncorrecto}'`);
       await db.query('SELECT set_config($1,$2,false)', ['pos.facturas_desvincular_tipo', JSON.stringify([{
         tabla: 'Factura', id: facturaId, compania: '006', centro: '606', tipo: 'DVP',
@@ -198,6 +200,8 @@ test('el cliente Prisma nuevo lee y actualiza las dos tablas migradas', async ()
     await db.exec(retirarMetodoAnterior);
     await db.exec(migracionValoresPago);
     await db.exec(migracionNombresPago);
+    await db.exec(migracionColumnaPrefijo);
+    await db.exec(migracionCodigoDocumental);
     await socket.start();
     cliente = new PrismaClient({ datasources: { db: {
       url: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?connection_limit=1&sslmode=disable`,
@@ -208,6 +212,8 @@ test('el cliente Prisma nuevo lee y actualiza las dos tablas migradas', async ()
       assert.equal(factura.total, 119);
       assert.equal(factura.usuarioNombre, 'cajero606');
       assert.equal(factura.sucursalCliente, 'Principal');
+      assert.equal(factura.tipoDocumentoCodigo, 'FEV');
+      assert.equal(factura.prefijo, 'DVP');
       const actualizada = await prisma[modelo].update({ where: { id: facturaId }, data: { pdfPath: '/nuevo.pdf' } });
       assert.equal(actualizada.pdfPath, '/nuevo.pdf');
       assert.equal(actualizada.total, 119);
@@ -245,11 +251,11 @@ test('Prisma real crea, consulta, actualiza y revierte facturas con el esquema c
     const usuarioFactura = await prisma.usuario.create({ data: { usuario: 'cajero606', nombre: 'Cajero', passwordHash: 'no-utilizable' } });
     const tipoFactura = await prisma.tipoDocumento.create({ data: {
       clase: 'FACTURA DE VENTA (NO ELECTRONICA)', esElectronico: false,
-      codigo: '606', prefijo: 'DVP', companiaCodigo: '006', centroOperacionCodigo: '606',
+      codigo: 'DVP', prefijo: 'FAV', companiaCodigo: '006', centroOperacionCodigo: '606',
     } });
     const pedido = await prisma.pedido.create({ data: {} });
     const datos = {
-      companiaCodigo: '006', centroOperacionCodigo: '606', prefijo: 'DVP', numeroFactura: '184',
+      companiaCodigo: '006', centroOperacionCodigo: '606', prefijo: 'FAV', numeroFactura: '184',
       tipoDocumentoId: tipoFactura.id, usuarioId: usuarioFactura.id, pedidoId: pedido.id,
       subtotal: 100, impuestoPct: 19, impuesto: 19, total: 119, credito: true, estadoDIAN: 'NO_APLICA',
       detalle: { create: [{ productoNombre: 'Producto historico', cantidad: 1, total: 119 }] },
@@ -261,16 +267,19 @@ test('Prisma real crea, consulta, actualiza y revierte facturas con el esquema c
     assert.equal(factura.usuario.usuario, 'cajero606');
     assert.equal(factura.numeroFactura, '184');
     assert.equal(factura.consecutivo, 184);
+    assert.equal(factura.tipoDocumentoCodigo, 'DVP');
+    assert.equal(factura.prefijo, 'FAV');
     assert.equal(factura.metodoPago1, '0');
     assert.equal(factura.metodoPago4, '0');
     const tipoElectronico = await prisma.tipoDocumento.create({ data: {
       clase: 'FACTURA ELECTRONICA DE VENTA', esElectronico: true,
-      codigo: '606', prefijo: 'FE', companiaCodigo: '006', centroOperacionCodigo: '606',
+      codigo: 'FEV', prefijo: 'RM1C', companiaCodigo: '006', centroOperacionCodigo: '606',
     } });
     const electronica = await prisma.factura.create({ data: {
-      ...datos, prefijo: 'FE', tipoDocumentoId: tipoElectronico.id, estadoDIAN: null,
+      ...datos, prefijo: 'RM1C', tipoDocumentoId: tipoElectronico.id, estadoDIAN: null,
     }, include: { detalle: true, notasCredito: true, notasDebito: true, retenciones: true } });
-    assert.equal(electronica.prefijo, 'FE');
+    assert.equal(electronica.tipoDocumentoCodigo, 'FEV');
+    assert.equal(electronica.prefijo, 'RM1C');
     assert.equal(electronica.total, 119);
     assert.equal(electronica.detalle.length, 1);
     const emitida = await prisma.factura.update({ where: { id: electronica.id }, data: { estadoDIAN: 'ACEPTADA', numeroFactus: 'FE184' } });
@@ -323,7 +332,7 @@ test('Prisma real crea, consulta, actualiza y revierte facturas con el esquema c
     assert.equal(centavos.valor1, 119.75);
     assert.equal(typeof centavos.valor1, 'number');
     const efectivoConPropina = await prisma.factura.create({ data: {
-      ...datos, numeroFactura: '188', prefijo: 'FE', tipoDocumentoId: tipoElectronico.id,
+      ...datos, numeroFactura: '188', prefijo: 'RM1C', tipoDocumentoId: tipoElectronico.id,
       credito: false, subtotal: 8000, impuestoPct: 0, impuesto: 0, total: 8000, propina: 800, metodoPago: 'EFECTIVO',
     } });
     assert.equal(efectivoConPropina.metodoPago1, 'EFECTIVO');
@@ -443,5 +452,79 @@ test('cancela la separacion numerica ante un campo sin importe verificable', asy
     await db.exec('ROLLBACK');
     assert.equal((await db.query('SELECT metodopago1 FROM "Factura"')).rows[0].metodopago1, 'EFECTIVO');
     assert.equal((await db.query(`SELECT to_regnamespace('respaldo_valores_pago_20261104') AS esquema`)).rows[0].esquema, null);
+  } finally { await db.close(); }
+});
+
+test('agrega Prefijo inmediatamente despues de TipoDocumento y conserva documentos y vinculos', async () => {
+  const db = await baseAnterior();
+  try {
+    await db.exec(migracion);
+    await db.exec(migracionPagos);
+    await db.exec(retirarMetodoAnterior);
+    await db.exec(migracionValoresPago);
+    await db.exec(migracionNombresPago);
+    await db.exec(pausa);
+    await db.query('SELECT set_config($1,$2,false)', ['pos.migracion_facturas', '20261104']);
+    await db.exec(migracionColumnaPrefijo);
+    await db.exec(migracionCodigoDocumental);
+    for (const tabla of ['Factura', 'FacturaVenta']) {
+      const estructura = (await db.query('SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2 ORDER BY ordinal_position', ['public', tabla])).rows;
+      assert.equal(estructura.length, 36);
+      assert.deepEqual(estructura.slice(0, 6).map((columna) => columna.column_name), ['CompaniaCodigo', 'CentroOperacionCodigo', 'TipoDocumento', 'Prefijo', 'fecha', 'numero']);
+      const factura = (await db.query(`SELECT * FROM "${tabla}"`)).rows[0];
+      assert.equal(factura.TipoDocumento, 'FEV');
+      assert.equal(factura.Prefijo, 'DVP');
+      assert.equal(factura.Total, 119);
+      assert.equal(factura.CUFE, 'cufe-historico');
+      const operacion = (await db.query(`SELECT * FROM "${tabla}Operacion"`)).rows[0];
+      assert.equal(operacion.Id, facturaId);
+      assert.equal(operacion.TipoDocumento, 'FEV');
+      assert.equal(operacion.Prefijo, 'DVP');
+      const original = (await db.query(`SELECT * FROM respaldo_tipo_prefijo_20261104."${tabla}"`)).rows[0];
+      assert.equal(original.TipoDocumento, 'DVP');
+    }
+    assert.equal((await db.query('SELECT count(*)::int AS cantidad FROM "FacturaDetalle" d JOIN "FacturaOperacion" f ON f."Id"=d."FacturaId"')).rows[0].cantidad, 1);
+    await db.query('SELECT set_config($1,$2,false)', ['pos.migracion_facturas', '']);
+    await assert.rejects(db.exec('UPDATE "Factura" SET "Total"="Total"'), { code: '55000' });
+  } finally { await db.close(); }
+});
+
+test('cancela antes de reorganizar si dos prefijos generarian la misma clave documental', async () => {
+  const db = await baseAnterior();
+  try {
+    await db.exec(migracion);
+    await db.exec(migracionPagos);
+    await db.exec(retirarMetodoAnterior);
+    await db.exec(migracionValoresPago);
+    await db.exec(migracionNombresPago);
+    await db.exec(`INSERT INTO "TiposDocumento" ("Id","CompaniaCodigo","CentroOperacionCodigo","Prefijo")
+      VALUES ('00000000-0000-4000-8000-000000000077','006','606','RM1C');
+      INSERT INTO "Factura" SELECT (jsonb_populate_record(NULL::"Factura",to_jsonb(f)||jsonb_build_object('TipoDocumento','RM1C'))).* FROM "Factura" f;
+      INSERT INTO "FacturaOperacion" SELECT (jsonb_populate_record(NULL::"FacturaOperacion",to_jsonb(f)||jsonb_build_object(
+        'Id','00000000-0000-4000-8000-000000000078','TipoDocumento','RM1C','TipoDocumentoId','00000000-0000-4000-8000-000000000077'))).* FROM "FacturaOperacion" f`);
+    await assert.rejects(db.exec(migracionColumnaPrefijo), /claves documentales duplicadas/);
+    await db.exec('ROLLBACK');
+    assert.equal((await db.query('SELECT count(*)::int AS cantidad FROM "Factura"')).rows[0].cantidad, 2);
+    assert.equal((await db.query(`SELECT to_regnamespace('respaldo_tipo_prefijo_20261104') AS esquema`)).rows[0].esquema, null);
+  } finally { await db.close(); }
+});
+
+test('conserva el prefijo historico sin relinkear un documento desvinculado', async () => {
+  const db = await baseAnterior();
+  try {
+    await db.exec(migracion);
+    await db.exec(migracionPagos);
+    await db.exec(retirarMetodoAnterior);
+    await db.exec(migracionValoresPago);
+    await db.exec(migracionNombresPago);
+    await db.exec(`UPDATE "FacturaOperacion" SET "TipoDocumentoId"=NULL;
+      INSERT INTO "TiposDocumento" ("Id","CompaniaCodigo","CentroOperacionCodigo","Prefijo","Codigo")
+      VALUES ('00000000-0000-4000-8000-000000000079','006','606','RM1C','DVP')`);
+    await db.exec(migracionColumnaPrefijo);
+    await db.exec(migracionCodigoDocumental);
+    const factura = (await db.query('SELECT "TipoDocumento","Prefijo" FROM "Factura"')).rows[0];
+    assert.equal(factura.TipoDocumento, 'DVP');
+    assert.equal(factura.Prefijo, 'DVP');
+    assert.equal((await db.query('SELECT "TipoDocumentoId" FROM "FacturaOperacion"')).rows[0].TipoDocumentoId, null);
   } finally { await db.close(); }
 });

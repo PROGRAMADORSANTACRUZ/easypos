@@ -24,7 +24,8 @@ test('reserva numeración solo para compañía y centro solicitados', async () =
     id: 'tipo-006-606',
     clase: 'FACTURA DE VENTA (NO ELECTRONICA)',
     esElectronico: false,
-    prefijo: 'FAV',
+    codigo: 'FEV',
+    prefijo: 'RM1C',
     consInicial: 1,
     consFinal: 100,
     consProximo: 9,
@@ -42,9 +43,9 @@ test('reserva numeración solo para compañía y centro solicitados', async () =
     companiaCodigo: '006',
     centroOperacionCodigo: '606',
   });
-  assert.equal(reserva.prefijo, 'FAV');
+  assert.equal(reserva.prefijo, 'RM1C');
   assert.equal(reserva.consecutivo, 9);
-  assert.equal(reserva.tipoDocumento, 'FAV');
+  assert.equal(reserva.tipoDocumento, 'FEV');
   assert.equal(reserva.numero, 9);
   assert.equal(reserva.companiaCodigo, '006');
   assert.equal(reserva.centroOperacionCodigo, '606');
