@@ -322,6 +322,14 @@ test('Prisma real crea, consulta, actualiza y revierte facturas con el esquema c
     } });
     assert.equal(centavos.valor1, 119.75);
     assert.equal(typeof centavos.valor1, 'number');
+    const efectivoConPropina = await prisma.factura.create({ data: {
+      ...datos, numeroFactura: '188', prefijo: 'FE', tipoDocumentoId: tipoElectronico.id,
+      credito: false, subtotal: 8000, impuestoPct: 0, impuesto: 0, total: 8000, propina: 800, metodoPago: 'EFECTIVO',
+    } });
+    assert.equal(efectivoConPropina.metodoPago1, 'EFECTIVO');
+    assert.equal(efectivoConPropina.valor1, 8800);
+    assert.equal(efectivoConPropina.valor2, 0);
+    assert.equal(efectivoConPropina.propina, 800);
   } finally {
     if (cliente) await cliente.$disconnect();
     await socket.stop();

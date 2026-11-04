@@ -1,4 +1,4 @@
-const formatoImporte = new Intl.NumberFormat('es-CO', {
+const formatoImporte = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 0, maximumFractionDigits: 2,
 });
 
@@ -79,7 +79,12 @@ export function separarMetodosPago(factura, pagos = [], { conservarImportesRegis
     throw Object.assign(new Error('Los medios de pago deben cubrir exactamente el total mas la propina.'), { status: 400 });
   }
   [...agrupados.entries()].forEach(([metodo, monto], indice) => {
-    resultado[camposMetodoPago[indice]] = `${metodo} $${formatoImporte.format(monto / 100)}`;
+    const importe = formatoImporte.formatToParts(monto / 100).map((parte) => {
+      if (parte.type === 'group') return '.';
+      if (parte.type === 'decimal') return ',';
+      return parte.value;
+    }).join('');
+    resultado[camposMetodoPago[indice]] = `${metodo} $${importe}`;
   });
   return resultado;
 }

@@ -1,8 +1,27 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import { desglosarFactura } from '../src/routes/aperturas.js';
 import { etiquetaPagos } from '../../client/src/pagosMultiples.js';
 import { separarMetodosPago, separarValoresPago } from '../src/pagosFactura.js';
+
+test('cobra 8800 con propina incluso cuando el servidor solo dispone de locale en-US', () => {
+  const codigo = `
+    import assert from 'node:assert/strict';
+    const FormatoOriginal = Intl.NumberFormat;
+    Intl.NumberFormat = class extends FormatoOriginal {
+      constructor(_locale, opciones) { super('en-US', opciones); }
+    };
+    const { separarMetodosPago, separarValoresPago } = await import(${JSON.stringify(new URL('../src/pagosFactura.js', import.meta.url).href)});
+    const metodos = separarMetodosPago({ total: 8000, propina: 800, metodoPago: 'EFECTIVO' });
+    assert.equal(metodos.metodoPago1, 'EFECTIVO $8.800');
+    assert.equal(separarValoresPago(metodos).valor1, 8800);
+    const centavos = separarMetodosPago({ total: 8000.75, metodoPago: 'TARJETA' });
+    assert.equal(centavos.metodoPago1, 'TARJETA $8.000,75');
+    assert.equal(separarValoresPago(centavos).valor1, 8000.75);
+  `;
+  execFileSync(process.execPath, ['--input-type=module', '-e', codigo]);
+});
 
 test('separa cada medio de su importe numerico y deja los pares no usados en cero', () => {
   assert.deepEqual(separarValoresPago({
