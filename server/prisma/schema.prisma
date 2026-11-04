@@ -618,22 +618,15 @@ model PreparacionCocina {
 
 // Factura / recibo generado al cerrar el pedido (estructura DIAN)
 model Factura {
-  companiaCodigo String?  @db.VarChar(3) @map("CompaniaCodigo")
-  compania      Compania? @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
-  centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
-  centroOperacion CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
+  companiaCodigo String   @db.VarChar(3) @map("CompaniaCodigo")
+  compania      Compania  @relation(fields: [companiaCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
+  centroOperacionCodigo String @db.VarChar(10) @map("CentroOperacionCodigo")
+  centroOperacion CentroOperacion @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
   tipoDocumentoId String?  @db.Uuid @map("TipoDocumentoId")
   tipoDocumento TipoDocumento? @relation(fields: [tipoDocumentoId], references: [id], onDelete: SetNull)
-  numeroFactura String?   @db.VarChar(50) @map("NumeroFactura")
-  prefijo       String?   @db.VarChar(20) @map("Prefijo")
-  numeroDocumentoCliente String? @map("NumeroDocumentoCliente")
-  nombreCliente String?   @map("NombreCliente")
-  sucursalCliente String? @db.VarChar(200) @map("SucursalCliente")
-  telefonoCliente String? @db.VarChar(50) @map("TelefonoCliente")
-  direccionCliente String? @map("DireccionCliente")
-  barrioCliente String?   @map("BarrioCliente")
-  ciudadCliente String?   @map("CiudadCliente")
-  emailCliente String?    @db.VarChar(150) @map("EmailCliente")
+  numeroFactura Int      @map("numero")
+  prefijo       String   @db.VarChar(20) @map("TipoDocumento")
+  cabecera      FacturaCabecera @relation(fields: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], references: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], onDelete: Cascade, onUpdate: Cascade, map: "FacturaOperacion_cabecera_fkey")
   id            String    @id @default(uuid()) @db.Uuid @map("Id")
   pedidoId      Int
   pedido        Pedido    @relation(fields: [pedidoId], references: [id])
@@ -641,20 +634,6 @@ model Factura {
   divisionCuenta DivisionCuenta? @relation(fields: [divisionCuentaId], references: [id], onDelete: SetNull)
   clienteId     String?   @db.Uuid @map("ClienteId")
   cliente       Cliente?  @relation(fields: [clienteId], references: [id])
-  subtotal      Float     @map("Subtotal")
-  impuestoPct   Float
-  impuesto      Float     @map("IVA")
-  total         Float     @map("Total")
-  propina       Float     @default(0) @map("Propina") // propina voluntaria (no fiscal), sugerida 10%
-  metodoPago    String    @default("EFECTIVO")
-  credito       Boolean   @default(false) // venta a credito (cuenta por cobrar)
-  creditoDias   Int?      // plazo pactado
-  vence         DateTime? // fecha de vencimiento del credito
-  cufe          String?   @db.VarChar(200) @map("CUFE")
-  numeroFactus  String?   @db.VarChar(50) @map("NumeroFactus") // numero/prefijo oficial asignado por Factus (ej. SETP990020614)
-  xmlPath       String?   @map("XmlPath")
-  pdfPath       String?   @map("PdfPath")
-  estadoDIAN    String?   @db.VarChar(50) @map("EstadoDIAN")
   usuarioId     String?   @db.Uuid @map("UsuarioId")
   usuario       Usuario?  @relation(fields: [usuarioId], references: [id])
   aperturaId    String?   @db.Uuid @map("AperturaId")
@@ -667,31 +646,23 @@ model Factura {
   pagos         Pago[]
   comisiones    ComisionVendedor[]
   eventosDIAN   EventoDIAN[]
-  createdAt     DateTime  @default(now()) @map("Fecha")
-
+  @@unique([companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], map: "FacturaOperacion_documento_key")
   @@index([pedidoId])
+  @@map("FacturaOperacion")
 }
 
 model FacturaVenta {
-  companiaCodigo String?  @db.VarChar(3) @map("CompaniaCodigo")
-  compania      Compania? @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
-  centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
-  centroOperacion CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
+  companiaCodigo String   @db.VarChar(3) @map("CompaniaCodigo")
+  compania      Compania  @relation(fields: [companiaCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
+  centroOperacionCodigo String @db.VarChar(10) @map("CentroOperacionCodigo")
+  centroOperacion CentroOperacion @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: Restrict, onUpdate: Cascade)
   tipoDocumentoId String?  @db.Uuid @map("TipoDocumentoId")
   tipoDocumento TipoDocumento? @relation(fields: [tipoDocumentoId], references: [id], onDelete: SetNull)
-  numeroFactura String?   @db.VarChar(50) @map("Numero")
-  prefijo       String?   @db.VarChar(20) @map("Prefijo")
-  numeroDocumentoCliente String? @map("NumeroDocumentoCliente")
-  nombreCliente String?   @map("NombreCliente")
-  sucursalCliente String? @db.VarChar(200) @map("SucursalCliente")
-  telefonoCliente String? @db.VarChar(50) @map("TelefonoCliente")
-  direccionCliente String? @map("DireccionCliente")
-  barrioCliente String?   @map("BarrioCliente")
-  ciudadCliente String?   @map("CiudadCliente")
-  emailCliente String?    @db.VarChar(150) @map("EmailCliente")
+  numeroFactura Int      @map("numero")
+  prefijo       String   @db.VarChar(20) @map("TipoDocumento")
+  cabecera      FacturaVentaCabecera @relation(fields: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], references: [companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], onDelete: Cascade, onUpdate: Cascade, map: "FacturaVentaOperacion_cabecera_fkey")
   id            String    @id @default(uuid()) @db.Uuid @map("Id")
   estado        String    @default("FACTURADA") @db.VarChar(20) @map("Estado")
-  consecutivo   Int?      @map("Consecutivo")
   validezDias   Int?      @map("ValidezDias")
   observaciones String?   @map("Observaciones")
   pedidoId      Int       @map("PedidoId")
@@ -700,20 +671,6 @@ model FacturaVenta {
   divisionCuenta DivisionCuenta? @relation(fields: [divisionCuentaId], references: [id], onDelete: SetNull)
   clienteId     String?   @db.Uuid @map("ClienteId")
   cliente       Cliente?  @relation(fields: [clienteId], references: [id])
-  subtotal      Float     @map("Subtotal")
-  impuestoPct   Float     @map("ImpuestoPct")
-  impuesto      Float     @map("IVA")
-  total         Float     @map("Total")
-  propina       Float     @default(0) @map("Propina")
-  metodoPago    String    @default("EFECTIVO") @map("MetodoPago")
-  credito       Boolean   @default(false) @map("Credito")
-  creditoDias   Int?      @map("CreditoDias")
-  vence         DateTime? @map("Vence")
-  cufe          String?   @db.VarChar(200) @map("CUFE")
-  numeroFactus  String?   @db.VarChar(50) @map("NumeroFactus")
-  xmlPath       String?   @map("XmlPath")
-  pdfPath       String?   @map("PdfPath")
-  estadoDIAN    String?   @db.VarChar(50) @map("EstadoDIAN")
   usuarioId     String?   @db.Uuid @map("UsuarioId")
   usuario       Usuario?  @relation(fields: [usuarioId], references: [id])
   aperturaId    String?   @db.Uuid @map("AperturaId")
@@ -722,9 +679,78 @@ model FacturaVenta {
   detalle       FacturaVentaDetalle[]
   pagos         Pago[]
   comisiones    ComisionVendedor[]
-  createdAt     DateTime  @default(now()) @map("Fecha")
-
+  @@unique([companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura], map: "FacturaVentaOperacion_documento_key")
   @@index([pedidoId])
+  @@map("FacturaVentaOperacion")
+}
+
+model FacturaCabecera {
+  companiaCodigo String @db.VarChar(3) @map("CompaniaCodigo")
+  centroOperacionCodigo String @db.VarChar(10) @map("CentroOperacionCodigo")
+  prefijo String @db.VarChar(20) @map("TipoDocumento")
+  createdAt DateTime @default(now()) @map("fecha")
+  numeroFactura Int @map("numero")
+  numeroDocumentoCliente String? @map("NumeroDocumentoCliente")
+  nombreCliente String? @map("NombreCliente")
+  sucursalCliente String? @db.VarChar(200) @map("SucursalCliente")
+  telefonoCliente String? @db.VarChar(50) @map("TelefonoCliente")
+  direccionCliente String? @map("DireccionCliente")
+  barrioCliente String? @map("BarrioCliente")
+  ciudadCliente String? @map("CiudadCliente")
+  emailCliente String? @db.VarChar(150) @map("EmailCliente")
+  subtotal Float @map("Subtotal")
+  impuestoPct Float
+  impuesto Float @map("IVA")
+  total Float @map("Total")
+  propina Float @default(0) @map("Propina")
+  metodoPago String @default("EFECTIVO")
+  credito Boolean @default(false)
+  creditoDias Int?
+  vence DateTime?
+  cufe String? @db.VarChar(200) @map("CUFE")
+  numeroFactus String? @db.VarChar(50) @map("NumeroFactus")
+  xmlPath String? @map("XmlPath")
+  pdfPath String? @map("PdfPath")
+  estadoDIAN String? @db.VarChar(50) @map("EstadoDIAN")
+  usuarioNombre String @db.VarChar(50) @map("Usuario")
+  operacion Factura?
+
+  @@id([companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura])
+  @@map("Factura")
+}
+
+model FacturaVentaCabecera {
+  companiaCodigo String @db.VarChar(3) @map("CompaniaCodigo")
+  centroOperacionCodigo String @db.VarChar(10) @map("CentroOperacionCodigo")
+  prefijo String @db.VarChar(20) @map("TipoDocumento")
+  createdAt DateTime @default(now()) @map("fecha")
+  numeroFactura Int @map("numero")
+  numeroDocumentoCliente String? @map("NumeroDocumentoCliente")
+  nombreCliente String? @map("NombreCliente")
+  sucursalCliente String? @db.VarChar(200) @map("SucursalCliente")
+  telefonoCliente String? @db.VarChar(50) @map("TelefonoCliente")
+  direccionCliente String? @map("DireccionCliente")
+  barrioCliente String? @map("BarrioCliente")
+  ciudadCliente String? @map("CiudadCliente")
+  emailCliente String? @db.VarChar(150) @map("EmailCliente")
+  subtotal Float @map("Subtotal")
+  impuestoPct Float
+  impuesto Float @map("IVA")
+  total Float @map("Total")
+  propina Float @default(0) @map("Propina")
+  metodoPago String @default("EFECTIVO")
+  credito Boolean @default(false)
+  creditoDias Int?
+  vence DateTime?
+  cufe String? @db.VarChar(200) @map("CUFE")
+  numeroFactus String? @db.VarChar(50) @map("NumeroFactus")
+  xmlPath String? @map("XmlPath")
+  pdfPath String? @map("PdfPath")
+  estadoDIAN String? @db.VarChar(50) @map("EstadoDIAN")
+  usuarioNombre String @db.VarChar(50) @map("Usuario")
+  operacion FacturaVenta?
+
+  @@id([companiaCodigo, centroOperacionCodigo, prefijo, numeroFactura])
   @@map("FacturaVenta")
 }
 

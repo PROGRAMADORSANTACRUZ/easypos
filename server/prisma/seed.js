@@ -7,7 +7,7 @@ async function main() {
   console.log('Sembrando datos de Asados Santacruz...');
 
   // Limpiar (orden por dependencias)
-  await prisma.factura.deleteMany();
+  await prisma.facturaCabecera.deleteMany();
   await prisma.pedidoItem.deleteMany();
   await prisma.pedido.deleteMany();
   await prisma.kitComponente.deleteMany();
@@ -17,7 +17,7 @@ async function main() {
   await prisma.mesa.deleteMany();
   await prisma.mesera.deleteMany();
 
-  // Reiniciar numeracion de pedidos para que empiecen en #1 (las facturas usan UUID)
+  // Reiniciar numeracion de pedidos para que empiecen en #1
   for (const seq of ['Pedido_id_seq', 'PedidoItem_id_seq']) {
     await prisma.$executeRawUnsafe(`ALTER SEQUENCE "${seq}" RESTART WITH 1`);
   }

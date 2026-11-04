@@ -49,6 +49,8 @@ O usa tu propio PostgreSQL y ajusta `DATABASE_URL` en `server/.env`.
 
 ### 2. Backend
 
+Para bases existentes, revisar primero el [procedimiento de migracion de facturas](docs/migracion-facturas-20261104.md); no ejecutar el seed ni `prisma db push` para este cambio.
+
 ```powershell
 cd server
 npm install

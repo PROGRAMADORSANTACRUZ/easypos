@@ -29,6 +29,8 @@
     "pg": "^8.13.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
+    "@electric-sql/pglite-socket": "^0.2.18",
     "prisma": "^6.2.1"
   }
 }

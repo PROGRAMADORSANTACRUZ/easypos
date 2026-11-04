@@ -1,0 +1,244 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { PGlite } from '@electric-sql/pglite';
+import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
+import { Prisma, PrismaClient } from '@prisma/client';
+import { crearAdaptadorFacturas } from '../src/facturasPersistencia.js';
+
+const migracion = await readFile(new URL('../prisma/migrations/20261104120000_facturas_cabeceras_clave_compuesta/migration.sql', import.meta.url), 'utf8');
+const usuario = '00000000-0000-4000-8000-000000000001';
+const tipo = '00000000-0000-4000-8000-000000000002';
+const facturaId = '00000000-0000-4000-8000-000000000003';
+const columnas = [
+  'CompaniaCodigo', 'CentroOperacionCodigo', 'TipoDocumento', 'fecha', 'numero',
+  'NumeroDocumentoCliente', 'NombreCliente', 'SucursalCliente', 'TelefonoCliente',
+  'DireccionCliente', 'BarrioCliente', 'CiudadCliente', 'EmailCliente', 'Subtotal',
+  'impuestoPct', 'IVA', 'Total', 'Propina', 'metodoPago', 'credito', 'creditoDias',
+  'vence', 'CUFE', 'NumeroFactus', 'XmlPath', 'PdfPath', 'EstadoDIAN', 'Usuario',
+];
+
+async function baseAnterior() {
+  const db = new PGlite();
+  await db.exec(`
+    CREATE TABLE "Compania" ("Codigo" varchar(3) PRIMARY KEY);
+    CREATE TABLE "CentrosOperaciones" ("Codigo" varchar(10) PRIMARY KEY);
+    CREATE TABLE "Usuarios" ("Id" uuid PRIMARY KEY, "Usuario" varchar(50));
+    CREATE TABLE "TiposDocumento" ("Id" uuid PRIMARY KEY, "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10), "Prefijo" varchar(20));
+    INSERT INTO "Compania" VALUES ('006');
+    INSERT INTO "CentrosOperaciones" VALUES ('606');
+    INSERT INTO "Usuarios" VALUES ('${usuario}', 'cajero606');
+    INSERT INTO "TiposDocumento" VALUES ('${tipo}', '006', '606', 'DVP');
+  `);
+  for (const tabla of ['Factura', 'FacturaVenta']) {
+    const venta = tabla === 'FacturaVenta';
+    await db.exec(`
+      CREATE TABLE "${tabla}" (
+        "Id" uuid PRIMARY KEY, "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10),
+        "${venta ? 'Numero' : 'NumeroFactura'}" varchar(50), "Prefijo" varchar(20),
+        "TipoDocumentoId" uuid, "UsuarioId" uuid, "${venta ? 'PedidoId' : 'pedidoId'}" integer NOT NULL,
+        "ClienteId" uuid, "AperturaId" uuid, "DivisionCuentaId" uuid,
+        "Fecha" timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "NumeroDocumentoCliente" text, "NombreCliente" text, "SucursalCliente" varchar(200),
+        "TelefonoCliente" varchar(50), "DireccionCliente" text, "BarrioCliente" text,
+        "CiudadCliente" text, "EmailCliente" varchar(150),
+        "Subtotal" double precision NOT NULL, "${venta ? 'ImpuestoPct' : 'impuestoPct'}" double precision NOT NULL,
+        "IVA" double precision NOT NULL, "Total" double precision NOT NULL,
+        "Propina" double precision NOT NULL DEFAULT 0,
+        "${venta ? 'MetodoPago' : 'metodoPago'}" text NOT NULL DEFAULT 'EFECTIVO',
+        "${venta ? 'Credito' : 'credito'}" boolean NOT NULL DEFAULT false,
+        "${venta ? 'CreditoDias' : 'creditoDias'}" integer, "${venta ? 'Vence' : 'vence'}" timestamp(3),
+        "CUFE" varchar(200), "NumeroFactus" varchar(50), "XmlPath" text, "PdfPath" text, "EstadoDIAN" varchar(50),
+        ${venta ? '"Consecutivo" integer, "Estado" varchar(20) DEFAULT \'FACTURADA\', "Observaciones" text, "ValidezDias" integer,' : ''}
+        CONSTRAINT "${tabla}_CompaniaCodigo_fkey" FOREIGN KEY ("CompaniaCodigo") REFERENCES "Compania"("Codigo") ON DELETE SET NULL,
+        CONSTRAINT "${tabla}_CentroOperacionCodigo_fkey" FOREIGN KEY ("CentroOperacionCodigo") REFERENCES "CentrosOperaciones"("Codigo") ON DELETE SET NULL
+      );
+      CREATE INDEX "${tabla}_pedido_idx" ON "${tabla}" ("${venta ? 'PedidoId' : 'pedidoId'}");
+      INSERT INTO "${tabla}" ("Id", "CompaniaCodigo", "CentroOperacionCodigo", "${venta ? 'Numero' : 'NumeroFactura'}", "Prefijo",
+        "TipoDocumentoId", "UsuarioId", "${venta ? 'PedidoId' : 'pedidoId'}", "NombreCliente", "Subtotal", "${venta ? 'ImpuestoPct' : 'impuestoPct'}", "IVA", "Total", "Fecha")
+      VALUES ('${facturaId}', '006', '606', '184', 'DVP', '${tipo}', '${usuario}', 8, 'Cliente historico', 100, 19, 19, 119, '2026-09-01 14:15:16.123');
+      UPDATE "${tabla}" SET "NumeroDocumentoCliente" = '12345678', "SucursalCliente" = 'Principal',
+        "TelefonoCliente" = '3000000000', "DireccionCliente" = 'Calle 1', "BarrioCliente" = 'Centro',
+        "CiudadCliente" = 'Cali', "EmailCliente" = 'cliente@example.test', "Propina" = 12.5,
+        "${venta ? 'MetodoPago' : 'metodoPago'}" = 'TRANSFERENCIA', "${venta ? 'Credito' : 'credito'}" = true,
+        "${venta ? 'CreditoDias' : 'creditoDias'}" = 30, "${venta ? 'Vence' : 'vence'}" = '2026-10-01 14:15:16.123',
+        "CUFE" = 'cufe-historico', "NumeroFactus" = 'FE184', "XmlPath" = '/facturas/184.xml',
+        "PdfPath" = '/facturas/184.pdf', "EstadoDIAN" = '${venta ? 'NO_APLICA' : 'ACEPTADA'}';
+    `);
+  }
+  await db.exec(`
+    CREATE TABLE "FacturaDetalle" (id integer PRIMARY KEY, "FacturaId" uuid REFERENCES "Factura"("Id") ON DELETE CASCADE);
+    CREATE TABLE "Pagos" (id integer PRIMARY KEY, "FacturaVentaId" uuid REFERENCES "FacturaVenta"("Id") ON DELETE SET NULL);
+    INSERT INTO "FacturaDetalle" VALUES (1, '${facturaId}');
+    INSERT INTO "Pagos" VALUES (1, '${facturaId}');
+  `);
+  return db;
+}
+
+test('migra ambas cabeceras con columnas exactas, conserva valores y mantiene vinculos', async () => {
+  const db = await baseAnterior();
+  try {
+    await db.exec(migracion);
+    for (const tabla of ['Factura', 'FacturaVenta']) {
+      const estructura = await db.query(`SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position`, [tabla]);
+      assert.deepEqual(estructura.rows.map((fila) => fila.column_name), columnas);
+      const { rows: [cabecera] } = await db.query(`SELECT * FROM "${tabla}"`);
+      assert.equal(cabecera.numero, 184);
+      assert.equal(cabecera.TipoDocumento, 'DVP');
+      assert.equal(cabecera.Usuario, 'cajero606');
+      assert.equal(cabecera.Total, 119);
+      assert.equal(cabecera.metodoPago, 'TRANSFERENCIA');
+      assert.equal(cabecera.credito, true);
+      assert.equal(cabecera.creditoDias, 30);
+      assert.equal(cabecera.Propina, 12.5);
+      assert.equal(cabecera.NumeroDocumentoCliente, '12345678');
+      assert.equal(cabecera.CUFE, 'cufe-historico');
+      assert.equal(cabecera.XmlPath, '/facturas/184.xml');
+      const fecha = await db.query(`SELECT to_char(fecha, 'YYYY-MM-DD HH24:MI:SS.MS') AS valor FROM "${tabla}"`);
+      assert.equal(fecha.rows[0].valor, '2026-09-01 14:15:16.123');
+      const { rows: [operacion] } = await db.query(`SELECT * FROM "${tabla}Operacion"`);
+      assert.equal(operacion.Id, facturaId);
+      assert.equal(operacion.Total, undefined);
+      assert.equal(operacion.numero, 184);
+      const respaldo = await db.query(`SELECT "Total" FROM respaldo_facturas_20261104."${tabla}"`);
+      assert.equal(respaldo.rows[0].Total, 119);
+    }
+    assert.equal((await db.query('SELECT count(*)::int AS cantidad FROM "FacturaDetalle" d JOIN "FacturaOperacion" f ON f."Id" = d."FacturaId"')).rows[0].cantidad, 1);
+    assert.equal((await db.query('SELECT count(*)::int AS cantidad FROM "Pagos" p JOIN "FacturaVentaOperacion" f ON f."Id" = p."FacturaVentaId"')).rows[0].cantidad, 1);
+    await assert.rejects(db.exec(`INSERT INTO "Factura" SELECT * FROM "Factura"`), /duplicate key/);
+    await db.exec('DELETE FROM "Factura"');
+    assert.equal((await db.query('SELECT count(*)::int AS cantidad FROM "FacturaDetalle"')).rows[0].cantidad, 0);
+  } finally { await db.close(); }
+});
+
+for (const [nombre, preparar, mensaje] of [
+  ['numero con prefijo', `UPDATE "Factura" SET "NumeroFactura" = 'DVP184'`, /sin clave/],
+  ['numero fuera del rango entero', `UPDATE "Factura" SET "NumeroFactura" = '2147483648'`, /sin clave/],
+  ['usuario ausente', `UPDATE "FacturaVenta" SET "UsuarioId" = NULL`, /sin clave/],
+  ['tipo de otro centro', `UPDATE "Factura" SET "CentroOperacionCodigo" = NULL; UPDATE "TiposDocumento" SET "CentroOperacionCodigo" = '607'`, /sin clave/],
+  ['consecutivos contradictorios', `UPDATE "FacturaVenta" SET "Consecutivo" = 185`, /diferentes/],
+  ['clave duplicada', `INSERT INTO "Factura" SELECT '00000000-0000-4000-8000-000000000004'::uuid, "CompaniaCodigo", "CentroOperacionCodigo", '0184', "Prefijo", "TipoDocumentoId", "UsuarioId", "pedidoId", "ClienteId", "AperturaId", "DivisionCuentaId", "Fecha", "NumeroDocumentoCliente", "NombreCliente", "SucursalCliente", "TelefonoCliente", "DireccionCliente", "BarrioCliente", "CiudadCliente", "EmailCliente", "Subtotal", "impuestoPct", "IVA", "Total", "Propina", "metodoPago", credito, "creditoDias", vence, "CUFE", "NumeroFactus", "XmlPath", "PdfPath", "EstadoDIAN" FROM "Factura"`, /duplicadas/],
+]) {
+  test(`cancela sin alterar tablas ante ${nombre}`, async () => {
+    const db = await baseAnterior();
+    try {
+      await db.exec(preparar);
+      await assert.rejects(db.exec(migracion), mensaje);
+      await db.exec('ROLLBACK');
+      assert.equal((await db.query(`SELECT count(*)::int AS cantidad FROM "Factura"`)).rows[0].cantidad, nombre === 'clave duplicada' ? 2 : 1);
+      assert.equal((await db.query(`SELECT to_regclass('"FacturaOperacion"') AS tabla`)).rows[0].tabla, null);
+      assert.equal((await db.query(`SELECT to_regnamespace('respaldo_facturas_20261104') AS esquema`)).rows[0].esquema, null);
+    } finally { await db.close(); }
+  });
+}
+
+test('el cliente Prisma nuevo lee y actualiza las dos tablas migradas', async () => {
+  const db = await baseAnterior();
+  const socket = new PGLiteSocketServer({ db, port: 0, host: '127.0.0.1' });
+  let cliente;
+  try {
+    await db.exec(migracion);
+    await socket.start();
+    cliente = new PrismaClient({ datasources: { db: {
+      url: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?connection_limit=1&sslmode=disable`,
+    } } });
+    const prisma = crearAdaptadorFacturas(Prisma.dmmf.datamodel.models)(cliente);
+    for (const modelo of ['factura', 'facturaVenta']) {
+      const factura = await prisma[modelo].findUnique({ where: { id: facturaId } });
+      assert.equal(factura.total, 119);
+      assert.equal(factura.usuarioNombre, 'cajero606');
+      assert.equal(factura.sucursalCliente, 'Principal');
+      const actualizada = await prisma[modelo].update({ where: { id: facturaId }, data: { pdfPath: '/nuevo.pdf' } });
+      assert.equal(actualizada.pdfPath, '/nuevo.pdf');
+      assert.equal(actualizada.total, 119);
+    }
+  } finally {
+    if (cliente) await cliente.$disconnect();
+    await socket.stop();
+    await db.close();
+  }
+});
+
+test('Prisma real crea, consulta, actualiza y revierte facturas con el esquema completo', async () => {
+  const db = await PGlite.create();
+  const socket = new PGLiteSocketServer({ db, port: 0, host: '127.0.0.1' });
+  let cliente;
+  try {
+    const sql = execFileSync(process.execPath, [
+      fileURLToPath(new URL('../node_modules/prisma/build/index.js', import.meta.url)),
+      'migrate', 'diff', '--from-empty', '--to-schema-datamodel',
+      fileURLToPath(new URL('../prisma/schema.prisma', import.meta.url)), '--script',
+    ], { encoding: 'utf8', env: { ...process.env, DATABASE_URL: 'postgresql://test:test@127.0.0.1:1/test' } });
+    const valorSucursal = Prisma.dmmf.datamodel.models.find((modelo) => modelo.name === 'ClienteSucursal')
+      .fields.find((campo) => campo.name === 'id').default.args[0];
+    await db.exec(sql.replace(valorSucursal, 'NULL'));
+    await socket.start();
+    const conexion = new URL(`postgresql://postgres:postgres@${socket.getServerConn()}/postgres`);
+    conexion.searchParams.set('connection_limit', '1');
+    conexion.searchParams.set('sslmode', 'disable');
+    cliente = new PrismaClient({ datasources: { db: { url: conexion.toString() } } });
+    const prisma = crearAdaptadorFacturas(Prisma.dmmf.datamodel.models)(cliente);
+    await prisma.compania.create({ data: { codigo: '006', nit: '123456789', razonSocial: 'Prueba' } });
+    await prisma.centroOperacion.create({ data: {
+      codigo: '606', companiaCodigo: '006', descripcion: 'Prueba', nombre: 'Alameda', regional: '01',
+    } });
+    const usuarioFactura = await prisma.usuario.create({ data: { usuario: 'cajero606', nombre: 'Cajero', passwordHash: 'no-utilizable' } });
+    const tipoFactura = await prisma.tipoDocumento.create({ data: {
+      clase: 'FACTURA DE VENTA (NO ELECTRONICA)', esElectronico: false,
+      codigo: '606', prefijo: 'DVP', companiaCodigo: '006', centroOperacionCodigo: '606',
+    } });
+    const pedido = await prisma.pedido.create({ data: {} });
+    const datos = {
+      companiaCodigo: '006', centroOperacionCodigo: '606', prefijo: 'DVP', numeroFactura: '184',
+      tipoDocumentoId: tipoFactura.id, usuarioId: usuarioFactura.id, pedidoId: pedido.id,
+      subtotal: 100, impuestoPct: 19, impuesto: 19, total: 119, credito: true, estadoDIAN: 'NO_APLICA',
+      detalle: { create: [{ productoNombre: 'Producto historico', cantidad: 1, total: 119 }] },
+    };
+    const factura = await prisma.$transaction((tx) => tx.facturaVenta.create({ data: datos, include: { detalle: true, usuario: true } }));
+    assert.equal(factura.total, 119);
+    assert.equal(factura.detalle.length, 1);
+    assert.equal(factura.usuarioNombre, 'cajero606');
+    assert.equal(factura.usuario.usuario, 'cajero606');
+    assert.equal(factura.numeroFactura, '184');
+    assert.equal(factura.consecutivo, 184);
+    const tipoElectronico = await prisma.tipoDocumento.create({ data: {
+      clase: 'FACTURA ELECTRONICA DE VENTA', esElectronico: true,
+      codigo: '606', prefijo: 'FE', companiaCodigo: '006', centroOperacionCodigo: '606',
+    } });
+    const electronica = await prisma.factura.create({ data: {
+      ...datos, prefijo: 'FE', tipoDocumentoId: tipoElectronico.id, estadoDIAN: null,
+    }, include: { detalle: true, notasCredito: true, notasDebito: true, retenciones: true } });
+    assert.equal(electronica.prefijo, 'FE');
+    assert.equal(electronica.total, 119);
+    assert.equal(electronica.detalle.length, 1);
+    const emitida = await prisma.factura.update({ where: { id: electronica.id }, data: { estadoDIAN: 'ACEPTADA', numeroFactus: 'FE184' } });
+    assert.equal(emitida.numeroFactus, 'FE184');
+    assert.equal(emitida.estadoDIAN, 'ACEPTADA');
+    const listado = await prisma.facturaVenta.findMany({
+      where: { credito: true, OR: [{ estadoDIAN: 'NO_APLICA' }, { estadoDIAN: null }] },
+      select: { id: true, total: true, createdAt: true }, orderBy: { createdAt: 'desc' },
+    });
+    assert.equal(listado.length, 1);
+    assert.deepEqual(Object.keys(listado[0]).sort(), ['createdAt', 'id', 'total']);
+    const pedidoConFacturas = await prisma.pedido.findUnique({ where: { id: pedido.id }, include: { facturasVenta: true } });
+    assert.equal(pedidoConFacturas.facturasVenta[0].total, 119);
+    const actualizada = await prisma.facturaVenta.update({ where: { id: factura.id }, data: { estadoDIAN: 'ERROR', cufe: 'CUFE-prueba' } });
+    assert.equal(actualizada.cufe, 'CUFE-prueba');
+    assert.equal(actualizada.estadoDIAN, 'ERROR');
+    const tipoConConteo = await prisma.tipoDocumento.findUnique({ where: { id: tipoFactura.id }, include: { _count: { select: { facturasVenta: true } } } });
+    assert.equal(tipoConConteo._count.facturasVenta, 1);
+    assert.equal(await prisma.facturaVenta.count({ where: { credito: true } }), 1);
+    await assert.rejects(prisma.facturaVenta.create({ data: {
+      ...datos, numeroFactura: '185', detalle: { create: [{ productoId: '00000000-0000-4000-8000-000000000099' }] },
+    } }), /Foreign key constraint/);
+    assert.equal(await cliente.facturaVentaCabecera.count(), 1);
+    await assert.rejects(prisma.facturaVenta.create({ data: datos }), /Unique constraint/);
+    assert.equal(await cliente.facturaVentaCabecera.count(), 1);
+  } finally {
+    if (cliente) await cliente.$disconnect();
+    await socket.stop();
+    await db.close();
+  }
+});

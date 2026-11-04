@@ -44,6 +44,8 @@ test('reserva numeración solo para compañía y centro solicitados', async () =
   });
   assert.equal(reserva.prefijo, 'FAV');
   assert.equal(reserva.consecutivo, 9);
+  assert.equal(reserva.tipoDocumento, 'FAV');
+  assert.equal(reserva.numero, 9);
   assert.equal(reserva.companiaCodigo, '006');
   assert.equal(reserva.centroOperacionCodigo, '606');
 });

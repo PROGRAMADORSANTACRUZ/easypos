@@ -19,9 +19,9 @@ async function main() {
     prisma.notaDebito.deleteMany(),
     prisma.retencionFactura.deleteMany(),
     prisma.facturaVentaDetalle.deleteMany(),
-    prisma.facturaVenta.deleteMany(),
+    prisma.facturaVentaCabecera.deleteMany(),
     prisma.facturaDetalle.deleteMany(),
-    prisma.factura.deleteMany(),
+    prisma.facturaCabecera.deleteMany(),
 
     // Pedidos (mesa y domicilio)
     prisma.pedidoItem.deleteMany(),

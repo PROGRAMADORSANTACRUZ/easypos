@@ -23,6 +23,8 @@ export async function reservarNumeroDocumento(tx, clase, { companiaCodigo, centr
       return {
         prefijo: tipo.prefijo,
         consecutivo,
+        tipoDocumento: tipo.prefijo,
+        numero: consecutivo,
         tipoDocumentoId: tipo.id,
         companiaCodigo: tipo.companiaCodigo,
         centroOperacionCodigo: tipo.centroOperacionCodigo,
