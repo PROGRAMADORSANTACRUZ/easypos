@@ -626,6 +626,7 @@ export default function Facturas({ electronica = true }) {
   const [cliente, setCliente] = useState(''); // clienteId seleccionado en venta directa
   const [sucursalDirecta, setSucursalDirecta] = useState('');
   const [propinaDirecta, setPropinaDirecta] = useState(''); // propina en venta directa ('' = sugerir 10%)
+  const [sinPropinaDirecta, setSinPropinaDirecta] = useState(false);
   const [facturandoDirecta, setFacturandoDirecta] = useState(false);
   const [congeladas, setCongeladas] = useState([]);
   const [apertura, setApertura] = useState(null); // caja abierta actual (null = cerrada)
@@ -1053,6 +1054,7 @@ export default function Facturas({ electronica = true }) {
     setCliente(idDefault);
     setPagosDirecta({ recibe: '', pagos: [] });
     setPropinaDirecta('');
+    setSinPropinaDirecta(false);
     setFiltroCat('');
     setBusquedaProd('');
     setDirectaAbierta(true);
@@ -1105,7 +1107,7 @@ export default function Facturas({ electronica = true }) {
   });
 
   // Propina de la venta directa: sugerida al 10% mientras no se digite otra.
-  const propDirecta = !electronica ? 0 : propinaDirecta !== '' ? Math.max(0, Number(propinaDirecta) || 0) : sugPropina(subtotalDirecta);
+  const propDirecta = !electronica || sinPropinaDirecta ? 0 : propinaDirecta !== '' ? Math.max(0, Number(propinaDirecta) || 0) : sugPropina(subtotalDirecta);
   const totalPagarDirecta = subtotalDirecta + propDirecta;
 
   // Condición del cliente seleccionado en la venta directa (crédito/contado según Clientes)
@@ -1132,6 +1134,7 @@ export default function Facturas({ electronica = true }) {
       setCarrito(c.items);
       setCliente(c.cliente || idDefault);
       setPagosDirecta({ recibe: '', pagos: [] });
+      setSinPropinaDirecta(false);
       setCongeladas((actuales) => actuales.filter((x) => x.id !== c.id));
       setDirectaAbierta(true);
     } catch (e) {
@@ -2022,12 +2025,21 @@ export default function Facturas({ electronica = true }) {
                 {!creditoDirecta && electronica && (
                   <>
                     <div className="field" style={{ marginTop: 12 }}>
-                      <label>Propina (10% sugerido)</label>
+                      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                        <label htmlFor="propina-directa">Propina (10% sugerido)</label>
+                        <label htmlFor="sin-propina-directa" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+                          <input id="sin-propina-directa" type="checkbox" checked={sinPropinaDirecta}
+                            style={{ width: 14, height: 14 }} onChange={(event) => setSinPropinaDirecta(event.target.checked)} />
+                          Sin propina
+                        </label>
+                      </div>
                       <input
+                        id="propina-directa"
                         type="number"
                         min="0"
+                        disabled={sinPropinaDirecta}
                         placeholder={String(sugPropina(subtotalDirecta))}
-                        value={propinaDirecta !== '' ? propinaDirecta : String(sugPropina(subtotalDirecta))}
+                        value={sinPropinaDirecta ? '0' : propinaDirecta !== '' ? propinaDirecta : String(sugPropina(subtotalDirecta))}
                         onChange={(e) => setPropinaDirecta(e.target.value)}
                       />
                     </div>
