@@ -1,11 +1,11 @@
-import { camposMetodoPago, separarMetodosPago } from './pagosFactura.js';
+import { camposMetodoPago, camposValorPago, separarMetodosPago, separarValoresPago } from './pagosFactura.js';
 
 const modelosFactura = new Set(['Factura', 'FacturaVenta']);
 const claves = ['companiaCodigo', 'centroOperacionCodigo', 'prefijo', 'numeroFactura'];
 const camposCabecera = new Set([
   'createdAt', 'numeroDocumentoCliente', 'nombreCliente', 'sucursalCliente',
   'telefonoCliente', 'direccionCliente', 'barrioCliente', 'ciudadCliente', 'emailCliente',
-  'subtotal', 'impuestoPct', 'impuesto', 'total', 'propina', ...camposMetodoPago,
+  'subtotal', 'impuestoPct', 'impuesto', 'total', 'propina', ...camposMetodoPago, ...camposValorPago,
   'credito', 'creditoDias', 'vence', 'cufe', 'numeroFactus', 'xmlPath', 'pdfPath',
   'estadoDIAN', 'usuarioNombre',
 ]);
@@ -113,6 +113,12 @@ export function crearAdaptadorFacturas(modelos) {
     if (modelosFactura.has(modelo)) {
       const { cabecera, ...operacion } = resultado;
       resultado = { ...cabecera, ...operacion };
+      for (const campo of camposMetodoPago) {
+        if (typeof resultado[campo] === 'string') resultado[campo] = resultado[campo].replace(/\s+\$.*$/, '');
+      }
+      for (const campo of camposValorPago) {
+        if (resultado[campo] != null) resultado[campo] = Number(resultado[campo]);
+      }
       if (resultado.numeroFactura != null) {
         if (modelo === 'FacturaVenta') resultado.consecutivo = resultado.numeroFactura;
         resultado.numeroFactura = String(resultado.numeroFactura);
@@ -165,12 +171,13 @@ export function crearAdaptadorFacturas(modelos) {
       }
       datos.metodoPago ||= 'EFECTIVO';
       const pagos = datos.pagos?.create;
-      Object.assign(datosCabecera, separarMetodosPago(
+      const metodosConImporte = separarMetodosPago(
         { ...datosCabecera, metodoPago: datos.metodoPago },
         pagos ? (Array.isArray(pagos) ? pagos : [pagos]) : [],
-      ));
+      );
+      Object.assign(datosCabecera, separarValoresPago(metodosConImporte));
       if (pagos && !datosCabecera.credito) {
-        const aplicados = camposMetodoPago.map((campo) => datosCabecera[campo]).filter((pago) => pago !== '0');
+        const aplicados = camposMetodoPago.map((campo) => metodosConImporte[campo]).filter((pago) => pago !== '0');
         datos.metodoPago = aplicados.length === 1 ? aplicados[0].split(' $')[0] : aplicados.join(' + ');
       }
       await cabeceras.create({ data: { ...datosCabecera, ...Object.fromEntries(claves.map((campo) => [campo, datos[campo]])) } });
@@ -187,9 +194,9 @@ export function crearAdaptadorFacturas(modelos) {
     const clave = Object.fromEntries(claves.map((campo) => [campo, existente[campo]]));
     if (['metodoPago', 'total', 'propina', 'credito'].some((campo) => originales.data?.[campo] !== undefined)) {
       const actual = await tabla.findUniqueOrThrow({ where: donde(modelo, originales.where), include: { cabecera: true } });
-      Object.assign(datosCabecera, separarMetodosPago({
+      Object.assign(datosCabecera, separarValoresPago(separarMetodosPago({
         ...actual.cabecera, ...datosCabecera, metodoPago: datos.metodoPago ?? actual.metodoPago,
-      }));
+      })));
     }
     if (Object.keys(datosCabecera).length) await cabeceras.update({ where: { [nombreClave]: clave }, data: datosCabecera });
     const consulta = argumentos(modelo, originales);

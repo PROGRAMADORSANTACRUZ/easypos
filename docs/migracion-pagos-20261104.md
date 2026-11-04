@@ -1,5 +1,30 @@
 # Cuatro medios de pago por factura
 
+## Metodos y Valores Separados
+
+La actualizacion posterior separa cada campo combinado en un nombre y un valor numerico:
+
+| Metodo | Valor |
+| --- | ---: |
+| `metodopago1 = EFECTIVO` | `valor1 = 10000` |
+| `metodopago2 = TARJETA` | `valor2 = 10000` |
+| `metodopago3 = TRANSFERENCIA` | `valor3 = 17400` |
+| `metodopago4 = 0` | `valor4 = 0` |
+
+Los cuatro `valor` son `NUMERIC(18,2) NOT NULL DEFAULT 0`; la API los devuelve como numeros.
+Los nombres no incluyen moneda ni importe. Las dos cabeceras finales tienen 35 columnas.
+La conversion extrae el importe ya registrado: no recalcula totales, propinas ni diferencias historicas.
+Las etiquetas combinadas compatibles con caja y recibos permanecen en las tablas operativas auxiliares.
+
+Con respaldo completo verificado y pausa de facturacion activa, aplicar primero
+`20261104150000_facturas_valores_pago`, que agrega los valores sin cambiar los textos aun consumidos
+por la version anterior. Desplegar el codigo nuevo y comprobar `valoresPagoSeparados: true` en
+`/api/health`. Luego aplicar `20261104160000_facturas_nombres_pago`, que deja solo nombres y agrega
+restricciones de coherencia de cada par. Registrar ambas fases en Prisma y retirar la pausa.
+El respaldo adicional de cabeceras queda en `respaldo_valores_pago_20261104`; no sustituye al respaldo completo.
+
+## Estructura Anterior Combinada
+
 Las tablas fisicas `Factura` y `FacturaVenta` sustituyen `metodoPago` por cuatro columnas de texto no nulas:
 
 - `metodopago1`

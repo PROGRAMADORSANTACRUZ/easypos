@@ -706,9 +706,13 @@ model FacturaCabecera {
   total Float @map("Total")
   propina Float @default(0) @map("Propina")
   metodoPago1 String @default("0") @map("metodopago1")
+  valor1 Decimal @default(0) @db.Decimal(18, 2)
   metodoPago2 String @default("0") @map("metodopago2")
+  valor2 Decimal @default(0) @db.Decimal(18, 2)
   metodoPago3 String @default("0") @map("metodopago3")
+  valor3 Decimal @default(0) @db.Decimal(18, 2)
   metodoPago4 String @default("0") @map("metodopago4")
+  valor4 Decimal @default(0) @db.Decimal(18, 2)
   credito Boolean @default(false)
   creditoDias Int?
   vence DateTime?
@@ -744,9 +748,13 @@ model FacturaVentaCabecera {
   total Float @map("Total")
   propina Float @default(0) @map("Propina")
   metodoPago1 String @default("0") @map("metodopago1")
+  valor1 Decimal @default(0) @db.Decimal(18, 2)
   metodoPago2 String @default("0") @map("metodopago2")
+  valor2 Decimal @default(0) @db.Decimal(18, 2)
   metodoPago3 String @default("0") @map("metodopago3")
+  valor3 Decimal @default(0) @db.Decimal(18, 2)
   metodoPago4 String @default("0") @map("metodopago4")
+  valor4 Decimal @default(0) @db.Decimal(18, 2)
   credito Boolean @default(false)
   creditoDias Int?
   vence DateTime?

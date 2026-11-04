@@ -3,6 +3,30 @@ const formatoImporte = new Intl.NumberFormat('es-CO', {
 });
 
 export const camposMetodoPago = ['metodoPago1', 'metodoPago2', 'metodoPago3', 'metodoPago4'];
+export const camposValorPago = ['valor1', 'valor2', 'valor3', 'valor4'];
+
+export function separarValoresPago(metodos) {
+  const resultado = {};
+  camposMetodoPago.forEach((campo, indice) => {
+    const texto = String(metodos[campo] ?? '0').trim().replace(/[\u00a0\u202f]/g, ' ');
+    if (texto === '0') {
+      resultado[campo] = '0';
+      resultado[camposValorPago[indice]] = 0;
+      return;
+    }
+    const coincidencia = texto.match(/^(.+?)\s+\$\s*((?:[0-9]{1,3}(?:\.[0-9]{3})+|[0-9]+)(?:,[0-9]{1,2})?)$/);
+    if (!coincidencia) {
+      throw Object.assign(new Error('El medio de pago debe incluir un importe verificable antes de separarlo.'), { status: 400 });
+    }
+    const centavos = Math.round(Number(coincidencia[2].replaceAll('.', '').replace(',', '.')) * 100);
+    if (!Number.isSafeInteger(centavos) || centavos <= 0) {
+      throw Object.assign(new Error('El importe de cada medio debe ser positivo y conservar precision de centavos.'), { status: 400 });
+    }
+    resultado[campo] = coincidencia[1].trim().toUpperCase();
+    resultado[camposValorPago[indice]] = centavos / 100;
+  });
+  return resultado;
+}
 
 export function desglosarFactura(factura) {
   const metodo = String(factura.metodoPago || '').trim();

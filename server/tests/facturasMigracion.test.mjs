@@ -7,12 +7,14 @@ import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { crearAdaptadorFacturas } from '../src/facturasPersistencia.js';
-import { separarMetodosPago } from '../src/pagosFactura.js';
+import { separarMetodosPago, separarValoresPago } from '../src/pagosFactura.js';
 
 const migracion = await readFile(new URL('../prisma/migrations/20261104120000_facturas_cabeceras_clave_compuesta/migration.sql', import.meta.url), 'utf8');
 const pausa = await readFile(new URL('../scripts/pausar-facturacion.sql', import.meta.url), 'utf8');
 const migracionPagos = await readFile(new URL('../prisma/migrations/20261104130000_facturas_cuatro_metodos_pago/migration.sql', import.meta.url), 'utf8');
 const retirarMetodoAnterior = await readFile(new URL('../prisma/migrations/20261104140000_facturas_retirar_metodo_pago_anterior/migration.sql', import.meta.url), 'utf8');
+const migracionValoresPago = await readFile(new URL('../prisma/migrations/20261104150000_facturas_valores_pago/migration.sql', import.meta.url), 'utf8');
+const migracionNombresPago = await readFile(new URL('../prisma/migrations/20261104160000_facturas_nombres_pago/migration.sql', import.meta.url), 'utf8');
 const usuario = '00000000-0000-4000-8000-000000000001';
 const tipo = '00000000-0000-4000-8000-000000000002';
 const facturaId = '00000000-0000-4000-8000-000000000003';
@@ -194,6 +196,8 @@ test('el cliente Prisma nuevo lee y actualiza las dos tablas migradas', async ()
     await db.exec(migracion);
     await db.exec(migracionPagos);
     await db.exec(retirarMetodoAnterior);
+    await db.exec(migracionValoresPago);
+    await db.exec(migracionNombresPago);
     await socket.start();
     cliente = new PrismaClient({ datasources: { db: {
       url: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?connection_limit=1&sslmode=disable`,
@@ -296,15 +300,28 @@ test('Prisma real crea, consulta, actualiza y revierte facturas con el esquema c
       ...datos, numeroFactura: '186', credito: false, propina: 3, metodoPago: 'TARJETA + TRANSFERENCIA',
       pagos: { create: [{ formaPago: 'TARJETA', monto: 100 }, { formaPago: 'TRANSFERENCIA', monto: 22 }] },
     }, include: { pagos: true } });
-    assert.equal(mixta.metodoPago1, 'TARJETA $100');
-    assert.equal(mixta.metodoPago2, 'TRANSFERENCIA $22');
+    assert.equal(mixta.metodoPago1, 'TARJETA');
+    assert.equal(mixta.valor1, 100);
+    assert.equal(mixta.metodoPago2, 'TRANSFERENCIA');
+    assert.equal(mixta.valor2, 22);
     assert.equal(mixta.metodoPago3, '0');
+    assert.equal(mixta.valor3, 0);
     assert.equal(mixta.metodoPago4, '0');
+    assert.equal(mixta.valor4, 0);
     assert.equal(mixta.metodoPago, 'TARJETA $100 + TRANSFERENCIA $22');
     assert.equal(mixta.pagos.reduce((suma, pago) => suma + pago.monto, 0), 122);
     const pagoActualizado = await prisma.facturaVenta.update({ where: { id: mixta.id }, data: { metodoPago: 'EFECTIVO' } });
-    assert.equal(pagoActualizado.metodoPago1, 'EFECTIVO $122');
+    assert.equal(pagoActualizado.metodoPago1, 'EFECTIVO');
+    assert.equal(pagoActualizado.valor1, 122);
     assert.equal(pagoActualizado.metodoPago2, '0');
+    assert.equal(pagoActualizado.valor2, 0);
+    const proyeccion = await prisma.facturaVenta.findUnique({ where: { id: mixta.id }, select: { metodoPago1: true, valor1: true } });
+    assert.deepEqual(proyeccion, { metodoPago1: 'EFECTIVO', valor1: 122 });
+    const centavos = await prisma.facturaVenta.create({ data: {
+      ...datos, numeroFactura: '187', credito: false, total: 119.75, metodoPago: 'TARJETA',
+    } });
+    assert.equal(centavos.valor1, 119.75);
+    assert.equal(typeof centavos.valor1, 'number');
   } finally {
     if (cliente) await cliente.$disconnect();
     await socket.stop();
@@ -377,3 +394,46 @@ for (const coincide of [true, false]) {
     } finally { await db.close(); }
   });
 }
+
+test('migra los cuatro pares con importes decimales sin recalcular el historial', async () => {
+  const db = await baseAnterior();
+  try {
+    await db.exec(migracion);
+    await db.exec(migracionPagos);
+    await db.exec(retirarMetodoAnterior);
+    await db.query('UPDATE "Factura" SET metodopago1=$1,metodopago2=$2,metodopago3=$3,metodopago4=$4', [
+      `EFECTIVO $${String.fromCharCode(160)}10.000,75`, 'TARJETA $10.000', 'TRANSFERENCIA $17.400', '0',
+    ]);
+    await db.exec(migracionValoresPago);
+    await db.exec(migracionNombresPago);
+    for (const tabla of ['Factura', 'FacturaVenta']) {
+      const { rows: [factura] } = await db.query(`SELECT * FROM "${tabla}"`);
+      const { rows: [original] } = await db.query(`SELECT * FROM respaldo_valores_pago_20261104."${tabla}"`);
+      const esperado = separarValoresPago(Object.fromEntries([1, 2, 3, 4].map((indice) => [`metodoPago${indice}`, original[`metodopago${indice}`]])));
+      assert.equal(Object.keys(factura).length, 35);
+      for (let indice = 1; indice <= 4; indice++) {
+        assert.equal(factura[`metodopago${indice}`], esperado[`metodoPago${indice}`]);
+        assert.equal(Number(factura[`valor${indice}`]), esperado[`valor${indice}`]);
+      }
+      assert.equal(factura.Total, original.Total);
+      assert.equal(factura.Propina, original.Propina);
+      assert.equal(factura.CUFE, original.CUFE);
+    }
+    await assert.rejects(db.exec('UPDATE "Factura" SET metodopago4 = \'EFECTIVO\', valor4 = 0'), /check constraint/);
+    await assert.rejects(db.exec('UPDATE "Factura" SET metodopago4 = \'0\', valor4 = 10'), /check constraint/);
+  } finally { await db.close(); }
+});
+
+test('cancela la separacion numerica ante un campo sin importe verificable', async () => {
+  const db = await baseAnterior();
+  try {
+    await db.exec(migracion);
+    await db.exec(migracionPagos);
+    await db.exec(retirarMetodoAnterior);
+    await db.exec('UPDATE "Factura" SET metodopago1 = \'EFECTIVO\'');
+    await assert.rejects(db.exec(migracionValoresPago), /valor de pago verificable/);
+    await db.exec('ROLLBACK');
+    assert.equal((await db.query('SELECT metodopago1 FROM "Factura"')).rows[0].metodopago1, 'EFECTIVO');
+    assert.equal((await db.query(`SELECT to_regnamespace('respaldo_valores_pago_20261104') AS esquema`)).rows[0].esquema, null);
+  } finally { await db.close(); }
+});

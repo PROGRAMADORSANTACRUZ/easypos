@@ -2,7 +2,33 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { desglosarFactura } from '../src/routes/aperturas.js';
 import { etiquetaPagos } from '../../client/src/pagosMultiples.js';
-import { separarMetodosPago } from '../src/pagosFactura.js';
+import { separarMetodosPago, separarValoresPago } from '../src/pagosFactura.js';
+
+test('separa cada medio de su importe numerico y deja los pares no usados en cero', () => {
+  assert.deepEqual(separarValoresPago({
+    metodoPago1: 'EFECTIVO $10.000', metodoPago2: 'TARJETA $10.000', metodoPago3: 'TRANSFERENCIA $17.400', metodoPago4: '0',
+  }), {
+    metodoPago1: 'EFECTIVO', valor1: 10000,
+    metodoPago2: 'TARJETA', valor2: 10000,
+    metodoPago3: 'TRANSFERENCIA', valor3: 17400,
+    metodoPago4: '0', valor4: 0,
+  });
+});
+
+test('los valores separados conservan centavos y reconocen el espacio monetario del cliente', () => {
+  const resultado = separarValoresPago({ metodoPago1: `TARJETA $${String.fromCharCode(160)}25.000,75` });
+  assert.equal(resultado.metodoPago1, 'TARJETA');
+  assert.equal(resultado.valor1, 25000.75);
+  assert.equal(typeof resultado.valor1, 'number');
+  assert.equal(resultado.valor4, 0);
+});
+
+test('separa sin recalcular los importes historicos ni inventar valores ausentes', () => {
+  assert.equal(separarValoresPago({ metodoPago1: 'EFECTIVO $10.000' }).valor1, 10000);
+  assert.throws(() => separarValoresPago({ metodoPago1: 'EFECTIVO' }), /importe verificable/);
+  assert.throws(() => separarValoresPago({ metodoPago1: 'EFECTIVO $0' }), /positivo/);
+  assert.throws(() => separarValoresPago({ metodoPago1: 'EFECTIVO $10,123' }), /importe verificable/);
+});
 
 test('separa tres medios en orden y deja el cuarto en cero sin duplicar propina', () => {
   assert.deepEqual(separarMetodosPago({ total: 34000, propina: 3400, metodoPago: 'EFECTIVO $ 10.000 + TARJETA $ 10.000 + TRANSFERENCIA $ 17.400' }), {
