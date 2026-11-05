@@ -18,6 +18,7 @@ const migracionNombresPago = await readFile(new URL('../prisma/migrations/202611
 const migracionColumnaPrefijo = await readFile(new URL('../prisma/migrations/20261104170000_facturas_columna_prefijo/migration.sql', import.meta.url), 'utf8');
 const migracionCodigoDocumental = await readFile(new URL('../prisma/migrations/20261104180000_facturas_codigo_documental/migration.sql', import.meta.url), 'utf8');
 const migracionFacturaDetalle = await readFile(new URL('../prisma/migrations/20261104190000_factura_detalle_documento_bodega/migration.sql', import.meta.url), 'utf8');
+const migracionOrdenTipoDocumento = await readFile(new URL('../prisma/migrations/20261105100000_factura_detalle_tipodocumento_orden/migration.sql', import.meta.url), 'utf8');
 const usuario = '00000000-0000-4000-8000-000000000001';
 const tipo = '00000000-0000-4000-8000-000000000002';
 const facturaId = '00000000-0000-4000-8000-000000000003';
@@ -86,11 +87,12 @@ async function baseAnterior() {
   return db;
 }
 
-test('reordena FacturaDetalle y relaciona numero, tipo documental y bodega', async () => {
+test('ubica TipoDocumento junto al centro y conserva numero, bodega y relaciones', async () => {
   const db = new PGlite();
   const factura = '00000000-0000-4000-8000-000000000021';
   const producto = '00000000-0000-4000-8000-000000000022';
   const detalle = '00000000-0000-4000-8000-000000000023';
+  const bodega = '00000000-0000-4000-8000-000000000024';
   try {
     await db.exec(`
       CREATE TABLE "Compania" ("Codigo" varchar(3) PRIMARY KEY);
@@ -125,18 +127,21 @@ test('reordena FacturaDetalle y relaciona numero, tipo documental y bodega', asy
       INSERT INTO "Compania" VALUES ('006');
       INSERT INTO "CentrosOperaciones" VALUES ('606');
       INSERT INTO "Producto" VALUES ('${producto}');
+      INSERT INTO "Bodega" VALUES ('${bodega}');
       INSERT INTO "Factura" VALUES ('006', '606', 'FEV', 421);
       INSERT INTO "FacturaOperacion" VALUES ('${factura}', '006', '606', 'FEV', 421);
       INSERT INTO "FacturaDetalle" VALUES ('006', '606', 'P-1', 'Producto histórico', 2, 'UND', 5000, 950, 10950, '${detalle}', '${factura}', '${producto}');
     `);
     await db.exec(migracionFacturaDetalle);
+    await db.exec(`UPDATE "FacturaDetalle" SET "Bodega" = '${bodega}'`);
+    await db.exec(migracionOrdenTipoDocumento);
     const estructura = await db.query(`
       SELECT column_name FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'FacturaDetalle'
       ORDER BY ordinal_position
     `);
-    assert.deepEqual(estructura.rows.slice(0, 11).map((fila) => fila.column_name), [
-      'CompaniaCodigo', 'CentroOperacionCodigo', 'numero', 'CodigoProducto', 'NombreProducto',
+    assert.deepEqual(estructura.rows.slice(0, 12).map((fila) => fila.column_name), [
+      'CompaniaCodigo', 'CentroOperacionCodigo', 'TipoDocumento', 'numero', 'CodigoProducto', 'NombreProducto',
       'Cantidad', 'Unidad', 'PrecioUnitario', 'IVA', 'Total', 'Bodega',
     ]);
     const { rows: [linea] } = await db.query('SELECT * FROM "FacturaDetalle"');
@@ -144,14 +149,14 @@ test('reordena FacturaDetalle y relaciona numero, tipo documental y bodega', asy
     assert.equal(linea.TipoDocumento, 'FEV');
     assert.equal(linea.CodigoProducto, 'P-1');
     assert.equal(linea.Total, 10950);
-    assert.equal(linea.Bodega, null);
-    assert.equal((await db.query('SELECT count(*)::int AS cantidad FROM "FacturaDetalle_backup_20261104"')).rows[0].cantidad, 1);
+    assert.equal(linea.Bodega, bodega);
+    assert.equal((await db.query('SELECT count(*)::int AS cantidad FROM "FacturaDetalle_backup_20261105"')).rows[0].cantidad, 1);
     await assert.rejects(db.exec(`
       INSERT INTO "FacturaDetalle" (
         "CompaniaCodigo", "CentroOperacionCodigo", "numero", "CodigoProducto", "Cantidad",
         "PrecioUnitario", "IVA", "Total", "TipoDocumento", "Id", "FacturaId"
       ) VALUES ('006', '606', 422, 'P-2', 1, 100, 19, 119, 'FEV',
-        '00000000-0000-4000-8000-000000000024', '${factura}')
+        '00000000-0000-4000-8000-000000000025', '${factura}')
     `), /foreign key/i);
   } finally { await db.close(); }
 });
