@@ -242,6 +242,7 @@ model Bodega {
   sucursalId  String?      @db.Uuid @map("SucursalId")
   sucursal    Sucursal?    @relation(fields: [sucursalId], references: [id], onDelete: SetNull)
   facturaDetalles FacturaDetalle[]
+  facturaVentaDetalles FacturaVentaDetalle[]
   existencias Inventario[]
   existenciasInsumos InventarioItemBodega[]
   movimientos MovimientoInventario[]
@@ -683,6 +684,7 @@ model FacturaVenta {
   apertura      AperturaCaja? @relation(fields: [aperturaId], references: [id])
   abonos        Abono[]
   detalle       FacturaVentaDetalle[]
+  detallePorDocumento FacturaVentaDetalle[] @relation("FacturaVentaDetalleDocumento")
   pagos         Pago[]
   comisiones    ComisionVendedor[]
   @@unique([companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numeroFactura], map: "FacturaVentaOperacion_documento_key")
@@ -781,6 +783,8 @@ model FacturaVentaDetalle {
   compania       Compania?      @relation(fields: [companiaCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
   centroOperacionCodigo String? @db.VarChar(10) @map("CentroOperacionCodigo")
   centroOperacion CentroOperacion? @relation(fields: [centroOperacionCodigo], references: [codigo], onDelete: SetNull, onUpdate: Cascade)
+  tipoDocumentoCodigo String?   @db.VarChar(20) @map("TipoDocumento")
+  numeroFactura Int?            @map("numero")
   productoCodigo String?        @db.VarChar(50) @map("CodigoProducto")
   productoNombre String?        @db.VarChar(250) @map("NombreProducto")
   cantidad       Float          @default(0) @map("Cantidad")
@@ -788,6 +792,9 @@ model FacturaVentaDetalle {
   precioUnitario Float          @default(0) @map("PrecioUnitario")
   iva            Float          @default(0) @map("IVA")
   total          Float          @default(0) @map("Total")
+  bodegaId       String?        @db.Uuid @map("Bodega")
+  bodega         Bodega?        @relation(fields: [bodegaId], references: [id], onDelete: SetNull)
+  facturaVentaDocumento FacturaVenta? @relation("FacturaVentaDetalleDocumento", fields: [companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numeroFactura], references: [companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numeroFactura], onDelete: Cascade, onUpdate: Cascade, map: "FacturaVentaDetalle_documento_fkey")
   id             String         @id @default(uuid()) @db.Uuid @map("Id")
   facturaVentaId String?        @db.Uuid @map("FacturaVentaId")
   facturaVenta   FacturaVenta?  @relation(fields: [facturaVentaId], references: [id], onDelete: Cascade)

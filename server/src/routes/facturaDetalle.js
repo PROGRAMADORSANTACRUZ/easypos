@@ -26,13 +26,21 @@ async function asociacionFactura(facturaId, preferirVenta = false) {
   const buscarVenta = async () => {
     const factura = await prisma.facturaVenta.findUnique({
       where: { id: String(facturaId) },
-      select: { id: true, companiaCodigo: true, centroOperacionCodigo: true },
+      select: {
+        id: true,
+        companiaCodigo: true,
+        centroOperacionCodigo: true,
+        numeroFactura: true,
+        tipoDocumentoCodigo: true,
+      },
     });
     return factura && {
       facturaId: null,
       facturaVentaId: factura.id,
       companiaCodigo: factura.companiaCodigo,
       centroOperacionCodigo: factura.centroOperacionCodigo,
+      numeroFactura: factura.numeroFactura,
+      tipoDocumentoCodigo: factura.tipoDocumentoCodigo,
     };
   };
   const buscarElectronica = async () => {
@@ -105,6 +113,9 @@ router.post('/', wrap(async (req, res) => {
     const d = await prisma.facturaVentaDetalle.create({
       data: {
         ...asociacion,
+        numeroFactura: asociacion.numeroFactura ?? null,
+        tipoDocumentoCodigo: asociacion.tipoDocumentoCodigo ?? null,
+        bodegaId: bodegaId ? String(bodegaId) : null,
         productoId: productoId ? String(productoId) : null,
         ...snapshot,
         cantidad: Number(cantidad) || 0,
@@ -150,6 +161,7 @@ router.put('/:id', wrap(async (req, res) => {
         where: { id: String(req.params.id) },
         data: {
           ...(asociacion && asociacion.facturaVentaId && asociacion),
+          ...(bodegaId !== undefined && { bodegaId: bodegaId ? String(bodegaId) : null }),
           ...(productoId !== undefined && { productoId: productoId ? String(productoId) : null }),
           ...snapshot,
           ...(cantidad !== undefined && { cantidad: Number(cantidad) || 0 }),
