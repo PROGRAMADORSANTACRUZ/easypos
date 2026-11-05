@@ -17,6 +17,7 @@ const migracionValoresPago = await readFile(new URL('../prisma/migrations/202611
 const migracionNombresPago = await readFile(new URL('../prisma/migrations/20261104160000_facturas_nombres_pago/migration.sql', import.meta.url), 'utf8');
 const migracionColumnaPrefijo = await readFile(new URL('../prisma/migrations/20261104170000_facturas_columna_prefijo/migration.sql', import.meta.url), 'utf8');
 const migracionCodigoDocumental = await readFile(new URL('../prisma/migrations/20261104180000_facturas_codigo_documental/migration.sql', import.meta.url), 'utf8');
+const migracionFacturaDetalle = await readFile(new URL('../prisma/migrations/20261104190000_factura_detalle_documento_bodega/migration.sql', import.meta.url), 'utf8');
 const usuario = '00000000-0000-4000-8000-000000000001';
 const tipo = '00000000-0000-4000-8000-000000000002';
 const facturaId = '00000000-0000-4000-8000-000000000003';
@@ -84,6 +85,76 @@ async function baseAnterior() {
   `);
   return db;
 }
+
+test('reordena FacturaDetalle y relaciona numero, tipo documental y bodega', async () => {
+  const db = new PGlite();
+  const factura = '00000000-0000-4000-8000-000000000021';
+  const producto = '00000000-0000-4000-8000-000000000022';
+  const detalle = '00000000-0000-4000-8000-000000000023';
+  try {
+    await db.exec(`
+      CREATE TABLE "Compania" ("Codigo" varchar(3) PRIMARY KEY);
+      CREATE TABLE "CentrosOperaciones" ("Codigo" varchar(10) PRIMARY KEY);
+      CREATE TABLE "Producto" ("Id" uuid PRIMARY KEY);
+      CREATE TABLE "Bodega" ("Id" uuid PRIMARY KEY);
+      CREATE TABLE "Factura" (
+        "CompaniaCodigo" varchar(3) NOT NULL,
+        "CentroOperacionCodigo" varchar(10) NOT NULL,
+        "TipoDocumento" varchar(20) NOT NULL,
+        "numero" integer NOT NULL,
+        PRIMARY KEY ("CompaniaCodigo", "CentroOperacionCodigo", "TipoDocumento", "numero")
+      );
+      CREATE TABLE "FacturaOperacion" (
+        "Id" uuid PRIMARY KEY,
+        "CompaniaCodigo" varchar(3) NOT NULL,
+        "CentroOperacionCodigo" varchar(10) NOT NULL,
+        "TipoDocumento" varchar(20) NOT NULL,
+        "numero" integer NOT NULL,
+        FOREIGN KEY ("CompaniaCodigo", "CentroOperacionCodigo", "TipoDocumento", "numero")
+          REFERENCES "Factura"("CompaniaCodigo", "CentroOperacionCodigo", "TipoDocumento", "numero")
+      );
+      CREATE TABLE "FacturaDetalle" (
+        "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10),
+        "CodigoProducto" varchar(50), "NombreProducto" varchar(250),
+        "Cantidad" double precision NOT NULL DEFAULT 0, "Unidad" varchar(10),
+        "PrecioUnitario" double precision NOT NULL DEFAULT 0, "IVA" double precision NOT NULL DEFAULT 0,
+        "Total" double precision NOT NULL DEFAULT 0, "Id" uuid PRIMARY KEY,
+        "FacturaId" uuid REFERENCES "FacturaOperacion"("Id") ON DELETE CASCADE,
+        "ProductoId" uuid REFERENCES "Producto"("Id") ON DELETE SET NULL
+      );
+      INSERT INTO "Compania" VALUES ('006');
+      INSERT INTO "CentrosOperaciones" VALUES ('606');
+      INSERT INTO "Producto" VALUES ('${producto}');
+      INSERT INTO "Factura" VALUES ('006', '606', 'FEV', 421);
+      INSERT INTO "FacturaOperacion" VALUES ('${factura}', '006', '606', 'FEV', 421);
+      INSERT INTO "FacturaDetalle" VALUES ('006', '606', 'P-1', 'Producto histórico', 2, 'UND', 5000, 950, 10950, '${detalle}', '${factura}', '${producto}');
+    `);
+    await db.exec(migracionFacturaDetalle);
+    const estructura = await db.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'FacturaDetalle'
+      ORDER BY ordinal_position
+    `);
+    assert.deepEqual(estructura.rows.slice(0, 11).map((fila) => fila.column_name), [
+      'CompaniaCodigo', 'CentroOperacionCodigo', 'numero', 'CodigoProducto', 'NombreProducto',
+      'Cantidad', 'Unidad', 'PrecioUnitario', 'IVA', 'Total', 'Bodega',
+    ]);
+    const { rows: [linea] } = await db.query('SELECT * FROM "FacturaDetalle"');
+    assert.equal(linea.numero, 421);
+    assert.equal(linea.TipoDocumento, 'FEV');
+    assert.equal(linea.CodigoProducto, 'P-1');
+    assert.equal(linea.Total, 10950);
+    assert.equal(linea.Bodega, null);
+    assert.equal((await db.query('SELECT count(*)::int AS cantidad FROM "FacturaDetalle_backup_20261104"')).rows[0].cantidad, 1);
+    await assert.rejects(db.exec(`
+      INSERT INTO "FacturaDetalle" (
+        "CompaniaCodigo", "CentroOperacionCodigo", "numero", "CodigoProducto", "Cantidad",
+        "PrecioUnitario", "IVA", "Total", "TipoDocumento", "Id", "FacturaId"
+      ) VALUES ('006', '606', 422, 'P-2', 1, 100, 19, 119, 'FEV',
+        '00000000-0000-4000-8000-000000000024', '${factura}')
+    `), /foreign key/i);
+  } finally { await db.close(); }
+});
 
 test('migra ambas cabeceras con columnas exactas, conserva valores y mantiene vinculos', async () => {
   const db = await baseAnterior();
