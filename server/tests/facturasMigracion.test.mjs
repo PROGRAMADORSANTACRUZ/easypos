@@ -20,6 +20,7 @@ const migracionCodigoDocumental = await readFile(new URL('../prisma/migrations/2
 const migracionFacturaDetalle = await readFile(new URL('../prisma/migrations/20261104190000_factura_detalle_documento_bodega/migration.sql', import.meta.url), 'utf8');
 const migracionOrdenTipoDocumento = await readFile(new URL('../prisma/migrations/20261105100000_factura_detalle_tipodocumento_orden/migration.sql', import.meta.url), 'utf8');
 const migracionFacturaVentaDetalle = await readFile(new URL('../prisma/migrations/20261105110000_factura_venta_detalle_documento_bodega/migration.sql', import.meta.url), 'utf8');
+const migracionDetallesFechaUsuario = await readFile(new URL('../prisma/migrations/20261105120000_detalles_factura_fecha_usuario/migration.sql', import.meta.url), 'utf8');
 const usuario = '00000000-0000-4000-8000-000000000001';
 const tipo = '00000000-0000-4000-8000-000000000002';
 const facturaId = '00000000-0000-4000-8000-000000000003';
@@ -87,6 +88,95 @@ async function baseAnterior() {
   `);
   return db;
 }
+
+test('agrega fecha y usuario después de Total en ambos detalles y conserva bodegas', async () => {
+  const db = new PGlite();
+  const factura = '00000000-0000-4000-8000-000000000041';
+  const facturaVenta = '00000000-0000-4000-8000-000000000042';
+  const producto = '00000000-0000-4000-8000-000000000043';
+  const detalle = '00000000-0000-4000-8000-000000000044';
+  const detalleVenta = '00000000-0000-4000-8000-000000000045';
+  const bodega = '00000000-0000-4000-8000-000000000046';
+  try {
+    await db.exec(`
+      CREATE TABLE "Compania" ("Codigo" varchar(3) PRIMARY KEY);
+      CREATE TABLE "CentrosOperaciones" ("Codigo" varchar(10) PRIMARY KEY);
+      CREATE TABLE "Producto" ("Id" uuid PRIMARY KEY);
+      CREATE TABLE "Bodega" ("Id" uuid PRIMARY KEY);
+      CREATE TABLE "Factura" (
+        "CompaniaCodigo" varchar(3) NOT NULL, "CentroOperacionCodigo" varchar(10) NOT NULL,
+        "TipoDocumento" varchar(20) NOT NULL, "numero" integer NOT NULL,
+        "fecha" timestamp(3) NOT NULL, "Usuario" varchar(50) NOT NULL,
+        PRIMARY KEY ("CompaniaCodigo", "CentroOperacionCodigo", "TipoDocumento", "numero")
+      );
+      CREATE TABLE "FacturaVenta" (
+        "CompaniaCodigo" varchar(3) NOT NULL, "CentroOperacionCodigo" varchar(10) NOT NULL,
+        "TipoDocumento" varchar(20) NOT NULL, "numero" integer NOT NULL,
+        "fecha" timestamp(3) NOT NULL, "Usuario" varchar(50) NOT NULL,
+        PRIMARY KEY ("CompaniaCodigo", "CentroOperacionCodigo", "TipoDocumento", "numero")
+      );
+      CREATE TABLE "FacturaOperacion" (
+        "Id" uuid PRIMARY KEY, "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10),
+        "TipoDocumento" varchar(20), "numero" integer,
+        FOREIGN KEY ("CompaniaCodigo", "CentroOperacionCodigo", "TipoDocumento", "numero")
+          REFERENCES "Factura"("CompaniaCodigo", "CentroOperacionCodigo", "TipoDocumento", "numero")
+      );
+      CREATE TABLE "FacturaVentaOperacion" (
+        "Id" uuid PRIMARY KEY, "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10),
+        "TipoDocumento" varchar(20), "numero" integer,
+        FOREIGN KEY ("CompaniaCodigo", "CentroOperacionCodigo", "TipoDocumento", "numero")
+          REFERENCES "FacturaVenta"("CompaniaCodigo", "CentroOperacionCodigo", "TipoDocumento", "numero")
+      );
+      CREATE TABLE "FacturaDetalle" (
+        "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10), "TipoDocumento" varchar(20),
+        "numero" integer, "CodigoProducto" varchar(50), "NombreProducto" varchar(250),
+        "Cantidad" double precision NOT NULL DEFAULT 0, "Unidad" varchar(10),
+        "PrecioUnitario" double precision NOT NULL DEFAULT 0, "IVA" double precision NOT NULL DEFAULT 0,
+        "Total" double precision NOT NULL DEFAULT 0, "Bodega" uuid, "Id" uuid PRIMARY KEY,
+        "FacturaId" uuid REFERENCES "FacturaOperacion"("Id") ON DELETE CASCADE,
+        "ProductoId" uuid REFERENCES "Producto"("Id") ON DELETE SET NULL
+      );
+      CREATE TABLE "FacturaVentaDetalle" (
+        "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10), "TipoDocumento" varchar(20),
+        "numero" integer, "CodigoProducto" varchar(50), "NombreProducto" varchar(250),
+        "Cantidad" double precision NOT NULL DEFAULT 0, "Unidad" varchar(10),
+        "PrecioUnitario" double precision NOT NULL DEFAULT 0, "IVA" double precision NOT NULL DEFAULT 0,
+        "Total" double precision NOT NULL DEFAULT 0, "Bodega" uuid, "Id" uuid PRIMARY KEY,
+        "FacturaVentaId" uuid REFERENCES "FacturaVentaOperacion"("Id") ON DELETE CASCADE,
+        "ProductoId" uuid REFERENCES "Producto"("Id") ON DELETE SET NULL
+      );
+      INSERT INTO "Compania" VALUES ('006');
+      INSERT INTO "CentrosOperaciones" VALUES ('606');
+      INSERT INTO "Producto" VALUES ('${producto}');
+      INSERT INTO "Bodega" VALUES ('${bodega}');
+      INSERT INTO "Factura" VALUES ('006', '606', 'FEV', 501, '2026-11-05 10:11:12.123', 'cajero606');
+      INSERT INTO "FacturaVenta" VALUES ('006', '606', 'DVP', 902, '2026-11-05 12:13:14.456', 'vendedor606');
+      INSERT INTO "FacturaOperacion" VALUES ('${factura}', '006', '606', 'FEV', 501);
+      INSERT INTO "FacturaVentaOperacion" VALUES ('${facturaVenta}', '006', '606', 'DVP', 902);
+      INSERT INTO "FacturaDetalle" VALUES ('006', '606', 'FEV', 501, 'P-1', 'Producto FEV', 1, 'UND', 1000, 190, 1190, '${bodega}', '${detalle}', '${factura}', '${producto}');
+      INSERT INTO "FacturaVentaDetalle" VALUES ('006', '606', 'DVP', 902, 'P-2', 'Producto DVP', 2, 'UND', 2000, 760, 4760, '${bodega}', '${detalleVenta}', '${facturaVenta}', '${producto}');
+    `);
+    await db.exec(migracionDetallesFechaUsuario);
+    for (const tabla of ['FacturaDetalle', 'FacturaVentaDetalle']) {
+      const estructura = await db.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position
+      `, [tabla]);
+      assert.deepEqual(estructura.rows.slice(0, 14).map((fila) => fila.column_name), [
+        'CompaniaCodigo', 'CentroOperacionCodigo', 'TipoDocumento', 'numero', 'CodigoProducto', 'NombreProducto',
+        'Cantidad', 'Unidad', 'PrecioUnitario', 'IVA', 'Total', 'fecha', 'usuario', 'Bodega',
+      ]);
+    }
+    const facturaDetalle = (await db.query(`SELECT d."numero", d."TipoDocumento", d."usuario", d."Bodega",
+      to_char(d."fecha", 'YYYY-MM-DD HH24:MI:SS.MS') AS fecha FROM "FacturaDetalle" d`)).rows[0];
+    const facturaVentaDetalle = (await db.query(`SELECT d."numero", d."TipoDocumento", d."usuario", d."Bodega",
+      to_char(d."fecha", 'YYYY-MM-DD HH24:MI:SS.MS') AS fecha FROM "FacturaVentaDetalle" d`)).rows[0];
+    assert.deepEqual(facturaDetalle, { numero: 501, TipoDocumento: 'FEV', usuario: 'cajero606', Bodega: bodega, fecha: '2026-11-05 10:11:12.123' });
+    assert.deepEqual(facturaVentaDetalle, { numero: 902, TipoDocumento: 'DVP', usuario: 'vendedor606', Bodega: bodega, fecha: '2026-11-05 12:13:14.456' });
+    assert.equal((await db.query('SELECT count(*)::int AS cantidad FROM "FacturaDetalle_backup_20261105_fecha_usuario"')).rows[0].cantidad, 1);
+    assert.equal((await db.query('SELECT count(*)::int AS cantidad FROM "FacturaVentaDetalle_backup_20261105_fecha_usuario"')).rows[0].cantidad, 1);
+  } finally { await db.close(); }
+});
 
 test('ordena FacturaVentaDetalle y vincula numero, tipo documental y bodega', async () => {
   const db = new PGlite();

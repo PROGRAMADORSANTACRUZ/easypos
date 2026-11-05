@@ -32,6 +32,8 @@ async function asociacionFactura(facturaId, preferirVenta = false) {
         centroOperacionCodigo: true,
         numeroFactura: true,
         tipoDocumentoCodigo: true,
+        createdAt: true,
+        usuarioNombre: true,
       },
     });
     return factura && {
@@ -41,6 +43,8 @@ async function asociacionFactura(facturaId, preferirVenta = false) {
       centroOperacionCodigo: factura.centroOperacionCodigo,
       numeroFactura: factura.numeroFactura,
       tipoDocumentoCodigo: factura.tipoDocumentoCodigo,
+      fecha: factura.createdAt,
+      usuario: factura.usuarioNombre,
     };
   };
   const buscarElectronica = async () => {
@@ -52,6 +56,8 @@ async function asociacionFactura(facturaId, preferirVenta = false) {
         centroOperacionCodigo: true,
         numeroFactura: true,
         tipoDocumentoCodigo: true,
+        createdAt: true,
+        usuarioNombre: true,
       },
     });
     return factura && {
@@ -61,6 +67,8 @@ async function asociacionFactura(facturaId, preferirVenta = false) {
       centroOperacionCodigo: factura.centroOperacionCodigo,
       numeroFactura: factura.numeroFactura,
       tipoDocumentoCodigo: factura.tipoDocumentoCodigo,
+      fecha: factura.createdAt,
+      usuario: factura.usuarioNombre,
     };
   };
   const asociacion = preferirVenta
@@ -115,6 +123,8 @@ router.post('/', wrap(async (req, res) => {
         ...asociacion,
         numeroFactura: asociacion.numeroFactura ?? null,
         tipoDocumentoCodigo: asociacion.tipoDocumentoCodigo ?? null,
+        fecha: asociacion.fecha ?? null,
+        usuario: asociacion.usuario ?? null,
         bodegaId: bodegaId ? String(bodegaId) : null,
         productoId: productoId ? String(productoId) : null,
         ...snapshot,
@@ -133,6 +143,8 @@ router.post('/', wrap(async (req, res) => {
       ...asociacion,
       numeroFactura: asociacion.numeroFactura ?? null,
       tipoDocumentoCodigo: asociacion.tipoDocumentoCodigo ?? null,
+      fecha: asociacion.fecha ?? null,
+      usuario: asociacion.usuario ?? null,
       bodegaId: bodegaId ? String(bodegaId) : null,
       productoId: productoId ? String(productoId) : null,
       ...snapshot,
