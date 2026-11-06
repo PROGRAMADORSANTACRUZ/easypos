@@ -1,4 +1,7 @@
 // Cliente para la API de Factus (proveedor tecnologico DIAN). OAuth2 password grant con cache de token.
+import { prisma } from './prisma.js';
+import { codigoPagoDian } from './pagosFactura.js';
+
 const BASE_URL = process.env.FACTUS_BASE_URL || 'https://api-sandbox.factus.com.co';
 
 let tokenCache = null; // { accessToken, refreshToken, expiraEn (timestamp ms) }
@@ -65,7 +68,19 @@ export async function probarConexionFactus() {
 // Mapa de tipo de documento local (Cliente.tipoDocumento) -> codigo DIAN (tabla 6).
 const DOC_DIAN = { RC: '11', TI: '12', CC: '13', TE: '21', CE: '22', NIT: '31', PAS: '41', DIE: '42', PEP: '47', NUIP: '91' };
 // Mapa de metodo de pago local -> codigo DIAN (tabla 25, forma de pago simplificada).
-const PAGO_DIAN = { EFECTIVO: '10', TARJETA: '48', TRANSFERENCIA: '42' };
+export async function cargarPagosFactura(factura, buscar = (where) => prisma.pago.findMany({
+  where,
+  select: { formaPago: true, monto: true },
+})) {
+  if (Array.isArray(factura.pagos)) return factura.pagos;
+  return factura.id ? buscar({ facturaId: factura.id }) : [];
+}
+
+async function formasPagoFactura(factura, pagos) {
+  const codigos = [...new Set([factura.metodoPago, ...pagos.map((pago) => pago.formaPago)])]
+    .filter((codigo) => typeof codigo === 'string' && /^[A-Z0-9_-]{1,10}$/.test(codigo));
+  return codigos.length ? prisma.formaPago.findMany({ where: { id: { in: codigos } }, select: { id: true, formaPagoDian: true } }) : [];
+}
 
 // Datos de "Consumidor Final" cuando la factura no tiene cliente asociado.
 const CLIENTE_GENERICO = {
@@ -115,12 +130,14 @@ function mapearItemsFactus(detalle) {
 // Emite (crea y valida) una factura en Factus a partir de la Factura local ya creada
 // (con cliente y detalle.producto incluidos). Lanza si la llamada falla.
 export async function crearFacturaFactus(factura) {
+  const pagosFactura = await cargarPagosFactura(factura);
+  const formas = await formasPagoFactura(factura, pagosFactura);
   const referenceCode = `${factura.prefijo || 'FEV'}${factura.numeroFactura}`;
   const esCredito = !!factura.credito;
-  const pagosRegistrados = (factura.pagos || []).filter((pago) => Number(pago.monto) > 0);
+  const pagosRegistrados = pagosFactura.filter((pago) => Number(pago.monto) > 0);
   let paymentDetails = [{
     payment_form: esCredito ? '2' : '1',
-    payment_method_code: PAGO_DIAN[factura.metodoPago] || '10',
+    payment_method_code: codigoPagoDian(factura.metodoPago, formas),
     amount: Number(factura.total).toFixed(2),
     ...(esCredito && factura.vence ? { due_date: new Date(factura.vence).toISOString().slice(0, 10) } : {}),
   }];
@@ -134,7 +151,7 @@ export async function crearFacturaFactus(factura) {
       asignado += monto;
       return {
         payment_form: '1',
-        payment_method_code: PAGO_DIAN[pago.formaPago] || '10',
+        payment_method_code: codigoPagoDian(pago.formaPago, formas),
         amount: monto.toFixed(2),
       };
     });
@@ -151,6 +168,7 @@ export async function crearFacturaFactus(factura) {
 
 // Emite una nota credito en Factus asociada a la factura ya reportada (factura.numeroFactus).
 export async function crearNotaCreditoFactus({ nota, factura }) {
+  const pagos = await cargarPagosFactura(factura);
   const referenceCode = `NC${nota.id.slice(0, 8)}`;
   const payload = {
     reference_code: referenceCode,
@@ -158,7 +176,7 @@ export async function crearNotaCreditoFactus({ nota, factura }) {
     numbering_range_id: Number(process.env.FACTUS_NUMBERING_RANGE_NOTA_CREDITO) || undefined,
     bill_number: factura.numeroFactus,
     observation: nota.motivo || undefined,
-    payment_details: [{ payment_form: '1', payment_method_code: PAGO_DIAN[factura.metodoPago] || '10', amount: Number(nota.total).toFixed(2) }],
+    payment_details: [{ payment_form: '1', payment_method_code: codigoPagoDian(factura.metodoPago, await formasPagoFactura(factura, pagos)), amount: Number(nota.total).toFixed(2) }],
     customer: mapearClienteFactus(factura.cliente),
     items: mapearItemsFactus(factura.detalle || []),
   };

@@ -1,9 +1,53 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import test from 'node:test';
-import { desglosarFactura } from '../src/routes/aperturas.js';
+import { desglosarFactura, efectivoDeFactura } from '../src/routes/aperturas.js';
 import { etiquetaPagos } from '../../client/src/pagosMultiples.js';
-import { separarMetodosPago, separarValoresPago } from '../src/pagosFactura.js';
+import { separarMetodosPago, separarValoresPago, validarPagosActivos, esMedioEfectivo, codigoPagoDian } from '../src/pagosFactura.js';
+import { cargarPagosFactura } from '../src/factus.js';
+
+test('valida conceptos activos al confirmar y conserva codigos e importes aplicados', async () => {
+  const formas = [{ id: 'EFE', activo: true }, { id: 'QR', activo: true }, { id: 'DTF', activo: false }];
+  const tx = { $queryRaw: async (sql, codigos) => {
+    assert.match(sql.join(''), /FOR SHARE/);
+    assert.match(sql.join(''), /"Activo" AS "activo"/);
+    return formas.filter((forma) => codigos.includes(forma.id));
+  } };
+  const pagos = [{ formaPago: 'EFE', monto: 13000 }, { formaPago: 'QR', monto: 5000 }];
+  await validarPagosActivos(tx, pagos, { total: 18000 });
+  assert.equal(separarValoresPago(separarMetodosPago({ total: 18000 }, pagos)).metodoPago1, 'EFE');
+  formas[1].activo = false;
+  await assert.rejects(validarPagosActivos(tx, pagos, { total: 18000 }), /QR.*inactivo/);
+  await assert.rejects(validarPagosActivos(tx, [{ formaPago: 'DTF', monto: 18000 }]), { status: 400 });
+  await assert.rejects(validarPagosActivos(tx, [{ formaPago: 'OTRO', monto: 18000 }]), /no existe/);
+  await assert.rejects(validarPagosActivos(tx, []), /activos/);
+  await assert.rejects(validarPagosActivos(tx, [{ formaPago: 'EFE', monto: 17000 }], { total: 18000 }), /exactamente/);
+  await assert.rejects(validarPagosActivos(tx, [{ formaPago: 'EFE', monto: -1 }]), /positivos/);
+});
+
+test('reconoce efectivo por Cpto caja, DIAN configurado y registros historicos', () => {
+  assert.equal(esMedioEfectivo('EFE'), true);
+  assert.equal(esMedioEfectivo('EFECTIVO'), true);
+  assert.equal(esMedioEfectivo('CAJ', [{ id: 'CAJ', formaPagoDian: '10-Efectivo' }]), true);
+  assert.equal(esMedioEfectivo('QR'), false);
+  assert.equal(efectivoDeFactura({ total: 18000, metodoPago: 'EFE $13.000 + QR $5.000' }), 13000);
+  assert.equal(efectivoDeFactura({ total: 18000, metodoPago: 'EFE' }), 18000);
+  assert.equal(efectivoDeFactura({ total: 18000, metodoPago: 'EFECTIVO' }), 18000);
+  assert.equal(efectivoDeFactura({ total: 18000, metodoPago: 'CAJ1 $13.000 + QR $5.000' }, [{ id: 'CAJ1', formaPagoDian: '10-Efectivo' }]), 13000);
+  assert.deepEqual(desglosarFactura({ total: 30000, propina: 3000, metodoPago: 'EFE $20.000 + QR $13.000' }), [
+    { metodo: 'EFE', monto: 20000 }, { metodo: 'QR', monto: 13000 },
+  ]);
+});
+
+test('los conceptos usan su parametro DIAN sin convertir datafonos ni transferencias en efectivo', () => {
+  assert.equal(codigoPagoDian('EFE'), '10');
+  assert.equal(codigoPagoDian('DTF'), '48');
+  assert.equal(codigoPagoDian('QR'), '42');
+  assert.equal(codigoPagoDian('DTF', [{ id: 'DTF', formaPagoDian: '49-Tarjeta Debito' }]), '49');
+  assert.equal(codigoPagoDian('BON', [{ id: 'BON' }]), 'ZZZ');
+  assert.equal(codigoPagoDian('DOM'), 'ZZZ');
+  assert.equal(codigoPagoDian('TARJETA'), '48');
+});
 
 test('cobra 8800 con propina incluso cuando el servidor solo dispone de locale en-US', () => {
   const codigo = `
@@ -110,4 +154,16 @@ test('solo una conversion historica explicita conserva importes que no cuadran',
   assert.deepEqual(separarMetodosPago(factura, [], { conservarImportesRegistrados: true }), {
     metodoPago1: 'EFECTIVO $10.000', metodoPago2: 'TARJETA $10.000', metodoPago3: 'TRANSFERENCIA $17.400', metodoPago4: '0',
   });
+});
+
+test('Factus recupera los pagos por factura cuando Prisma no incluyo la relacion', async () => {
+  let filtro;
+  const pagos = await cargarPagosFactura({ id: 'factura-1' }, async (where) => {
+    filtro = where;
+    return [{ formaPago: 'EFE', monto: 12000 }, { formaPago: 'QR', monto: 8000 }];
+  });
+  assert.deepEqual(filtro, { facturaId: 'factura-1' });
+  assert.deepEqual(pagos, [{ formaPago: 'EFE', monto: 12000 }, { formaPago: 'QR', monto: 8000 }]);
+  assert.deepEqual(await cargarPagosFactura({ pagos: [{ formaPago: 'DTF', monto: 1 }] }), [{ formaPago: 'DTF', monto: 1 }]);
+  assert.deepEqual(await cargarPagosFactura({}), []);
 });

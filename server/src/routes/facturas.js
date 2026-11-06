@@ -5,6 +5,7 @@ import { crearFacturaFactus } from '../factus.js';
 import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
 import { centroPermitido, filtroParesCentros } from '../centrosUsuario.js';
 import { calcularInsumosRequeridos, descontarInsumos, validarStockSuficiente } from '../inventarioKits.js';
+import { validarPagosActivos } from '../pagosFactura.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -383,7 +384,6 @@ router.post('/dividir', wrap(async (req, res) => {
   if (!['IGUALES', 'PRODUCTOS'].includes(modo)) return res.status(400).json({ error: 'Selecciona cómo dividir la cuenta' });
   if (!['UNA', 'SEPARADAS'].includes(emision)) return res.status(400).json({ error: 'Selecciona cómo generar las facturas' });
   if (electronica !== true && electronica !== false) return res.status(400).json({ error: 'Tipo de factura inválido' });
-  if (!['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'].includes(metodoPago)) return res.status(400).json({ error: 'Método de pago inválido' });
 
   const pedido = await prisma.pedido.findUnique({
     where: { id },
@@ -414,7 +414,7 @@ router.post('/dividir', wrap(async (req, res) => {
   if (!Array.isArray(pagos) || pagos.length !== partesN) {
     return res.status(400).json({ error: 'Registra un pago por cada persona' });
   }
-  if (pagos.some((pago) => !['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'].includes(pago.formaPago)
+  if (pagos.some((pago) => !pago || typeof pago.formaPago !== 'string'
     || !Number.isFinite(Number(pago.monto)) || Number(pago.monto) <= 0)) {
     return res.status(400).json({ error: 'Revisa los métodos y montos de pago' });
   }
@@ -450,6 +450,7 @@ router.post('/dividir', wrap(async (req, res) => {
   }));
 
   const creadas = await prisma.$transaction(async (tx) => {
+    await validarPagosActivos(tx, pagos);
     const cerrado = await tx.pedido.updateMany({
       where: { id, estado: 'ABIERTO' },
       data: { estado: 'FACTURADO', cliente: cliente.nombre, clienteId: cliente.clienteId },
@@ -543,7 +544,7 @@ router.post('/dividir', wrap(async (req, res) => {
 // Facturar un pedido: el inventario ya se descontó al crear el pedido (cocina); aquí solo se cierra y cobra.
 // body: { pedidoId, metodoPago?, clienteId?, credito?, creditoDias?, propina? }
 router.post('/', wrap(async (req, res) => {
-  const { pedidoId, metodoPago, clienteId, sucursalClienteId, credito, creditoDias, propina, electronica, companiaCodigo, centroOperacionCodigo } = req.body;
+  const { pedidoId, metodoPago, pagos = [], clienteId, sucursalClienteId, credito, creditoDias, propina, electronica, companiaCodigo, centroOperacionCodigo } = req.body;
   if (!validarCentroFacturacion(req, res, companiaCodigo, centroOperacionCodigo)) return;
   const id = Number(pedidoId);
 
@@ -577,6 +578,7 @@ router.post('/', wrap(async (req, res) => {
   catch (error) { if (error.status) return res.status(error.status).json({ error: error.message }); throw error; }
 
   const factura = await prisma.$transaction(async (tx) => {
+    if (!credito) await validarPagosActivos(tx, pagos, { total, propina: electronica === false ? 0 : Math.max(0, Number(propina) || 0) });
     // Cerrar pedido, asignar cliente y liberar mesa (los domicilios no tienen mesa)
     const cerrado = await tx.pedido.updateMany({
       where: { id, estado: 'ABIERTO' },
@@ -619,6 +621,7 @@ router.post('/', wrap(async (req, res) => {
         total,
         propina: electronica === false ? 0 : Math.max(0, Number(propina) || 0),
         metodoPago: metodoPago || 'EFECTIVO',
+        ...(!credito && { pagos: { create: pagos.map((pago) => ({ formaPago: pago.formaPago, monto: Number(pago.monto) })) } }),
         credito: !!credito,
         creditoDias: credito ? (Number(creditoDias) || null) : null,
         vence: credito ? calcularVence(creditoDias) : null,
@@ -661,7 +664,7 @@ router.post('/', wrap(async (req, res) => {
 // body: { items: [{ productoId, cantidad }], metodoPago?, clienteId?, credito?, creditoDias?, propina?, electronica? }
 // electronica=false (ej. modulo "Factura de venta"): NO se reporta a Factus/DIAN, es solo un documento de venta interno.
 router.post('/directa', wrap(async (req, res) => {
-  const { items = [], metodoPago, clienteId, sucursalClienteId, credito, creditoDias, propina, electronica, companiaCodigo, centroOperacionCodigo } = req.body;
+  const { items = [], metodoPago, pagos = [], clienteId, sucursalClienteId, credito, creditoDias, propina, electronica, companiaCodigo, centroOperacionCodigo } = req.body;
   if (!validarCentroFacturacion(req, res, companiaCodigo, centroOperacionCodigo)) return;
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Agrega al menos un producto' });
@@ -710,6 +713,7 @@ router.post('/directa', wrap(async (req, res) => {
   catch (error) { if (error.status) return res.status(error.status).json({ error: error.message }); throw error; }
 
   const factura = await prisma.$transaction(async (tx) => {
+    if (!credito) await validarPagosActivos(tx, pagos, { total, propina: electronica === false ? 0 : Math.max(0, Number(propina) || 0) });
     const pedido = await tx.pedido.create({
       data: {
         cliente: cli.nombre,
@@ -754,6 +758,7 @@ router.post('/directa', wrap(async (req, res) => {
         total,
         propina: electronica === false ? 0 : Math.max(0, Number(propina) || 0),
         metodoPago: metodoPago || 'EFECTIVO',
+        ...(!credito && { pagos: { create: pagos.map((pago) => ({ formaPago: pago.formaPago, monto: Number(pago.monto) })) } }),
         credito: !!credito,
         creditoDias: credito ? (Number(creditoDias) || null) : null,
         vence: credito ? calcularVence(creditoDias) : null,

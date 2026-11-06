@@ -5,6 +5,39 @@ const formatoImporte = new Intl.NumberFormat('en-US', {
 export const camposMetodoPago = ['metodoPago1', 'metodoPago2', 'metodoPago3', 'metodoPago4'];
 export const camposValorPago = ['valor1', 'valor2', 'valor3', 'valor4'];
 
+export function esMedioEfectivo(codigo, formas = []) {
+  const metodo = String(codigo || '').trim().toUpperCase();
+  return metodo === 'EFE' || /^EFECTIVO(?:\s|$)/.test(metodo)
+    || formas.some((forma) => forma.id === metodo && /^10(?:-|$)/.test(forma.formaPagoDian || ''));
+}
+
+export function codigoPagoDian(codigo, formas = []) {
+  const metodo = String(codigo || '').trim().toUpperCase();
+  const forma = formas.find((registro) => registro.id === metodo);
+  const configurado = String(forma?.formaPagoDian || '').match(/^(\d{1,3})(?:-|$)/)?.[1];
+  return configurado || {
+    EFECTIVO: '10', TARJETA: '48', TRANSFERENCIA: '42',
+    EFE: '10', DAT: '48', DTF: '48', PSE: '42', QR: '42', TRE: '42', TRH: '42', DOM: 'ZZZ',
+  }[metodo] || (forma ? 'ZZZ' : '10');
+}
+
+export async function validarPagosActivos(tx, pagos, factura) {
+  if (!Array.isArray(pagos) || !pagos.length || pagos.some((pago) => !pago
+    || typeof pago.formaPago !== 'string' || !/^[A-Z0-9_-]{1,10}$/.test(pago.formaPago)
+    || !Number.isFinite(Number(pago.monto)) || Number(pago.monto) <= 0)) {
+    throw Object.assign(new Error('Selecciona medios de pago activos y montos positivos.'), { status: 400 });
+  }
+  const codigos = [...new Set(pagos.map((pago) => pago.formaPago))].sort();
+  const formas = await tx.$queryRaw`SELECT "CptoCaja" AS "id", "Activo" AS "activo" FROM "FormasPago"
+    WHERE "CptoCaja" = ANY(${codigos}::text[]) ORDER BY "CptoCaja" FOR SHARE`;
+  for (const codigo of codigos) {
+    if (!formas.some((forma) => forma.id === codigo && forma.activo === true)) {
+      throw Object.assign(new Error(`El medio de pago ${codigo} no existe o está inactivo. Actualiza los medios de pago.`), { status: 400 });
+    }
+  }
+  if (factura) separarMetodosPago(factura, pagos);
+}
+
 export function separarValoresPago(metodos) {
   const resultado = {};
   camposMetodoPago.forEach((campo, indice) => {
@@ -39,14 +72,15 @@ export function desglosarFactura(factura) {
   if (metodo.includes(' + ')) {
     const partes = metodo.split(' + ').map((parte) => {
       const texto = parte.trim();
+      const importe = texto.match(/^(.+?)\s+\$?\s*((?:[0-9]{1,3}(?:\.[0-9]{3})+|[0-9]+)(?:,[0-9]{1,2})?)$/);
       return {
-        metodo: texto.replace(/\s*\$?\s*[0-9.,]+\s*$/, '').trim().toUpperCase() || 'OTRO',
-        monto: Number(texto.replace(/[^0-9,]/g, '').replace(',', '.')) || 0,
+        metodo: (importe?.[1] || texto).trim().toUpperCase() || 'OTRO',
+        monto: importe ? Number(importe[2].replaceAll('.', '').replace(',', '.')) : 0,
       };
     });
     const totalPagos = partes.reduce((suma, parte) => suma + parte.monto, 0);
     if (propina && Math.abs(totalPagos - (factura.total || 0)) < 0.01) {
-      const efectivo = partes.find((parte) => /^efectivo/i.test(parte.metodo));
+      const efectivo = partes.find((parte) => esMedioEfectivo(parte.metodo));
       if (efectivo) efectivo.monto += propina;
       else partes.push({ metodo: 'EFECTIVO', monto: propina });
     }

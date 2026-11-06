@@ -2,12 +2,12 @@ import { useId } from 'react';
 import { Icon } from '../icons.jsx';
 import { FORMAS_PAGO, agregarPago, resumirPagos, monedaPago } from '../pagosMultiples.js';
 
-export default function PagosMultiples({ value = { recibe: '', pagos: [] }, onChange, total, sugerido }) {
+export default function PagosMultiples({ value = { recibe: '', pagos: [] }, onChange, total, sugerido, formas = FORMAS_PAGO }) {
   const recibeId = useId();
-  const resumen = resumirPagos(value.pagos, total);
+  const resumen = resumirPagos(value.pagos, total, formas);
   const puedeAgregar = Number.isFinite(Number(value.recibe)) && Number(value.recibe) >= 0.01;
   const cargar = (formaPago) => {
-    const pagos = agregarPago(value.pagos, formaPago, value.recibe);
+    const pagos = agregarPago(value.pagos, formaPago, value.recibe, formas);
     if (pagos !== value.pagos) onChange({ recibe: '', pagos });
   };
 
@@ -19,20 +19,21 @@ export default function PagosMultiples({ value = { recibe: '', pagos: [] }, onCh
           onChange={(event) => onChange({ ...value, recibe: event.target.value })} />
       </div>
       <div className="pagos-formas" role="group" aria-label="Formas de pago">
-        {FORMAS_PAGO.map((forma) => (
+        {formas.map((forma) => (
           <button key={forma.codigo} type="button" className="btn"
             aria-pressed={value.pagos.some((pago) => pago.formaPago === forma.codigo)}
             title={`Agregar importe a ${forma.nombre.toLowerCase()}`}
-            disabled={!puedeAgregar} onClick={() => cargar(forma.codigo)}>
+            disabled={!puedeAgregar || (value.pagos.length >= 4 && !value.pagos.some((pago) => pago.formaPago === forma.codigo))} onClick={() => cargar(forma.codigo)}>
             <Icon name={forma.icono} size={18} />
             <span>{forma.nombre}</span>
             {sugerido === forma.codigo && <Icon name="check" size={14} />}
           </button>
         ))}
       </div>
+      {formas.length === 0 && <p role="alert" className="mini">No hay medios de pago activos.</p>}
       <div className="pagos-desglose" aria-label="Pagos cargados">
         {value.pagos.map((pago) => {
-          const forma = FORMAS_PAGO.find((opcion) => opcion.codigo === pago.formaPago);
+          const forma = formas.find((opcion) => opcion.codigo === pago.formaPago) || { nombre: `${pago.formaPago} (inactivo)` };
           return (
             <div className="pago-cargado" key={pago.formaPago}>
               <label htmlFor={`${recibeId}-${pago.formaPago}`}>{forma.nombre}</label>

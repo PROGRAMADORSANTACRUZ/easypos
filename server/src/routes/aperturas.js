@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
-import { desglosarFactura } from '../pagosFactura.js';
+import { desglosarFactura, esMedioEfectivo } from '../pagosFactura.js';
 
 export { desglosarFactura } from '../pagosFactura.js';
 
@@ -17,9 +17,9 @@ const conRelaciones = { caja: true, usuario: true };
 // La propina se recibe de contado: se suma al efectivo (o al método único si es
 // tarjeta/transferencia sin efectivo).
 // Efectivo que aporta una factura al cajon (para el cuadre).
-function efectivoDeFactura(f) {
+export function efectivoDeFactura(f, formas = []) {
   return desglosarFactura(f)
-    .filter((p) => /^efectivo/i.test(p.metodo))
+    .filter((p) => esMedioEfectivo(p.metodo, formas))
     .reduce((s, p) => s + p.monto, 0);
 }
 
@@ -27,9 +27,10 @@ function efectivoDeFactura(f) {
 async function calcularCuadre(apertura) {
   const where = { aperturaId: apertura.id };
   const select = { total: true, propina: true, metodoPago: true, credito: true };
-  const [facturas, ventas] = await Promise.all([
+  const [facturas, ventas, formas] = await Promise.all([
     prisma.factura.findMany({ where, select }),
     prisma.facturaVenta.findMany({ where, select }),
+    prisma.formaPago.findMany({ select: { id: true, formaPagoDian: true } }),
   ]);
   const movimientos = await prisma.movimientoCaja.findMany({
     where: { aperturaId: apertura.id },
@@ -42,7 +43,7 @@ async function calcularCuadre(apertura) {
   const todas = [...facturas, ...ventas];
   const totalVentas = todas.reduce((s, f) => s + (f.total || 0), 0);
   const totalPropinas = todas.reduce((s, f) => s + (f.propina || 0), 0);
-  const totalEfectivo = todas.reduce((s, f) => s + efectivoDeFactura(f), 0);
+  const totalEfectivo = todas.reduce((s, f) => s + efectivoDeFactura(f, formas), 0);
   const totalIngresos = movimientos.filter((m) => m.tipo === 'INGRESO').reduce((s, m) => s + m.monto, 0);
   const totalEgresos = movimientos.filter((m) => m.tipo === 'EGRESO').reduce((s, m) => s + m.monto, 0);
   const valorEsperado = (apertura.valorInicial || 0) + totalEfectivo + totalIngresos - totalEgresos;

@@ -11,7 +11,7 @@ import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir, registra
 import { tipoDocumentoListo } from '../tipoDocumentoListo.js';
 import { diaColombia } from '../fechaComercial.js';
 import PagosMultiples from '../components/PagosMultiples.jsx';
-import { etiquetaPagos, resumirPagos } from '../pagosMultiples.js';
+import { etiquetaPagos, resumirPagos, formasPagoActivas, esPagoEfectivo } from '../pagosMultiples.js';
 
 // Número visible de la factura: prefijo + consecutivo DIAN, o el ID corto si aún no tiene numeración.
 function numeroDian(f) {
@@ -602,15 +602,18 @@ export default function Facturas({ electronica = true }) {
   const [facturas, setFacturas] = useState([]);
   const [pendientes, setPendientes] = useState([]);
   const [pagosPedidos, setPagosPedidos] = useState({});
+  const [formasPagoMaestro, setFormasPagoMaestro] = useState([]);
+  const mediosActivos = formasPagoActivas(formasPagoMaestro);
+  const medioPorParte = (indice, formas = mediosActivos) => {
+    const ordenados = [...formas.filter((forma) => forma.esEfectivo), ...formas.filter((forma) => !forma.esEfectivo)];
+    return ordenados[indice % ordenados.length]?.codigo || '';
+  };
   const [dividirCuenta, setDividirCuenta] = useState(false);
   const [modoDivision, setModoDivision] = useState('IGUALES');
   const [cantidadPartes, setCantidadPartes] = useState(2);
   const [emisionDivision, setEmisionDivision] = useState('SEPARADAS');
   const [asignacionesDivision, setAsignacionesDivision] = useState({});
-  const [pagosDivision, setPagosDivision] = useState([
-    { formaPago: 'EFECTIVO', monto: '' },
-    { formaPago: 'TARJETA', monto: '' },
-  ]);
+  const [pagosDivision, setPagosDivision] = useState([]);
   const [propinas, setPropinas] = useState({}); // propina por pedidoId (undefined = sugerir 10%)
   const [propinaOn, setPropinaOn] = useState({}); // ¿se cobra propina? por pedidoId (undefined = sí)
   const [cobrando, setCobrando] = useState(null); // pedido en proceso de cobro (abre el modal POS)
@@ -651,7 +654,7 @@ export default function Facturas({ electronica = true }) {
 
   const cargar = async () => {
     try {
-      const [abiertos, facs, prods, clis, empresa, ap, ventasCongeladas] = await Promise.all([
+      const [abiertos, facs, prods, clis, empresa, ap, ventasCongeladas, formas] = await Promise.all([
         electronica ? api.get('/pedidos?estado=ABIERTO') : api.get('/pedidos?estado=ABIERTO').catch(() => []),
         api.get(electronica ? '/facturas' : '/facturas?electronica=false'),
         api.get('/productos'),
@@ -659,6 +662,7 @@ export default function Facturas({ electronica = true }) {
         api.get('/empresa').catch(() => null),
         api.get('/aperturas/activa').catch(() => null),
         api.get(`/ventas-congeladas?electronica=${electronica}`),
+        api.get('/formas-pago'),
       ]);
       empresaRecibo = empresa;
       try {
@@ -686,6 +690,7 @@ export default function Facturas({ electronica = true }) {
       setClientes(clis);
       setApertura(ap);
       setCongeladas(ventasCongeladas);
+      setFormasPagoMaestro(formas);
     } catch (e) {
       notify(e.message, 'err');
     }
@@ -934,7 +939,7 @@ export default function Facturas({ electronica = true }) {
       ? 0
       : (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(total));
     const totalPagar = total + prop;
-    const resumen = resumirPagos(pagoPedido.pagos, totalPagar);
+    const resumen = resumirPagos(pagoPedido.pagos, totalPagar, mediosActivos);
     if (pagoPedido.recibe !== '' || !resumen.valido) return notify('Asigna los importes a las formas de pago hasta cubrir el total', 'err');
     const ventana = abrirVentanaVacia();
     setProcesando(pedido.id);
@@ -943,13 +948,14 @@ export default function Facturas({ electronica = true }) {
         pedidoId: pedido.id,
         electronica,
         ...contextoDocumento,
-        metodoPago: etiquetaPagos(pagoPedido.pagos, totalPagar),
+        metodoPago: etiquetaPagos(pagoPedido.pagos, totalPagar, undefined, mediosActivos),
+        pagos: resumen.aplicados,
         clienteId: cliId,
         sucursalClienteId: sucursalIdPara(cliId, sucursalesSel[pedido.id]),
         propina: prop,
       });
       notify(`Factura #${factura.id} generada: ${money(factura.total)}`);
-      const recFinal = pagoPedido.pagos.some((pago) => pago.formaPago === 'EFECTIVO') ? resumen.recibido : null;
+      const recFinal = pagoPedido.pagos.some((pago) => esPagoEfectivo(pago.formaPago, mediosActivos)) ? resumen.recibido : null;
       setSel({ ...factura, _recibido: recFinal });
       setCobrando(null);
       await imprimirGenerada(factura, recFinal != null ? { recibido: recFinal } : null, ventana);
@@ -1030,9 +1036,14 @@ export default function Facturas({ electronica = true }) {
   };
 
   // Abre el modal POS de cobro para un pedido, precargando el método de pago del domicilio.
-  const abrirCobro = (pedido) => {
+  const abrirCobro = async (pedido) => {
     if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
+    let formas;
+    try {
+      formas = await api.get('/formas-pago');
+      setFormasPagoMaestro(formas);
+    } catch (e) { return notify(e.message, 'err'); }
     // Preselecciona el cliente registrado del domicilio para que la factura salga a su nombre
     if (pedido.clienteId && clientesSel[pedido.id] === undefined) {
       setClientesSel((prev) => ({ ...prev, [pedido.id]: pedido.clienteId }));
@@ -1042,14 +1053,16 @@ export default function Facturas({ electronica = true }) {
     setCantidadPartes(2);
     setEmisionDivision('SEPARADAS');
     setAsignacionesDivision({});
-    setPagosDivision([{ formaPago: 'EFECTIVO', monto: '' }, { formaPago: 'TARJETA', monto: '' }]);
+    setPagosDivision([0, 1].map((indice) => ({ formaPago: medioPorParte(indice, formasPagoActivas(formas)), monto: '' })));
     setCobrando(pedido);
   };
 
   // --- Factura directa (venta en caja para llevar) ---
-  const abrirDirecta = () => {
+  const abrirDirecta = async () => {
     if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
+    try { setFormasPagoMaestro(await api.get('/formas-pago')); }
+    catch (e) { return notify(e.message, 'err'); }
     setCarrito([]);
     setCliente(idDefault);
     setPagosDirecta({ recibe: '', pagos: [] });
@@ -1130,6 +1143,7 @@ export default function Facturas({ electronica = true }) {
 
   const reanudarCongelada = async (c) => {
     try {
+      setFormasPagoMaestro(await api.get('/formas-pago'));
       await api.del(`/ventas-congeladas/${c.id}?electronica=${electronica}`);
       setCarrito(c.items);
       setCliente(c.cliente || idDefault);
@@ -1196,7 +1210,7 @@ export default function Facturas({ electronica = true }) {
       return;
     }
 
-    const resumen = resumirPagos(pagosDirecta.pagos, totalPagarDirecta);
+    const resumen = resumirPagos(pagosDirecta.pagos, totalPagarDirecta, mediosActivos);
     if (pagosDirecta.recibe !== '' || !resumen.valido) return notify('Asigna los importes a las formas de pago hasta cubrir el total', 'err');
     const ventana = abrirVentanaVacia();
     setFacturandoDirecta(true);
@@ -1205,13 +1219,14 @@ export default function Facturas({ electronica = true }) {
         items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad })),
         electronica,
         ...contextoDocumento,
-        metodoPago: etiquetaPagos(pagosDirecta.pagos, totalPagarDirecta),
+        metodoPago: etiquetaPagos(pagosDirecta.pagos, totalPagarDirecta, undefined, mediosActivos),
+        pagos: resumen.aplicados,
         clienteId: (cliente ?? idDefault) || null,
         sucursalClienteId: sucursalIdPara(cliente ?? idDefault, sucursalDirecta),
         propina: propDirecta,
       });
       notify(`Factura #${factura.id} generada: ${money(factura.total)}`);
-      const recDirecta = pagosDirecta.pagos.some((pago) => pago.formaPago === 'EFECTIVO') ? resumen.recibido : null;
+      const recDirecta = pagosDirecta.pagos.some((pago) => esPagoEfectivo(pago.formaPago, mediosActivos)) ? resumen.recibido : null;
       setSel({ ...factura, _recibido: recDirecta });
       setDirectaAbierta(false);
       await imprimirGenerada(factura, recDirecta != null ? { recibido: recDirecta } : null, ventana);
@@ -1540,7 +1555,7 @@ export default function Facturas({ electronica = true }) {
                             setCantidadPartes(nuevaCantidad);
                             setAsignacionesDivision({});
                             setPagosDivision(Array.from({ length: nuevaCantidad }, (_, indice) => ({
-                              formaPago: indice === 0 ? 'EFECTIVO' : 'TARJETA',
+                              formaPago: medioPorParte(indice),
                               monto: '',
                             })));
                           }}
@@ -1593,7 +1608,7 @@ export default function Facturas({ electronica = true }) {
                             const emision = e.target.value;
                             setEmisionDivision(emision);
                             setPagosDivision(totalesPartes.map((monto, indice) => ({
-                              formaPago: indice === 0 ? 'EFECTIVO' : 'TARJETA',
+                              formaPago: medioPorParte(indice),
                               monto: monto.toFixed(2),
                             })));
                           }}
@@ -1605,7 +1620,7 @@ export default function Facturas({ electronica = true }) {
                       <div className="divide-pagos">
                         <div className="fc-sec-title">{emisionDivision === 'UNA' ? 'Pagos por persona' : 'Pago de cada factura'}</div>
                         {Array.from({ length: nPartes }, (_, indice) => {
-                          const pago = pagosDivision[indice] || { formaPago: 'EFECTIVO', monto: '' };
+                          const pago = pagosDivision[indice] || { formaPago: medioPorParte(indice), monto: '' };
                           return (
                             <div className="divide-pago" key={indice}>
                               <span>Parte {indice + 1}</span>
@@ -1613,9 +1628,8 @@ export default function Facturas({ electronica = true }) {
                                 value={pago.formaPago}
                                 onChange={(e) => setPagosDivision((anteriores) => anteriores.map((actual, i) => i === indice ? { ...actual, formaPago: e.target.value } : actual))}
                               >
-                                <option value="EFECTIVO">Efectivo</option>
-                                <option value="TARJETA">Tarjeta</option>
-                                <option value="TRANSFERENCIA">Transferencia</option>
+                                {!mediosActivos.some((medio) => medio.codigo === pago.formaPago) && <option value="">Seleccionar medio activo</option>}
+                                {mediosActivos.map((medio) => <option key={medio.codigo} value={medio.codigo}>{medio.nombre}</option>)}
                               </select>
                               <input
                                 type="number"
@@ -1633,7 +1647,8 @@ export default function Facturas({ electronica = true }) {
                       </div>
                       <button
                         className="btn btn-green cobro-btn"
-                        disabled={procesando === p.id || !asignacionesCompletas || pagosDivision.length !== nPartes || pagosDivision.some((pago, indice) => {
+                        disabled={procesando === p.id || !mediosActivos.length || !asignacionesCompletas || pagosDivision.length !== nPartes || pagosDivision.some((pago, indice) => {
+                          if (!mediosActivos.some((medio) => medio.codigo === pago.formaPago)) return true;
                           const esperado = totalesPartes[indice];
                           return Math.abs((Number(pago.monto) || 0) - esperado) > 0.01;
                         })}
@@ -1691,6 +1706,7 @@ export default function Facturas({ electronica = true }) {
                         <span>Total a pagar</span><span>{money(totalPagarP)}</span>
                       </div>
                       <PagosMultiples
+                        formas={mediosActivos}
                         value={pagosPedidos[p.id]}
                         onChange={(valor) => setPagosPedidos((actuales) => ({ ...actuales, [p.id]: valor }))}
                         total={totalPagarP}
@@ -1701,7 +1717,7 @@ export default function Facturas({ electronica = true }) {
                         disabled={
                           procesando === p.id ||
                           (pagosPedidos[p.id]?.recibe ?? '') !== '' ||
-                          !resumirPagos(pagosPedidos[p.id]?.pagos || [], totalPagarP).valido
+                          !resumirPagos(pagosPedidos[p.id]?.pagos || [], totalPagarP, mediosActivos).valido
                         }
                         onClick={() => facturar(p)}
                       >
@@ -2052,7 +2068,7 @@ export default function Facturas({ electronica = true }) {
                 )}
 
                 {!creditoDirecta && (
-                  <PagosMultiples value={pagosDirecta} onChange={setPagosDirecta} total={totalPagarDirecta} />
+                  <PagosMultiples value={pagosDirecta} onChange={setPagosDirecta} total={totalPagarDirecta} formas={mediosActivos} />
                 )}
 
                 <div className="row" style={{ gap: 8, marginTop: 8 }}>
@@ -2072,7 +2088,7 @@ export default function Facturas({ electronica = true }) {
                       carrito.length === 0 ||
                       (creditoDirecta
                         ? cupoExcedidoDirecta
-                        : pagosDirecta.recibe !== '' || !resumirPagos(pagosDirecta.pagos, totalPagarDirecta).valido)
+                        : pagosDirecta.recibe !== '' || !resumirPagos(pagosDirecta.pagos, totalPagarDirecta, mediosActivos).valido)
                     }
                     onClick={facturarDirecta}
                   >
