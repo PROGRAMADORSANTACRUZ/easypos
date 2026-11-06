@@ -943,7 +943,7 @@ tbody tr:last-child td { border-bottom: none; }
 .pago-mixto-check input { width: 16px; height: 16px; accent-color: var(--accent, #f59e0b); }
 
 .pagos-multiples { margin: 12px 0; min-width: 0; }
-.pagos-formas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.pagos-formas { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 6px; }
 .pagos-formas .btn { min-width: 0; min-height: 64px; flex-direction: column; gap: 4px; padding: 8px 3px; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
 .pagos-formas .btn[aria-pressed="true"] { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
 .pagos-desglose { display: grid; gap: 8px; margin: 12px 0; }

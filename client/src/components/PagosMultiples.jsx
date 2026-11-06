@@ -1,8 +1,8 @@
 import { useId } from 'react';
 import { Icon } from '../icons.jsx';
-import { FORMAS_PAGO, agregarPago, resumirPagos, monedaPago } from '../pagosMultiples.js';
+import { agregarPago, resumirPagos, monedaPago } from '../pagosMultiples.js';
 
-export default function PagosMultiples({ value = { recibe: '', pagos: [] }, onChange, total, sugerido, formas = FORMAS_PAGO }) {
+export default function PagosMultiples({ value = { recibe: '', pagos: [] }, onChange, total, sugerido, formas = [] }) {
   const recibeId = useId();
   const resumen = resumirPagos(value.pagos, total, formas);
   const puedeAgregar = Number.isFinite(Number(value.recibe)) && Number(value.recibe) >= 0.01;
