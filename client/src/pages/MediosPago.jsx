@@ -21,14 +21,18 @@ const DIAN = [
 const DATAFONO = ['Ninguno', 'Redeban', 'Credibanco', 'Otro'];
 
 const VACIO = {
+  cptoCaja: '',
+  claseConcepto: 'RECOGIDA',
   formaPago: '',
+  medioPago: '',
+  moneda: 'COP',
   manejaDocumento: false,
   cuenta: '',
   exportado: false,
   consignarEn: '',
   tipoDatafono: 'Ninguno',
   idBodega: 0,
-  formaPagoDian: DIAN[0],
+  formaPagoDian: '',
   activo: true,
 };
 
@@ -63,14 +67,18 @@ export default function MediosPago() {
   const editar = (r) => {
     setEditId(r.id);
     setForm({
+      cptoCaja: r.id,
+      claseConcepto: r.claseConcepto || 'RECOGIDA',
       formaPago: r.formaPago || '',
+      medioPago: r.medioPago || r.id,
+      moneda: r.moneda || 'COP',
       manejaDocumento: !!r.manejaDocumento,
       cuenta: r.cuenta || '',
       exportado: !!r.exportado,
       consignarEn: r.consignarEn || '',
       tipoDatafono: r.tipoDatafono || 'Ninguno',
       idBodega: r.idBodega ?? 0,
-      formaPagoDian: r.formaPagoDian || DIAN[0],
+      formaPagoDian: r.formaPagoDian || '',
       activo: r.activo !== false,
     });
     setModal(true);
@@ -79,7 +87,9 @@ export default function MediosPago() {
 
   const guardar = async (e) => {
     e.preventDefault();
-    if (!form.formaPago.trim()) return notify('El nombre de la forma de pago es obligatorio', 'err');
+    if (!form.cptoCaja.trim() || !form.formaPago.trim() || !form.medioPago.trim() || !form.moneda.trim()) {
+      return notify('Completa Cpto. caja, descripción, medio de pago y moneda', 'err');
+    }
     try {
       setGuardando(true);
       if (editId) {
@@ -113,7 +123,7 @@ export default function MediosPago() {
     <div>
       <PageHeader
         title="Medios de pago"
-        subtitle="Maestro de formas de pago: efectivo, transferencia, QR, tarjetas, bancos, datáfono, etc."
+        subtitle="Conceptos de caja y medios de pago."
         actions={puedeCrear && <Button variant="primary" icon="add" onClick={nuevo} title="Nueva forma de pago" />}
       />
 
@@ -122,14 +132,11 @@ export default function MediosPago() {
           <table>
             <thead>
               <tr>
-                <th>Forma de pago</th>
-                <th>Maneja documento</th>
-                <th>Cuenta</th>
-                <th>Exportado</th>
-                <th>Consignar en</th>
-                <th>Tipo datáfono</th>
-                <th>Id bodega</th>
-                <th>Forma pago DIAN</th>
+                <th>Clase cpto.</th>
+                <th>Cpto. caja</th>
+                <th>Desc. Cpto. caja</th>
+                <th>Medio pago</th>
+                <th>Moneda</th>
                 <th>Activo</th>
                 <th></th>
               </tr>
@@ -137,14 +144,11 @@ export default function MediosPago() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
+                  <td>{r.claseConcepto === 'ADICION' ? 'Adición' : 'Recogida'}</td>
+                  <td style={{ fontWeight: 700 }}>{r.id}</td>
                   <td style={{ fontWeight: 600 }}>{r.formaPago}</td>
-                  <td>{r.manejaDocumento ? 'S' : 'N'}</td>
-                  <td>{r.cuenta || ''}</td>
-                  <td>{r.exportado ? 'S' : 'N'}</td>
-                  <td>{r.consignarEn || ''}</td>
-                  <td>{r.tipoDatafono || ''}</td>
-                  <td>{r.idBodega ?? 0}</td>
-                  <td>{r.formaPagoDian || ''}</td>
+                  <td>{r.medioPago}</td>
+                  <td>{r.moneda}</td>
                   <td>{r.activo !== false ? 'Sí' : 'No'}</td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                     {puedeEditar && <button className="btn btn-sm" title="Editar" onClick={() => editar(r)}><Icon name="edit" size={16} /></button>}
@@ -152,7 +156,7 @@ export default function MediosPago() {
                   </td>
                 </tr>
               ))}
-              {!rows.length && <tr><td colSpan={10}><EmptyState icon="caja" title="Sin formas de pago" description="Crea la primera forma de pago (ej. EFECTIVO, TRANSFERENCIA, QR)." /></td></tr>}
+              {!rows.length && <tr><td colSpan={7}><EmptyState icon="caja" title="Sin conceptos de caja" /></td></tr>}
             </tbody>
           </table>
         </div>
@@ -170,10 +174,39 @@ export default function MediosPago() {
           )}
         >
           <form id="formapago-form" onSubmit={guardar}>
-            <div className="field">
-              <label>Forma de pago</label>
-              <input placeholder="Ej. EFECTIVO, TRANSFERENCIA, QR" value={form.formaPago} onChange={(e) => set('formaPago', e.target.value.toUpperCase())} style={{ textTransform: 'uppercase' }} autoFocus />
+            <div className="grid form-2col">
+              <div className="field">
+                <label htmlFor="clase-concepto">Clase cpto.</label>
+                <select id="clase-concepto" value={form.claseConcepto} onChange={(e) => set('claseConcepto', e.target.value)}>
+                  <option value="ADICION">Adición</option>
+                  <option value="RECOGIDA">Recogida</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="cpto-caja">Cpto. caja</label>
+                <input id="cpto-caja" maxLength={10} required readOnly={editId !== null} autoFocus={!editId}
+                  value={form.cptoCaja} onChange={(e) => {
+                    const codigo = e.target.value.toUpperCase();
+                    setForm((actual) => ({ ...actual, cptoCaja: codigo, medioPago: !actual.medioPago || actual.medioPago === actual.cptoCaja ? codigo : actual.medioPago }));
+                  }} />
+              </div>
             </div>
+            <div className="field">
+              <label htmlFor="descripcion-concepto">Desc. Cpto. caja</label>
+              <input id="descripcion-concepto" maxLength={120} required value={form.formaPago} onChange={(e) => set('formaPago', e.target.value.toUpperCase())} style={{ textTransform: 'uppercase' }} />
+            </div>
+            <div className="grid form-2col">
+              <div className="field">
+                <label htmlFor="medio-pago">Medio pago</label>
+                <input id="medio-pago" maxLength={10} required value={form.medioPago} onChange={(e) => set('medioPago', e.target.value.toUpperCase())} />
+              </div>
+              <div className="field">
+                <label htmlFor="moneda-pago">Moneda</label>
+                <input id="moneda-pago" maxLength={3} required value={form.moneda} onChange={(e) => set('moneda', e.target.value.toUpperCase())} />
+              </div>
+            </div>
+            <details>
+              <summary style={{ cursor: 'pointer', marginBottom: 12 }}>Parámetros contables y DIAN</summary>
             <div className="grid grid-2">
               <div className="field">
                 <label>Cuenta contable</label>
@@ -199,6 +232,7 @@ export default function MediosPago() {
             <div className="field">
               <label>Forma de pago DIAN</label>
               <select value={form.formaPagoDian} onChange={(e) => set('formaPagoDian', e.target.value)}>
+                <option value="">Sin asignar</option>
                 {DIAN.map((d) => <option key={d} value={d}>{d}</option>)}
                 {form.formaPagoDian && !DIAN.includes(form.formaPagoDian) && <option value={form.formaPagoDian}>{form.formaPagoDian}</option>}
               </select>
@@ -213,6 +247,7 @@ export default function MediosPago() {
                 Exportado
               </label>
             </div>
+            </details>
             <div className="field">
               <label className="mini" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input type="checkbox" checked={form.activo} onChange={(e) => set('activo', e.target.checked)} />

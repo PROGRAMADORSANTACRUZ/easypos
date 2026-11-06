@@ -301,8 +301,11 @@ model TipoDocumento {
 
 // Medios/Formas de pago (maestro): efectivo, transferencia, QR, tarjetas, bancos, datafono, etc.
 model FormaPago {
-  id               String   @id @default(uuid()) @db.Uuid @map("Id")
-  formaPago        String   @db.VarChar(120) @map("FormaPago")           // nombre del medio de pago
+  claseConcepto    String   @default("RECOGIDA") @db.VarChar(10) @map("ClaseCpto")
+  id               String   @id @db.VarChar(10) @map("CptoCaja")
+  formaPago        String   @db.VarChar(120) @map("DescCptoCaja")
+  medioPago        String   @db.VarChar(10) @map("MedioPago")
+  moneda           String   @default("COP") @db.VarChar(3) @map("Moneda")
   manejaDocumento  Boolean  @default(false)  @map("ManejaDocumento")     // S/N: exige numero de documento/comprobante
   cuenta           String?  @db.VarChar(30)  @map("Cuenta")              // cuenta contable
   exportado        Boolean  @default(false)  @map("Exportado")
@@ -311,6 +314,7 @@ model FormaPago {
   idBodega         Int?     @default(0)      @map("IdBodega")
   formaPagoDian    String?  @db.VarChar(40)  @map("FormaPagoDian")       // codigo DIAN: 10-Efectivo, 47-Transferencia...
   activo           Boolean  @default(true)   @map("Activo")
+  legacyId         String?  @unique @db.Uuid @map("Id")
   createdAt        DateTime @default(now())  @map("FechaCreacion")
 
   @@map("FormasPago")
