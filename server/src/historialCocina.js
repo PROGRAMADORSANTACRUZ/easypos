@@ -62,7 +62,11 @@ export function combinarHistorialCocina(preparaciones, eventos) {
   return filas.sort((primera, segunda) => new Date(segunda.fecha) - new Date(primera.fecha));
 }
 
-export async function registrarResultadoCocina(db, { pedidoId, estado, cocineroId, motivo, usuarioId }) {
+export async function registrarResultadoCocina(db, datos) {
+  return db.$transaction((tx) => registrarResultadoCocinaTransaccion(tx, datos), { isolationLevel: 'Serializable' });
+}
+
+export async function registrarResultadoCocinaTransaccion(tx, { pedidoId, estado, cocineroId, motivo, usuarioId, usuario }) {
   const fallar = (mensaje, status = 400) => { throw Object.assign(new Error(mensaje), { status }); };
   if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0) fallar('Pedido invalido');
   if (!['ENTREGADO', 'RECHAZADO', 'REABIERTO'].includes(estado)) fallar('Estado de cocina invalido');
@@ -70,7 +74,6 @@ export async function registrarResultadoCocina(db, { pedidoId, estado, cocineroI
   if (estado === 'RECHAZADO' && (!razon || razon.length > 500)) fallar('Indica un motivo de rechazo de hasta 500 caracteres');
   if (cocineroId && (!Number.isSafeInteger(Number(cocineroId)) || Number(cocineroId) <= 0)) fallar('Cocinero invalido');
 
-  return db.$transaction(async (tx) => {
     const pedido = await tx.pedido.findUnique({
       where: { id: pedidoId }, include: { mesa: true, mesera: true, items: { include: { producto: true } } },
     });
@@ -85,6 +88,7 @@ export async function registrarResultadoCocina(db, { pedidoId, estado, cocineroI
     const actual = estadoPreparacion({ ...preparacion, productos, pedido }, anterior);
     if (estado !== 'REABIERTO' && ['ENTREGADO', 'RECHAZADO'].includes(actual)) fallar('Esta comanda ya tiene un resultado registrado', 409);
     if (estado === 'ENTREGADO' && !preparacion?.listo) fallar('Marca primero la comanda como lista', 409);
+    if (estado === 'ENTREGADO' && preparacion.productos !== productos) fallar('La comanda cambió; cocina debe marcarla lista de nuevo', 409);
     const responsableId = cocineroId ? Number(cocineroId) : preparacion?.cocineroId || null;
     const cocinero = responsableId ? await tx.cocinero.findUnique({ where: { id: responsableId } }) : null;
     if (responsableId && (!cocinero || cocinero.activo === false)) fallar('Cocinero no disponible');
@@ -100,11 +104,42 @@ export async function registrarResultadoCocina(db, { pedidoId, estado, cocineroI
       consecutivoDia: pedido.consecutivoDia ?? null, pedidoEstado: pedido.estado,
       cocineroId: responsableId, cocinero: cocinero?.nombre || '', mesera: pedido.mesera?.nombre || '',
       motivo: estado === 'RECHAZADO' ? razon : '', cambios: pedido.cambios || '',
+      ...(estado === 'ENTREGADO' && usuario && {
+        entregadoPorUsuario: usuario.usuario,
+        entregadoPorNombre: usuario.nombre,
+        fechaPlatoListo: preparacion?.fechaListo || null,
+      }),
     };
     const evento = await tx.auditoria.create({ data: {
-      usuarioId: usuarioId || null, accion: `COCINA_${estado}`, entidad: 'PreparacionCocina',
+      usuarioId: usuario?.id || usuarioId || null, accion: `COCINA_${estado}`, entidad: 'PreparacionCocina',
       entidadId: String(pedidoId), detalle: JSON.stringify(detalle),
     } });
     return { ...detalle, estado, id: `evento-${evento.id}`, fecha: evento.createdAt };
-  }, { isolationLevel: 'Serializable' });
+}
+
+export async function consultarEntregaPedido(db, pedidoId) {
+  const pedido = await db.pedido.findUnique({
+    where: { id: pedidoId },
+    include: { preparacion: true },
+  });
+  if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
+  const evento = await db.auditoria.findFirst({
+    where: { entidad: 'PreparacionCocina', entidadId: String(pedidoId), accion: { in: ACCIONES_COCINA } },
+    orderBy: { createdAt: 'desc' },
+    include: { usuario: { select: { usuario: true, nombre: true } } },
+  });
+  const estado = estadoPreparacion({ ...pedido.preparacion, pedido }, evento);
+  const detalle = evento ? detalleEventoCocina(evento) : {};
+  return {
+    pedidoId,
+    estadoPedido: pedido.estado,
+    estadoCocina: estado,
+    fechaListo: pedido.preparacion?.fechaListo || null,
+    entrega: estado === 'ENTREGADO' ? {
+      fecha: evento.createdAt,
+      usuarioId: evento.usuarioId,
+      usuarioCuenta: detalle.entregadoPorUsuario || evento.usuario?.usuario || '',
+      usuarioNombre: detalle.entregadoPorNombre || evento.usuario?.nombre || '',
+    } : null,
+  };
 }

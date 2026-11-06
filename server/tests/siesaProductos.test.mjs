@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sincronizarItemsSiesa } from '../src/siesaProductos.js';
+import { referenciasExistentesSiesa, sincronizarItemsSiesa } from '../src/siesaProductos.js';
 
 function crearPrisma(productos = [], inventarioItems = []) {
   const porCodigo = new Map(productos.map((producto) => [producto.codigo, producto]));
@@ -54,6 +54,13 @@ const itemSiesa = {
   f120_ind_venta: 1,
   f120_ind_manufactura: 1,
 };
+
+test('consulta solo la unión de referencias actuales, limpia espacios y elimina duplicados', () => {
+  assert.deepEqual(referenciasExistentesSiesa(
+    [{ codigo: ' 10105 ' }, { codigo: null }, { codigo: '20200' }],
+    [{ codigo: '10105' }, { codigo: '' }, { codigo: '30300' }],
+  ), ['10105', '20200', '30300']);
+});
 
 test('omite referencias inexistentes y no crea productos', async () => {
   const prisma = crearPrisma();

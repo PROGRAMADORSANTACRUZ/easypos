@@ -83,6 +83,51 @@ test('packaged window has only native overlay controls and the POS icon', async 
   assert.equal(serverOptions.clientDist, path.join(desktopDir, 'web'));
 });
 
+test('local desktop routes API through the window origin to preserve session cookies', async () => {
+  let ready;
+  let serverOptions;
+  let windowUrl;
+  const app = {
+    isPackaged: false,
+    whenReady: () => ({ then: (callback) => { ready = callback; } }),
+    on: () => {},
+    setAppUserModelId: () => {},
+  };
+  class BrowserWindow {
+    constructor() {
+      this.webContents = { setWindowOpenHandler: () => {} };
+    }
+    once() {}
+    loadURL(url) { windowUrl = url; }
+  }
+  const context = {
+    __dirname: path.resolve(__dirname, '..'),
+    process: { env: { PORT: '4010', CLIENT_PORT: '4011' }, platform: 'win32' },
+    console,
+    require: (name) => {
+      if (name === 'electron') return { app, BrowserWindow, Menu: { setApplicationMenu: () => {} } };
+      if (name === './static-server.js') {
+        return { crearServidorEstatico: async (options) => { serverOptions = options; return { close() {} }; } };
+      }
+      if (name === 'node:child_process') return { spawn: () => ({ on() {} }) };
+      if (name === 'node:http') {
+        return {
+          get: (_url, callback) => {
+            const request = { on() {}, setTimeout() {} };
+            queueMicrotask(() => callback({ statusCode: 200, resume() {} }));
+            return request;
+          },
+        };
+      }
+      return require(name);
+    },
+  };
+  vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '..', 'main.js'), 'utf8'), context);
+  await ready();
+  assert.equal(serverOptions.apiUrl, `${windowUrl}/api`);
+  assert.equal(serverOptions.apiProxyUrl, 'http://localhost:4010');
+});
+
 test('desktop shell injection preserves frontend routing and API cookie proxy', async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pos-desktop-'));
   fs.writeFileSync(path.join(directory, 'index.html'), '<html><head></head><body>POS</body></html>');

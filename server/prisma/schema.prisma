@@ -550,9 +550,28 @@ model Pedido {
   pedidosMesa PedidoMesa[]
   preparacion PreparacionCocina?
   divisionesCuenta DivisionCuenta[]
+  eventos   PedidoEvento[]
   createdAt DateTime     @default(now())
 
   @@index([usuarioId, tipo, createdAt])
+}
+
+model PedidoEvento {
+  id            Int      @id @default(autoincrement())
+  pedidoId      Int
+  pedido        Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Restrict)
+  fecha         DateTime @default(now())
+  usuarioId     String   @db.Uuid
+  usuarioCuenta String   @db.VarChar(50)
+  usuarioNombre String   @db.VarChar(200)
+  accion        String   @db.VarChar(30)
+  motivo        String?
+  detalle       String?
+  antes         Json?
+  despues       Json
+
+  @@index([pedidoId, id])
+  @@map("HistorialPedidos")
 }
 
 model VentaCongelada {

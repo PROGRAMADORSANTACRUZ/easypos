@@ -175,12 +175,12 @@ export default function TomarPedido() {
   const puedeEditarMesa = puede('mesas.editar');
 
   const [mesa, setMesa] = useState(null);
-  const [meseras, setMeseras] = useState([]);
   const [productos, setProductos] = useState([]);
   const [pedido, setPedido] = useState(null);      // pedido abierto existente
+  const [estadoEntrega, setEstadoEntrega] = useState(null);
+  const [errorEntrega, setErrorEntrega] = useState('');
   const [editandoObservaciones, setEditandoObservaciones] = useState(false);
   const [carrito, setCarrito] = useState([]);       // items locales para pedido nuevo
-  const [meseraId, setMeseraId] = useState('');
   const [editando, setEditando] = useState(true); // un pedido enviado inicia bloqueado
   const [snapshot, setSnapshot] = useState([]); // items al entrar en modo edicion
   const [cargando, setCargando] = useState(true);
@@ -191,6 +191,7 @@ export default function TomarPedido() {
   const [filtroCat, setFiltroCat] = useState('');       // filtro por categoría en el menú
   const [observaciones, setObservaciones] = useState(''); // nota general del pedido (ej. "sin cebolla")
   const [confirmandoCancelar, setConfirmandoCancelar] = useState(false);
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
   const [mostrarReserva, setMostrarReserva] = useState(false);
   const [guardandoReserva, setGuardandoReserva] = useState(false);
   const [datosReserva, setDatosReserva] = useState(CLIENTE_RESERVA_VACIO);
@@ -201,22 +202,19 @@ export default function TomarPedido() {
 
   const cargar = async () => {
     try {
-      const [mesas, ms, ps, abiertos] = await Promise.all([
+      const [mesas, ps, abiertos] = await Promise.all([
         api.get('/mesas'),
-        api.get('/meseras'),
         api.get('/productos'),
         api.get('/pedidos?estado=ABIERTO'),
       ]);
       const m = mesas.find((x) => x.id === Number(mesaId));
       setMesa(m);
-      setMeseras(ms);
       setProductos(ps.filter((p) => p.activo !== false && p.precio > 0));
       setMesasLibres(mesas.filter((x) => x.estado === 'LIBRE' && x.id !== Number(mesaId)));
       const abierto = abiertos.find((p) => p.mesaId === Number(mesaId));
       setPedido(abierto || null);
       setEditando(!abierto); // nuevo pedido = editando; pedido existente = bloqueado
       if (abierto) {
-        setMeseraId(String(abierto.meseraId));
         setObservaciones(abierto.observaciones || '');
         setEditandoObservaciones(false);
       } else {
@@ -248,7 +246,6 @@ export default function TomarPedido() {
           setFechaReserva('');
           setPersonasReserva(Math.min(2, m?.capacidad || 2));
           setNotaReserva('');
-          setMeseraId('');
         }
       }
     } catch (e) {
@@ -259,6 +256,24 @@ export default function TomarPedido() {
   };
 
   useEffect(() => { cargar(); }, [mesaId]);
+
+  useEffect(() => {
+    setEstadoEntrega(null);
+    setErrorEntrega('');
+    if (!pedido?.id) return;
+    let activo = true;
+    const consultar = async () => {
+      try {
+        const estado = await api.get(`/pedidos/${pedido.id}/entrega`);
+        if (activo) { setEstadoEntrega(estado); setErrorEntrega(''); }
+      } catch (e) {
+        if (activo) { setEstadoEntrega(null); setErrorEntrega(e.message); }
+      }
+    };
+    consultar();
+    const intervalo = setInterval(consultar, 5000);
+    return () => { activo = false; clearInterval(intervalo); };
+  }, [pedido?.id]);
 
   // Categorías y productos filtrados del menú
   const categoriasMenu = [...new Set(productos.map((p) => p.categoria?.nombre || 'Sin categoría'))];
@@ -348,13 +363,12 @@ export default function TomarPedido() {
   };
 
   const enviarPedido = async () => {
-    if (!meseraId) return notify('Selecciona una mesera', 'err');
+    if (!user?.id) return notify('Inicia sesión para tomar el pedido', 'err');
     if (carrito.length === 0) return notify('Agrega al menos un producto', 'err');
     setProcesando(true);
     try {
       const nuevo = await api.post('/pedidos', {
         mesaId: Number(mesaId),
-        meseraId: Number(meseraId),
         items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad, notas: c.notas || null })),
         ...(puedeEditarObservaciones && { observaciones: observaciones.trim() || null }),
       });
@@ -481,6 +495,19 @@ export default function TomarPedido() {
     }
   };
 
+  const entregarPedido = async () => {
+    if (procesando || !pedido || estadoEntrega?.estadoCocina !== 'LISTO') return;
+    setProcesando(true);
+    try {
+      setEstadoEntrega(await api.post(`/pedidos/${pedido.id}/entregar`, {}));
+      notify('Entrega registrada');
+    } catch (e) {
+      notify(e.message, 'err');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const cancelarEdicionObservaciones = () => {
     setObservaciones(pedido?.observaciones || '');
     setEditandoObservaciones(false);
@@ -488,17 +515,24 @@ export default function TomarPedido() {
 
   const cancelar = () => {
     if (!pedido) return navigate('/mesas');
+    setMotivoCancelacion('');
     setConfirmandoCancelar(true);
   };
 
-  const confirmarCancelar = async () => {
-    setConfirmandoCancelar(false);
+  const confirmarCancelar = async (e) => {
+    e.preventDefault();
+    if (!motivoCancelacion.trim()) return notify('Indica el motivo de cancelación', 'err');
+    if (procesando) return;
+    setProcesando(true);
     try {
-      await api.post(`/pedidos/${pedido.id}/cancelar`, {});
+      await api.post(`/pedidos/${pedido.id}/cancelar`, { motivo: motivoCancelacion.trim() });
+      setConfirmandoCancelar(false);
       notify('Pedido cancelado');
       navigate('/mesas');
     } catch (e) {
       notify(e.message, 'err');
+    } finally {
+      setProcesando(false);
     }
   };
 
@@ -519,7 +553,7 @@ export default function TomarPedido() {
 
   return (
     <div>
-      <div className="row between">
+      <div className="row between" style={{ gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h1>Mesa {mesa.numero}</h1>
           <p className="subtitle">
@@ -529,8 +563,18 @@ export default function TomarPedido() {
                 ? <span className="badge orange">Reserva de {mesa.reservaNombre} — prepedido</span>
                 : 'Nuevo pedido'}
           </p>
+          {estadoEntrega?.fechaListo && <p className="mini">Plato listo: {new Date(estadoEntrega.fechaListo).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</p>}
+          {estadoEntrega?.entrega && (
+            <p className="mini" role="status">Entregado: {new Date(estadoEntrega.entrega.fecha).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
+              {estadoEntrega.entrega.usuarioNombre ? ` · ${estadoEntrega.entrega.usuarioNombre}` : ''}</p>
+          )}
+          {errorEntrega && <p className="mini" role="alert">{errorEntrega}</p>}
         </div>
-        <div className="row" style={{ gap: 8 }}>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          {pedido && puedeEditarPedido && estadoEntrega?.estadoCocina === 'LISTO' && estadoEntrega.estadoPedido === 'ABIERTO' && (
+            <Button variant="success" icon="check" disabled={procesando || editando} onClick={entregarPedido}>Entregar</Button>
+          )}
+          {estadoEntrega?.entrega && <span className="badge green">Entregado</span>}
           {pedido && puedeEditarMesa && (
             <button className="btn" onClick={() => setMoviendo(true)}><Icon name="swap" size={16} /> Cambiar mesa</button>
           )}
@@ -585,23 +629,12 @@ export default function TomarPedido() {
           <h3 style={{ marginTop: 0 }}>Cuenta</h3>
 
           <div className="field">
-            <label>Mesera</label>
-            <div className="mesera-grid">
-              {meseras.map((m) => {
-                const seleccionada = String(m.id) === meseraId;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className={`mesera-card ${seleccionada ? 'sel' : ''}`}
-                    onClick={() => !pedido && setMeseraId(String(m.id))}
-                    disabled={!!pedido && !seleccionada}
-                  >
-                    <div className="mesera-codigo">#{m.codigo}</div>
-                    <div className="mesera-nombre">{m.nombre}</div>
-                  </button>
-                );
-              })}
+            <label>Mesero</label>
+            <div className="mesera-card sel" style={{ cursor: 'default' }}>
+              <div className="mesera-nombre">{(pedido?.usuario || pedido?.mesera || user)?.nombre}</div>
+              {(pedido?.usuario || (!pedido && user))?.usuario && (
+                <div className="mini">{(pedido?.usuario || user).usuario}</div>
+              )}
             </div>
           </div>
 
@@ -906,19 +939,28 @@ export default function TomarPedido() {
 
       {confirmandoCancelar && (
         <Modal
-          title="Confirmar"
+          title="Cancelar pedido"
           size="sm"
-          onClose={() => setConfirmandoCancelar(false)}
+          onClose={() => { if (!procesando) setConfirmandoCancelar(false); }}
           footer={(
             <>
-              <Button variant="ghost" onClick={() => setConfirmandoCancelar(false)}>No</Button>
-              <Button variant="danger" onClick={confirmarCancelar}>Sí, cancelar</Button>
+              <Button variant="ghost" disabled={procesando} onClick={() => setConfirmandoCancelar(false)}>Volver</Button>
+              <Button variant="danger" type="submit" form="cancelar-pedido-form" disabled={procesando || !motivoCancelacion.trim()}>
+                {procesando ? 'Cancelando...' : 'Cancelar pedido'}
+              </Button>
             </>
           )}
         >
-          ¿Cancelar este pedido y liberar la mesa?
+          <form id="cancelar-pedido-form" onSubmit={confirmarCancelar}>
+            <div className="field">
+              <label htmlFor="motivo-cancelacion">Motivo de cancelación</label>
+              <textarea id="motivo-cancelacion" rows={3} maxLength={1000} required disabled={procesando}
+                value={motivoCancelacion} onChange={(e) => setMotivoCancelacion(e.target.value)} />
+            </div>
+          </form>
         </Modal>
       )}
+
     </div>
   );
 }

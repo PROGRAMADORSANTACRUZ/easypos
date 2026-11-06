@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { ajustarStockEnBodega, buscarBodegaCompras } from '../inventarioKits.js';
+import { actualizarReferenciasExistentesSiesa } from '../siesaProductos.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -20,6 +21,17 @@ router.get('/', wrap(async (_req, res) => {
     ...item,
     stock: item.existenciasBodega[0]?.stock || 0,
   })) : items);
+}));
+
+router.put('/siesa/actualizar', wrap(async (req, res) => {
+  const resultado = await actualizarReferenciasExistentesSiesa(prisma);
+  await auditar({
+    req,
+    accion: 'EDITAR',
+    entidad: 'catalogo_siesa',
+    detalle: `${resultado.productosActualizados} productos y ${resultado.inventarioActualizados} insumos actualizados; ${resultado.omitidos} omitidos`,
+  });
+  res.json(resultado);
 }));
 
 // Insumos con stock por debajo del minimo

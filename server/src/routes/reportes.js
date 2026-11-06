@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { diaColombia, inicioDiaColombia, finDiaColombia } from '../fechaColombia.js';
+import { filtroHistorialPedidos, estadoActualPedido } from '../historialPedidos.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -314,6 +315,15 @@ router.get('/cocina', wrap(async (req, res) => {
     listo: f.listo,
     fechaListo: f.fechaListo,
   })));
+}));
+
+router.get('/historial-pedidos', wrap(async (req, res) => {
+  const eventos = await prisma.pedidoEvento.findMany({
+    where: filtroHistorialPedidos(req.query),
+    include: { pedido: { select: { estado: true, preparacion: { select: { listo: true } } } } },
+    orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+  });
+  res.json(eventos.map(({ pedido, ...evento }) => ({ ...evento, estado: estadoActualPedido(pedido) })));
 }));
 
 export default router;

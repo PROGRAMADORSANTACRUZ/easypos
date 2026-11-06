@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useToast } from '../App.jsx';
-import { Icon } from '../icons.jsx';
 import { LoadingState, EmptyState, Button, Modal } from '../components/ui/index.jsx';
 import { diaColombia } from '../fechaComercial.js';
 
@@ -14,7 +13,6 @@ export default function Cocina() {
   const [cocineroId, setCocineroId] = useState('');
   const [cargando, setCargando] = useState(true);
   const [marcando, setMarcando] = useState(null);
-  const [confirmarId, setConfirmarId] = useState(null); // pedidoId pendiente de confirmar como "listo"
   const [historial, setHistorial] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(true);
   const [revisionHistorial, setRevisionHistorial] = useState(0);
@@ -26,15 +24,14 @@ export default function Cocina() {
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(1);
   const [resultado, setResultado] = useState(null);
-  const [motivo, setMotivo] = useState('');
   const notify = useToast();
 
   const cargar = async () => {
     try {
       const [peds, pendientesPrep, listasPrep, cocs] = await Promise.all([
         api.get('/pedidos?estado=ABIERTO'),
-        api.get('/preparacion-cocina?listo=0').catch(() => []),
-        api.get('/preparacion-cocina?listo=1').catch(() => []), // se pide aparte para que "Finalizado" no se pierda al volver a consultar
+        api.get('/preparacion-cocina?listo=0'),
+        api.get('/preparacion-cocina?listo=1'),
         api.get('/cocineros').catch(() => []),
       ]);
       setPedidos(peds);
@@ -83,10 +80,10 @@ export default function Cocina() {
   };
 
   const marcarListo = async (pedidoId) => {
-    setConfirmarId(null);
     try {
       setMarcando(pedidoId);
-      await api.put(`/preparacion-cocina/${pedidoId}/listo`, { cocineroId: cocineroId || null });
+      const preparacion = await api.put(`/preparacion-cocina/${pedidoId}/listo`, { cocineroId: cocineroId || null });
+      setPreparaciones((actual) => ({ ...actual, [pedidoId]: preparacion }));
       notify('Plato marcado como listo');
       await Promise.all([cargar(), cargarHistorial()]);
     } catch (e) {
@@ -101,11 +98,10 @@ export default function Cocina() {
     try {
       setMarcando(resultado.pedidoId);
       await api.put(`/preparacion-cocina/${resultado.pedidoId}/resultado`, {
-        estado: resultado.estado, cocineroId: cocineroId || null, motivo,
+        estado: 'REABIERTO', cocineroId: cocineroId || null,
       });
-      notify(resultado.estado === 'ENTREGADO' ? 'Entrega registrada' : resultado.estado === 'RECHAZADO' ? 'Rechazo registrado' : 'Comanda reenviada a cocina');
+      notify('Comanda reenviada a cocina');
       setResultado(null);
-      setMotivo('');
       await Promise.all([cargar(), cargarHistorial()]);
     } catch (error) {
       notify(error.message, 'err');
@@ -116,7 +112,8 @@ export default function Cocina() {
 
   if (cargando) return <LoadingState label="Cargando comandas…" />;
 
-  const pendientes = pedidos.filter((pedido) => !['ENTREGADO', 'RECHAZADO'].includes(preparaciones[pedido.id]?.estadoCocina));
+  const pendientes = pedidos.filter((pedido) => !preparaciones[pedido.id]?.listo
+    && !['ENTREGADO', 'RECHAZADO'].includes(preparaciones[pedido.id]?.estadoCocina));
   const texto = busqueda.trim().toLocaleLowerCase('es-CO');
   const filtrado = historial.filter((fila) =>
     (!estadoFiltro || fila.estado === estadoFiltro) &&
@@ -128,7 +125,7 @@ export default function Cocina() {
   const filasVisibles = filtrado.slice((paginaActual - 1) * 20, paginaActual * 20);
   const responsables = [...new Map([...cocineros, ...historial.filter((fila) => fila.cocineroId).map((fila) => ({ id: fila.cocineroId, nombre: fila.cocinero }))]
     .map((cocinero) => [String(cocinero.id), cocinero])).values()];
-  const abrirResultado = (pedidoId, estado) => { setMotivo(''); setResultado({ pedidoId, estado }); };
+  const abrirResultado = (pedidoId, estado) => setResultado({ pedidoId, estado });
 
   return (
     <div>
@@ -146,13 +143,11 @@ export default function Cocina() {
       </div>
 
       {pendientes.length === 0 ? (
-        <EmptyState icon="mesas" title="Sin comandas pendientes" description="No hay comandas por preparar o entregar." />
+        <EmptyState icon="mesas" title="Sin comandas pendientes" description="No hay comandas por preparar." />
       ) : (
         <div className="grid" style={{ gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-          {pendientes.map((p) => {
-            const listo = !!preparaciones[p.id]?.listo;
-            return (
-            <div key={p.id} className={`card${listo ? ' LISTO' : ''}`}>
+          {pendientes.map((p) => (
+            <div key={p.id} className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <strong>
                   {p.tipo === 'DOMICILIO' ? `Domicilio #${p.consecutivoDia ?? p.id}` : `Mesa ${p.mesa?.numero ?? '-'}`}
@@ -173,29 +168,18 @@ export default function Cocina() {
                   </li>
                 ))}
               </ul>
-              {listo ? (
-                <>
-                  <div className="mini" style={{ color: 'var(--green)', marginTop: 10, fontWeight: 700 }}><Icon name="check" size={16} /> Listo para entregar</div>
-                  <Button variant="success" icon="check" style={{ width: '100%', marginTop: 8 }}
-                    disabled={marcando !== null} onClick={() => abrirResultado(p.id, 'ENTREGADO')}>Entregar</Button>
-                </>
-              ) : (
-                <Button
+              <Button
                   variant="success"
                   icon="check"
                   style={{ width: '100%', marginTop: 10 }}
                   loading={marcando === p.id}
                   disabled={marcando !== null}
-                  onClick={() => setConfirmarId(p.id)}
+                  onClick={() => marcarListo(p.id)}
                 >
                   Plato listo
-                </Button>
-              )}
-              <Button variant="ghost" icon="ban" style={{ width: '100%', marginTop: 8 }}
-                disabled={marcando !== null} onClick={() => abrirResultado(p.id, 'RECHAZADO')}>Rechazar comanda</Button>
+              </Button>
             </div>
-            );
-          })}
+          ))}
         </div>
       )}
 
@@ -255,32 +239,13 @@ export default function Cocina() {
       </section>
 
       {resultado && (
-        <Modal title={resultado.estado === 'RECHAZADO' ? 'Rechazar comanda' : resultado.estado === 'ENTREGADO' ? 'Confirmar entrega' : 'Reenviar a cocina'} size="sm"
+        <Modal title="Reenviar a cocina" size="sm"
           onClose={() => { if (marcando === null) setResultado(null); }}
           footer={<><Button variant="ghost" disabled={marcando !== null} onClick={() => setResultado(null)}>Cancelar</Button>
-            <Button variant={resultado.estado === 'RECHAZADO' ? 'danger' : 'success'} icon={resultado.estado === 'RECHAZADO' ? 'ban' : 'check'}
-              loading={marcando === resultado.pedidoId} disabled={marcando !== null || (resultado.estado === 'RECHAZADO' && !motivo.trim())}
-              onClick={registrarResultado}>{resultado.estado === 'RECHAZADO' ? 'Registrar rechazo' : resultado.estado === 'ENTREGADO' ? 'Confirmar entrega' : 'Reenviar'}</Button></>}
+            <Button variant="success" icon="reload" loading={marcando === resultado.pedidoId} disabled={marcando !== null}
+              onClick={registrarResultado}>Reenviar</Button></>}
         >
-          {resultado.estado === 'RECHAZADO' ? <div className="field"><label htmlFor="cocina-motivo">Motivo del rechazo</label>
-            <textarea id="cocina-motivo" rows={3} maxLength={500} value={motivo} onChange={(event) => setMotivo(event.target.value)} /></div>
-            : <p>{resultado.estado === 'ENTREGADO' ? 'Confirmar que los platos de esta comanda fueron entregados.' : 'La comanda volvera a pendientes y conservara su rechazo en el historial.'}</p>}
-        </Modal>
-      )}
-
-      {confirmarId != null && (
-        <Modal
-          title="Confirmar"
-          size="sm"
-          onClose={() => setConfirmarId(null)}
-          footer={(
-            <>
-              <Button variant="ghost" onClick={() => setConfirmarId(null)}>No</Button>
-              <Button variant="success" onClick={() => marcarListo(confirmarId)}>Sí</Button>
-            </>
-          )}
-        >
-          ¿Marcar este plato como listo?
+          <p>La comanda volverá a pendientes y conservará su rechazo en el historial.</p>
         </Modal>
       )}
     </div>

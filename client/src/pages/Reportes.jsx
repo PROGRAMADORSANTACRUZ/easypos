@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ExcelJS from 'exceljs';
 import { api, money } from '../api.js';
@@ -7,6 +7,40 @@ import { useToast } from '../App.jsx';
 import { LoadingState } from '../components/ui/index.jsx';
 
 const fechaHoraColombia = (fecha) => new Date(fecha).toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+
+const ACCIONES_HISTORIAL = {
+  CREAR: 'Pedido creado', AGREGAR_PRODUCTO: 'Producto agregado', CAMBIAR_CANTIDAD: 'Cantidad modificada',
+  QUITAR_PRODUCTO: 'Producto retirado', OBSERVACIONES: 'Observaciones modificadas', REENVIAR: 'Pedido reenviado',
+  CAMBIAR_MESA: 'Cambio de mesa', CANCELAR: 'Pedido cancelado',
+  PLATO_LISTO: 'Plato listo en cocina', ENTREGAR: 'Entregado en mesa',
+};
+
+const ESTADOS_HISTORIAL = {
+  DESPACHADO: 'Despachado', FACTURADO: 'Facturado', CANCELADO: 'Cancelado',
+  EN_COCINA: 'En cocina', PENDIENTE: 'Pendiente',
+};
+
+const textoEstadoPedido = (estado) => !estado ? 'Sin estado anterior' : [
+  `Mesa ${estado.mesaNumero ?? estado.mesaId ?? '-'}`, estado.estado,
+  ...(estado.items || []).map((item) => `${item.cantidad} x ${item.nombre || item.productoId} (${money(item.precioUnit)})${item.notas ? `: ${item.notas}` : ''}`),
+  `Observaciones: ${estado.observaciones || 'Sin observaciones'}`,
+].join(' | ');
+
+function EstadoHistorialPedido({ estado }) {
+  if (!estado) return <p className="mini">Sin estado anterior.</p>;
+  return (
+    <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+      <p className="mini">Mesa {estado.mesaNumero ?? estado.mesaId ?? '-'} · {estado.estado}</p>
+      {(estado.items || []).map((item) => (
+        <div key={item.id} style={{ marginBottom: 8 }}>
+          <strong>{item.cantidad} × {item.nombre || item.productoId}</strong>
+          <div className="mini">{money(item.precioUnit)} · {item.notas || 'Sin notas'}</div>
+        </div>
+      ))}
+      <p className="mini">Observaciones: {estado.observaciones || 'Sin observaciones'}</p>
+    </div>
+  );
+}
 
 // Catálogo de reportes seleccionables
 const REPORTES = [
@@ -26,6 +60,7 @@ const REPORTES = [
   { id: 'insumos', nombre: 'Consumo de insumos' },
   { id: 'compras-insumo', nombre: 'Compras por insumo' },
   { id: 'pedidos-mesa', nombre: 'Pedidos por mesa' },
+  { id: 'historial-pedidos', nombre: 'Historial de pedidos' },
   { id: 'cocina', nombre: 'Preparación de cocina' },
 ];
 
@@ -81,9 +116,37 @@ export default function Reportes() {
   const hoy = diaColombia(new Date());
   const [desde, setDesde] = useState(hoy);
   const [hasta, setHasta] = useState(hoy);
+  const [motivo, setMotivo] = useState('');
+  const [historial, setHistorial] = useState([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [errorHistorial, setErrorHistorial] = useState('');
+  const [filtrosHistorial, setFiltrosHistorial] = useState({ desde: hoy, hasta: hoy, motivo: '' });
+  const consultaHistorial = useRef(0);
   const notify = useToast();
 
+  const cargarHistorial = async (inicio = desde, fin = hasta, razon = motivo) => {
+    const consulta = ++consultaHistorial.current;
+    const params = new URLSearchParams();
+    if (inicio) params.set('desde', inicio);
+    if (fin) params.set('hasta', fin);
+    if (razon.trim()) params.set('motivo', razon.trim());
+    setCargandoHistorial(true);
+    setErrorHistorial('');
+    setHistorial([]);
+    try {
+      const datos = await api.get(`/reportes/historial-pedidos?${params}`);
+      if (consulta !== consultaHistorial.current) return;
+      setHistorial(datos);
+      setFiltrosHistorial({ desde: inicio, hasta: fin, motivo: razon.trim() });
+    } catch (e) {
+      if (consulta === consultaHistorial.current) setErrorHistorial(e.message);
+    } finally {
+      if (consulta === consultaHistorial.current) setCargandoHistorial(false);
+    }
+  };
+
   const cargar = () => {
+    if (sel === 'historial-pedidos') return cargarHistorial();
     const params = new URLSearchParams();
     if (desde) params.set('desde', desde);
     if (hasta) params.set('hasta', hasta);
@@ -96,19 +159,23 @@ export default function Reportes() {
   const limpiar = () => {
     setDesde(hoy);
     setHasta(hoy);
+    setMotivo('');
+    if (sel === 'historial-pedidos') return cargarHistorial(hoy, hoy, '');
     api.get(`/reportes?desde=${hoy}&hasta=${hoy}`).then(setRep).catch((e) => notify(e.message, 'err'));
     api.get(`/reportes/pedidos-mesa?desde=${hoy}&hasta=${hoy}`).then(setPedidosMesa).catch(() => setPedidosMesa([]));
     api.get(`/reportes/cocina?desde=${hoy}&hasta=${hoy}`).then(setCocina).catch(() => setCocina([]));
   };
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    if (sel === 'historial-pedidos' || !rep) cargar();
+  }, [sel]);
 
   const maxDia = useMemo(() => Math.max(1, ...(rep?.ventasPorDia || []).map((v) => v.total)), [rep]);
   const maxSemana = useMemo(() => Math.max(1, ...(rep?.ventasPorSemana || []).map((v) => v.total)), [rep]);
   const maxMes = useMemo(() => Math.max(1, ...(rep?.ventasPorMes || []).map((v) => v.total)), [rep]);
 
-  if (!rep) return <LoadingState label="Cargando reportes…" />;
-  const t = rep.totales;
+  if (!rep && sel !== 'historial-pedidos') return <LoadingState label="Cargando reportes…" />;
+  const t = rep?.totales;
   const actual = REPORTES.find((r) => r.id === sel);
 
   // Construye { columnas, filas } del reporte actual para exportar
@@ -227,6 +294,17 @@ export default function Reportes() {
             p.observaciones || '',
           ]),
         };
+      case 'historial-pedidos':
+        return {
+          columnas: ['Fecha/Hora', 'Pedido', 'Mesa', 'Usuario', 'Nombre', 'Acción', 'Motivo', 'Detalle', 'Antes', 'Después', 'Estado'],
+          filas: historial.map((evento) => [
+            fechaHoraColombia(evento.fecha), String(evento.pedidoId),
+            String(evento.despues?.mesaNumero ?? evento.antes?.mesaNumero ?? evento.despues?.mesaId ?? '-'),
+            evento.usuarioCuenta, evento.usuarioNombre, ACCIONES_HISTORIAL[evento.accion] || evento.accion,
+            evento.motivo || '', evento.detalle || '', textoEstadoPedido(evento.antes), textoEstadoPedido(evento.despues),
+            ESTADOS_HISTORIAL[evento.estado] || 'Pendiente',
+          ]),
+        };
       case 'cocina':
         return {
           columnas: ['Hora listo', 'Mesa', 'Productos', 'Cocinero', 'Listo'],
@@ -243,7 +321,10 @@ export default function Reportes() {
     }
   };
 
-  const rangoTexto = desde || hasta ? `${desde || '...'} a ${hasta || '...'}` : 'Todo el histórico';
+  const rangoDesde = sel === 'historial-pedidos' ? filtrosHistorial.desde : desde;
+  const rangoHasta = sel === 'historial-pedidos' ? filtrosHistorial.hasta : hasta;
+  const rangoTexto = (rangoDesde || rangoHasta ? `${rangoDesde || '...'} a ${rangoHasta || '...'}` : 'Todo el histórico')
+    + (sel === 'historial-pedidos' && filtrosHistorial.motivo ? ` · Motivo: ${filtrosHistorial.motivo}` : '');
 
   const exportarExcel = async () => {
     const { columnas, filas } = datosReporte();
@@ -363,7 +444,7 @@ export default function Reportes() {
       <div class="head">
         <img class="marca-logo" src="${window.location.origin}/logo-oscuro.png" alt="Asados Santacruz">
         <h1>${actual?.nombre || 'Reporte'}</h1>
-        <div class="sub">Rango: ${rangoTexto} · Generado: ${fechaHoraColombia(new Date())}</div>
+        <div class="sub">Rango: ${rangoTexto.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]))} · Generado: ${fechaHoraColombia(new Date())}</div>
       </div>
       <table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>
       <div class="pie">Asados Santacruz · Reporte de ventas</div>
@@ -550,6 +631,38 @@ export default function Reportes() {
             </tbody>
           </table>
         );
+      case 'historial-pedidos':
+        return cargandoHistorial ? <LoadingState label="Cargando historial…" /> : errorHistorial ? <p role="alert">{errorHistorial}</p>
+          : historial.length === 0 ? <p className="empty">Sin eventos para los filtros seleccionados.</p> : (
+            <div style={{ overflowX: 'auto' }}>
+              <table>
+                <thead><tr><th>Fecha/Hora</th><th>Pedido</th><th>Mesa</th><th>Usuario</th><th>Acción</th><th>Motivo</th><th>Cambios</th><th title="Estado actual del pedido">Estado</th></tr></thead>
+                <tbody>
+                  {historial.map((evento) => (
+                    <tr key={evento.id}>
+                      <td className="mini">{fechaHoraColombia(evento.fecha)}</td>
+                      <td>#{evento.pedidoId}</td>
+                      <td>{evento.despues?.mesaNumero ?? evento.antes?.mesaNumero ?? evento.despues?.mesaId ?? '-'}</td>
+                      <td><strong>{evento.usuarioNombre}</strong><div className="mini">{evento.usuarioCuenta}</div></td>
+                      <td>{ACCIONES_HISTORIAL[evento.accion] || evento.accion}</td>
+                      <td style={{ overflowWrap: 'anywhere', minWidth: 140 }}>{evento.motivo || '-'}</td>
+                      <td style={{ minWidth: 180 }}>
+                        <details>
+                          <summary style={{ cursor: 'pointer' }}>Ver cambios</summary>
+                          {evento.detalle && <p style={{ overflowWrap: 'anywhere' }}>{evento.detalle}</p>}
+                          <h4>Antes</h4><EstadoHistorialPedido estado={evento.antes} />
+                          <h4>Después</h4><EstadoHistorialPedido estado={evento.despues} />
+                        </details>
+                      </td>
+                      <td><span className={`badge ${evento.estado === 'CANCELADO' ? 'red' : evento.estado === 'FACTURADO' ? 'green' : evento.estado === 'DESPACHADO' ? 'blue' : 'orange'}`}>
+                        {ESTADOS_HISTORIAL[evento.estado] || 'Pendiente'}
+                      </span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
       case 'cocina':
         return cocina.length === 0 ? <p className="empty">Sin preparaciones en el periodo.</p> : (
           <table>
@@ -578,20 +691,26 @@ export default function Reportes() {
 
       <div className="reportes-layout">
         {/* Reporte seleccionado */}
-        <div className="card">
+        <div className="card" style={{ minWidth: 0 }}>
           <div className="row between" style={{ flexWrap: 'wrap', gap: 10 }}>
             <h3 style={{ margin: 0 }}>{actual?.nombre}</h3>
-            <div className="row" style={{ gap: 8, alignItems: 'flex-end' }}>
+            <div className="row" style={{ gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', maxWidth: '100%' }}>
               <div className="field" style={{ margin: 0 }}>
-                <label>Desde</label>
-                <input type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} />
+                <label htmlFor="reporte-desde">Desde</label>
+                <input id="reporte-desde" type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} />
               </div>
               <div className="field" style={{ margin: 0 }}>
-                <label>Hasta</label>
-                <input type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} />
+                <label htmlFor="reporte-hasta">Hasta</label>
+                <input id="reporte-hasta" type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} />
               </div>
+              {sel === 'historial-pedidos' && (
+                <div className="field" style={{ margin: 0, flex: '1 1 180px', minWidth: 0 }}>
+                  <label htmlFor="historial-motivo">Motivo</label>
+                  <input id="historial-motivo" type="search" maxLength={1000} value={motivo} placeholder="Buscar motivo…" onChange={(e) => setMotivo(e.target.value)} />
+                </div>
+              )}
               <button className="btn btn-primary btn-sm" onClick={cargar}>Consultar</button>
-              {(desde !== hoy || hasta !== hoy) && (
+              {(desde !== hoy || hasta !== hoy || (sel === 'historial-pedidos' && motivo)) && (
                 <button className="btn btn-sm" onClick={limpiar}>Hoy</button>
               )}
               <button className="btn-export btn-export-xls" title="Exportar a Excel" onClick={exportarExcel}>

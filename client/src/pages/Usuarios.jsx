@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Icon } from '../icons.jsx';
 import { useAuth, useToast } from '../App.jsx';
-import { PageHeader, Modal, Button, EmptyState } from '../components/ui/index.jsx';
+import { PageHeader, Modal, Button } from '../components/ui/index.jsx';
 
 const uVacio = { nombre: '', usuario: '', correo: '', password: '', roles: [], centrosOperacionCodigos: [], activo: true };
 
@@ -26,30 +26,20 @@ export default function Usuarios() {
   const [usuarios, setUsuarios] = useState([]);
   const [roles, setRoles] = useState([]);
   const [centrosOperacion, setCentrosOperacion] = useState([]);
-  const [meseras, setMeseras] = useState([]);
-  const [cocineros, setCocineros] = useState([]);
   const [uForm, setUForm] = useState(uVacio);
   const [editId, setEditId] = useState(null);
-  const [mForm, setMForm] = useState({ nombre: '', codigo: '' });
-  const [cForm, setCForm] = useState({ nombre: '', codigo: '' });
   const [modalUsuario, setModalUsuario] = useState(false);
-  const [modalMesera, setModalMesera] = useState(false);
-  const [modalCocinero, setModalCocinero] = useState(false);
   const notify = useToast();
 
   const cargar = async () => {
     try {
-      const [us, rs, ms, cs, centros] = await Promise.all([
+      const [us, rs, centros] = await Promise.all([
         api.get('/usuarios'),
         api.get('/roles'),
-        api.get('/meseras'),
-        api.get('/cocineros').catch(() => []),
         api.get('/centros-operaciones'),
       ]);
       setUsuarios(us);
       setRoles(rs);
-      setMeseras(ms);
-      setCocineros(cs);
       setCentrosOperacion(centros);
     } catch (e) {
       notify(e.message, 'err');
@@ -152,69 +142,19 @@ export default function Usuarios() {
     }
   };
 
-  const crearMesera = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post('/meseras', mForm);
-      setMForm({ nombre: '', codigo: '' });
-      setModalMesera(false);
-      notify('Mesera agregada');
-      cargar();
-    } catch (err) {
-      notify(err.message, 'err');
-    }
-  };
-
-  const eliminarMesera = async (m) => {
-    if (!confirm(`¿Eliminar a "${m.nombre}"?`)) return;
-    try {
-      await api.del(`/meseras/${m.id}`);
-      notify('Mesera eliminada');
-      cargar();
-    } catch (err) {
-      notify(err.message, 'err');
-    }
-  };
-
-  const crearCocinero = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post('/cocineros', cForm);
-      setCForm({ nombre: '', codigo: '' });
-      setModalCocinero(false);
-      notify('Cocinero agregado');
-      cargar();
-    } catch (err) {
-      notify(err.message, 'err');
-    }
-  };
-
-  const eliminarCocinero = async (c) => {
-    if (!confirm(`¿Eliminar a "${c.nombre}"?`)) return;
-    try {
-      await api.del(`/cocineros/${c.id}`);
-      notify('Cocinero eliminado');
-      cargar();
-    } catch (err) {
-      notify(err.message, 'err');
-    }
-  };
-
   return (
     <div>
       <PageHeader
         title="Usuarios"
-        subtitle="Personal que toma pedidos y usuarios que inician sesión en el sistema."
+        subtitle="Cuentas de acceso al sistema."
         actions={(
           <>
-            <Button variant="secondary" icon="mesas" onClick={() => { setMForm({ nombre: '', codigo: '' }); setModalMesera(true); }}>Nueva mesera</Button>
-            <Button variant="secondary" icon="cocina" onClick={() => { setCForm({ nombre: '', codigo: '' }); setModalCocinero(true); }}>Nuevo cocinero</Button>
             {esAdmin && <Button variant="primary" icon="add" onClick={nuevoUsuario} title="Nuevo usuario" />}
           </>
         )}
       />
 
-      <div className="grid grid-2">
+      <div className="grid">
         {/* Usuarios del sistema */}
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Usuarios del sistema</h3>
@@ -265,45 +205,6 @@ export default function Usuarios() {
           </table>
         </div>
 
-        {/* Personal / meseras */}
-        <div className="card">
-          <h3 style={{ marginTop: 0 }}>Personal (meseras)</h3>
-          <table>
-            <thead>
-              <tr><th>Código</th><th>Nombre</th><th></th></tr>
-            </thead>
-            <tbody>
-              {meseras.map((m) => (
-                <tr key={m.id}>
-                  <td><span className="badge orange">#{m.codigo}</span></td>
-                  <td style={{ fontWeight: 600 }}>{m.nombre}</td>
-                  <td style={{ textAlign: 'right' }}><button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminarMesera(m)}><Icon name="delete" size={16} /></button></td>
-                </tr>
-              ))}
-              {meseras.length === 0 && <tr><td colSpan={3} className="empty">Sin personal.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Personal / cocineros */}
-        <div className="card">
-          <h3 style={{ marginTop: 0 }}>Personal (cocineros)</h3>
-          <table>
-            <thead>
-              <tr><th>Código</th><th>Nombre</th><th></th></tr>
-            </thead>
-            <tbody>
-              {cocineros.map((c) => (
-                <tr key={c.id}>
-                  <td><span className="badge orange">#{c.codigo}</span></td>
-                  <td style={{ fontWeight: 600 }}>{c.nombre}</td>
-                  <td style={{ textAlign: 'right' }}><button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminarCocinero(c)}><Icon name="delete" size={16} /></button></td>
-                </tr>
-              ))}
-              {cocineros.length === 0 && <tr><td colSpan={3} className="empty">Sin personal.</td></tr>}
-            </tbody>
-          </table>
-        </div>
       </div>
 
       {modalUsuario && (
@@ -402,59 +303,6 @@ export default function Usuarios() {
         </Modal>
       )}
 
-      {modalMesera && (
-        <Modal
-          title="Nueva mesera"
-          onClose={() => setModalMesera(false)}
-          size="sm"
-          footer={(
-            <>
-              <Button variant="secondary" onClick={() => setModalMesera(false)}>Cancelar</Button>
-              <Button variant="primary" type="submit" form="mesera-form">Agregar mesera</Button>
-            </>
-          )}
-        >
-          <form id="mesera-form" onSubmit={crearMesera}>
-            <div className="grid form-2col" style={{ gap: 12 }}>
-              <div className="field">
-                <label>Nombre</label>
-                <input value={mForm.nombre} onChange={(e) => setMForm({ ...mForm, nombre: e.target.value })} required />
-              </div>
-              <div className="field">
-                <label>Código</label>
-                <input value={mForm.codigo} onChange={(e) => setMForm({ ...mForm, codigo: e.target.value })} required />
-              </div>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {modalCocinero && (
-        <Modal
-          title="Nuevo cocinero"
-          onClose={() => setModalCocinero(false)}
-          size="sm"
-          footer={(
-            <>
-              <Button variant="secondary" onClick={() => setModalCocinero(false)}>Cancelar</Button>
-              <Button variant="primary" type="submit" form="cocinero-form">Agregar cocinero</Button>
-            </>
-          )}
-        >
-          <form id="cocinero-form" onSubmit={crearCocinero}>
-            <div className="grid form-2col" style={{ gap: 12 }}>
-              <div className="field">
-                <label>Nombre</label>
-                <input value={cForm.nombre} onChange={(e) => setCForm({ ...cForm, nombre: e.target.value })} required />
-              </div>
-              <div className="field">
-                <label>Código</label>
-                <input value={cForm.codigo} onChange={(e) => setCForm({ ...cForm, codigo: e.target.value })} required />
-              </div>
-            </div>
-          </form>
-        </Modal>
-      )}
     </div>
   );
 }

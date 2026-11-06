@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { ACCIONES_COCINA, combinarHistorialCocina, estadoPreparacion, filtroFechaCocina, registrarResultadoCocina } from '../historialCocina.js';
+import { conEventoPedido } from '../historialPedidos.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -37,11 +38,12 @@ router.get('/historial', wrap(async (req, res) => {
 }));
 
 router.put('/:pedidoId/resultado', wrap(async (req, res) => {
+  if (req.body.estado === 'ENTREGADO') return res.status(400).json({ error: 'La entrega debe registrarse desde la mesa' });
   try {
     const resultado = await registrarResultadoCocina(prisma, {
       pedidoId: Number(req.params.pedidoId), estado: req.body.estado,
       motivo: req.body.motivo, cocineroId: req.body.cocineroId,
-      usuarioId: req.headers['x-usuario-id'] ? String(req.headers['x-usuario-id']) : null,
+      usuarioId: req.usuario.id,
     });
     res.json(resultado);
   } catch (error) {
@@ -55,33 +57,21 @@ router.put('/:pedidoId/resultado', wrap(async (req, res) => {
 // Si el pedido es anterior a este modulo y no tiene preparacion registrada, se crea al vuelo.
 // body: { cocineroId }
 router.put('/:pedidoId/listo', wrap(async (req, res) => {
+  if (!req.usuario?.permisos?.includes('cocina.ver')) return res.status(403).json({ error: 'No tienes permiso para preparar comandas' });
   const pedidoId = Number(req.params.pedidoId);
   const { cocineroId } = req.body;
-
-  const pedido = await prisma.pedido.findUnique({
-    where: { id: pedidoId },
-    include: { items: { include: { producto: true } } },
-  });
-  if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
-
-  const resumen = pedido.items.map((it) => `${it.cantidad}x ${it.producto?.nombre || ''}`).join(', ');
-  const prep = await prisma.preparacionCocina.upsert({
-    where: { pedidoId },
-    create: {
-      pedidoId,
-      mesaId: pedido.mesaId,
-      productos: resumen,
-      listo: true,
-      fechaListo: new Date(),
-      cocineroId: cocineroId ? Number(cocineroId) : null,
-    },
-    update: {
-      listo: true,
-      fechaListo: new Date(),
-      cocineroId: cocineroId ? Number(cocineroId) : null,
-    },
-    include,
-  });
+  const prep = await prisma.$transaction(async (tx) => conEventoPedido(tx, req, pedidoId, 'PLATO_LISTO', async () => {
+    const pedido = await tx.pedido.findUnique({ where: { id: pedidoId }, include: { items: { include: { producto: true } } } });
+    const anterior = await tx.preparacionCocina.findUnique({ where: { pedidoId } });
+    if (anterior?.listo) throw Object.assign(new Error('La comanda ya está lista'), { status: 409 });
+    if (cocineroId) {
+      const cocinero = await tx.cocinero.findUnique({ where: { id: Number(cocineroId) } });
+      if (!cocinero || !cocinero.activo) throw Object.assign(new Error('Cocinero no disponible'), { status: 400 });
+    }
+    const productos = pedido.items.map((it) => `${it.cantidad}x ${it.producto?.nombre || ''}`).join(', ');
+    const datos = { productos, listo: true, fechaListo: new Date(), cocineroId: cocineroId ? Number(cocineroId) : null };
+    return tx.preparacionCocina.upsert({ where: { pedidoId }, create: { pedidoId, mesaId: pedido.mesaId, ...datos }, update: datos, include });
+  }, { detalle: 'Plato listo en cocina' }));
   res.json(prep);
 }));
 

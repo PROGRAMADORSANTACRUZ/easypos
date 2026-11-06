@@ -161,6 +161,7 @@ export default function Inventario() {
   const [costoVal, setCostoVal] = useState('');
   const [modalAbierto, setModalAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [actualizandoSiesa, setActualizandoSiesa] = useState(false);
   const notify = useToast();
 
   const cargar = async () => {
@@ -216,6 +217,22 @@ export default function Inventario() {
     }
   };
 
+  const actualizarDesdeSiesa = async () => {
+    const referencias = items.filter((item) => item.codigo).length;
+    if (!referencias) return notify('No hay referencias para actualizar desde Siesa', 'err');
+    if (!confirm(`Se consultarán hasta ${referencias} referencias ya registradas. No se crearán artículos nuevos ni se cambiarán existencias, costos o precios. ¿Continuar?`)) return;
+    try {
+      setActualizandoSiesa(true);
+      const resultado = await api.put('/inventario/siesa/actualizar', {});
+      notify(`Siesa: ${resultado.productosActualizados} productos y ${resultado.inventarioActualizados} insumos actualizados. Coincidencias: ${resultado.consultados}/${resultado.referenciasLocales}.`);
+      await cargar();
+    } catch (err) {
+      notify(err.message, 'err');
+    } finally {
+      setActualizandoSiesa(false);
+    }
+  };
+
   const abrirCosto = (item) => { setEditCosto(item.id); setCostoVal(String(item.costo)); };
 
   const guardarCosto = async (item) => {
@@ -253,6 +270,9 @@ export default function Inventario() {
         subtitle="Insumos que consumen los productos (kits). El stock baja al facturar."
         actions={(
           <>
+            <Button variant="secondary" icon="reload" onClick={actualizarDesdeSiesa} loading={actualizandoSiesa}>
+              Actualizar Siesa
+            </Button>
             <button className="btn-export btn-export-xls" title="Exportar inventario a Excel" onClick={() => exportarExcel(items, notify)}>
               <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm-1 7V3.5L18.5 9H13Z"/><path fill="#fff" d="m8.5 12 1.6 2.4L11.7 12h1.6l-2.4 3.4 2.5 3.6h-1.7l-1.7-2.6-1.7 2.6H6.6l2.5-3.6L6.8 12h1.7Z"/></svg>
               Excel

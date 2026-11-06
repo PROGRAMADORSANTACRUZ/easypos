@@ -82,6 +82,7 @@ const ORDEN_INICIO = [
   ['roles.ver', '/roles'], ['auditoria.ver', '/auditoria'],
 ];
 const rutaInicial = (user) => {
+  if (user?.roles?.includes('MESERO') && puede(user, 'mesas.ver')) return '/mesas';
   // El primer paso de un cajero es abrir la caja: si puede abrirla, aterriza en Caja.
   if (puede(user, 'caja.abrir')) return '/caja';
   return (ORDEN_INICIO.find(([p]) => puede(user, p)) || [null, '/pedidos'])[1];
@@ -104,6 +105,7 @@ const REPORTES_NAV = [
   { id: 'gastos', nombre: 'Gastos de insumos (por producto)' },
   { id: 'insumos', nombre: 'Consumo de insumos' },
   { id: 'pedidos-mesa', nombre: 'Pedidos por mesa' },
+  { id: 'historial-pedidos', nombre: 'Historial de pedidos' },
   { id: 'cocina', nombre: 'Preparación de cocina' },
 ];
 

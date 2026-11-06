@@ -97,8 +97,8 @@ app.whenReady().then(async () => {
   if (!app.isPackaged) startServer();
   staticServer = await crearServidorEstatico({
     clientDist,
-    apiUrl: app.isPackaged ? `${CLIENT_URL}/api` : `${API_ORIGIN}/api`,
-    apiProxyUrl: app.isPackaged ? API_ORIGIN : null,
+    apiUrl: `${CLIENT_URL}/api`,
+    apiProxyUrl: API_ORIGIN,
     port: CLIENT_PORT,
   });
   if (!app.isPackaged) {

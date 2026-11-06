@@ -4,6 +4,8 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { calcularInsumosRequeridos, validarStockSuficiente, descontarInsumos, revertirInsumos } from '../inventarioKits.js';
 import { imprimirComandaPorEstacion } from '../impresionCocina.js';
+import { conEventoPedido, registrarEventoPedido, validarMotivoCancelacion } from '../historialPedidos.js';
+import { consultarEntregaPedido, registrarResultadoCocinaTransaccion } from '../historialCocina.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -25,6 +27,7 @@ const aNumero = (v) => {
 const pedidoInclude = {
   mesa: true,
   mesera: true,
+  usuario: { select: { id: true, nombre: true, usuario: true } },
   clienteRel: true,
   items: { include: { producto: { include: { categoria: true, unidad: true, componentes: { include: { item: true } } } } } },
   facturas: true,
@@ -167,12 +170,31 @@ router.get('/:id', wrap(async (req, res) => {
   res.json(pedido);
 }));
 
+router.get('/:id/entrega', exigirPermiso('pedidos.ver'), wrap(async (req, res) => {
+  res.json(await consultarEntregaPedido(prisma, Number(req.params.id)));
+}));
+
+router.post('/:id/entregar', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
+  const pedidoId = Number(req.params.id);
+  try {
+    const resultado = await prisma.$transaction(async (tx) => conEventoPedido(tx, req, pedidoId, 'ENTREGAR', async (pedido) => {
+      if (pedido.tipo !== 'MESA') throw Object.assign(new Error('La entrega en mesa requiere un pedido de mesa'), { status: 400 });
+      await registrarResultadoCocinaTransaccion(tx, { pedidoId, estado: 'ENTREGADO', usuario: req.usuario });
+      return consultarEntregaPedido(tx, pedidoId);
+    }, { detalle: 'Entrega de platos en mesa' }), { isolationLevel: 'Serializable' });
+    res.json(resultado);
+  } catch (error) {
+    if (error.code === 'P2034') return res.status(409).json({ error: 'El pedido cambió; actualiza e intenta de nuevo' });
+    throw error;
+  }
+}));
+
 // Crear pedido y ocupar la mesa
-// body: { mesaId, meseraId, items: [{ productoId, cantidad, notas? }] }
+// body: { mesaId, items: [{ productoId, cantidad, notas? }] }
 router.post('/', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
-  const { mesaId, meseraId, items = [], observaciones } = req.body;
+  const { mesaId, items = [], observaciones } = req.body;
   const puedeGuardarObservaciones = req.usuario?.permisos?.includes('pedidos.observaciones');
-  if (!mesaId || !meseraId) return res.status(400).json({ error: 'mesaId y meseraId son requeridos' });
+  if (!mesaId) return res.status(400).json({ error: 'mesaId es requerido' });
   if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Agrega al menos un producto' });
 
   const productos = await prisma.producto.findMany({
@@ -203,10 +225,16 @@ router.post('/', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
       const pedidoAbierto = await tx.pedido.findFirst({ where: { mesaId: Number(mesaId), estado: 'ABIERTO' }, select: { id: true } });
       if (pedidoAbierto) throw Object.assign(new Error(`La mesa ${mesa.numero} ya tiene un pedido abierto`), { status: 409 });
       await validarStockSuficiente(tx, requeridos);
+      const responsable = await tx.mesera.upsert({
+        where: { codigo: `usuario:${req.usuario.id}` },
+        create: { codigo: `usuario:${req.usuario.id}`, nombre: req.usuario.nombre, activa: true },
+        update: { nombre: req.usuario.nombre, activa: true },
+      });
       const nuevo = await tx.pedido.create({
         data: {
           mesaId: Number(mesaId),
-          meseraId: Number(meseraId),
+          usuarioId: req.usuario.id,
+          meseraId: responsable.id,
           clienteId: mesa.reservaClienteId,
           cliente: mesa.reservaCliente?.razonSocial || mesa.reservaCliente?.nombre || null,
           observaciones: puedeGuardarObservaciones && observaciones ? String(observaciones).trim() || null : null,
@@ -235,6 +263,7 @@ router.post('/', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
         },
       });
       await sincronizarCocina(tx, nuevo.id);
+      await registrarEventoPedido(tx, req, nuevo.id, 'CREAR');
       return nuevo;
     }, { timeout: 15000 });
   } catch (e) {
@@ -429,7 +458,7 @@ router.post('/:id/items', exigirPermiso('pedidos.editar'), wrap(async (req, res)
   const requeridos = calcularInsumosRequeridos([{ productoId: String(productoId), cantidad: cant }], [producto]);
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => conEventoPedido(tx, req, pedidoId, 'AGREGAR_PRODUCTO', async () => {
       const pedido = await tx.pedido.findUnique({ where: { id: pedidoId }, select: { inventarioDescontado: true } });
       if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
       await validarStockSuficiente(tx, requeridos);
@@ -456,9 +485,9 @@ router.post('/:id/items', exigirPermiso('pedidos.editar'), wrap(async (req, res)
         await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${pedidoId}` });
       }
       await sincronizarCocina(tx, pedidoId, { soloNuevosItems: true });
-    });
+    }));
   } catch (e) {
-    return res.status(409).json({ error: e.message });
+    return res.status(e.status || 409).json({ error: e.message });
   }
   const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, include: pedidoInclude });
   imprimirComandaPorEstacion(pedido, [{ cantidad: cant, notas: notas || null, producto }]).catch(() => {});
@@ -469,16 +498,16 @@ router.post('/:id/items', exigirPermiso('pedidos.editar'), wrap(async (req, res)
 // Cambiar la cantidad de un item (si llega a 0 o menos, se elimina). Ajusta el inventario por la diferencia.
 router.put('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
   const cant = Number(req.body.cantidad);
+  const pedidoId = Number(req.params.id);
   const itemId = Number(req.params.itemId);
-  const actual = await prisma.pedidoItem.findUnique({
-    where: { id: itemId },
-    include: { producto: { include: { componentes: true } }, pedido: { select: { inventarioDescontado: true } } },
-  });
-  if (!actual) return res.status(404).json({ error: 'Item no encontrado' });
-
-  const diferencia = (cant && cant > 0 ? cant : 0) - actual.cantidad; // positivo: consume mas, negativo: devuelve
   try {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => conEventoPedido(tx, req, pedidoId, cant > 0 ? 'CAMBIAR_CANTIDAD' : 'QUITAR_PRODUCTO', async () => {
+      const actual = await tx.pedidoItem.findFirst({
+        where: { id: itemId, pedidoId },
+        include: { producto: { include: { componentes: true } }, pedido: { select: { inventarioDescontado: true } } },
+      });
+      if (!actual) throw Object.assign(new Error('Item no encontrado en este pedido'), { status: 404 });
+      const diferencia = (cant && cant > 0 ? cant : 0) - actual.cantidad;
       if (diferencia > 0) {
         const requeridos = calcularInsumosRequeridos([{ productoId: actual.productoId, cantidad: diferencia }], [actual.producto]);
         await validarStockSuficiente(tx, requeridos);
@@ -494,9 +523,9 @@ router.put('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async (re
       } else {
         await tx.pedidoItem.update({ where: { id: itemId }, data: { cantidad: cant } });
       }
-    });
+    }));
   } catch (e) {
-    return res.status(409).json({ error: e.message });
+    return res.status(e.status || 409).json({ error: e.message });
   }
   const pedido = await prisma.pedido.findUnique({ where: { id: Number(req.params.id) }, include: pedidoInclude });
   res.json(pedido);
@@ -504,38 +533,35 @@ router.put('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async (re
 
 // Quitar item (devuelve sus insumos al inventario)
 router.delete('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
+  const pedidoId = Number(req.params.id);
   const itemId = Number(req.params.itemId);
-  const actual = await prisma.pedidoItem.findUnique({
-    where: { id: itemId },
-    include: { producto: { include: { componentes: true } }, pedido: { select: { inventarioDescontado: true } } },
-  });
-  if (!actual) return res.status(404).json({ error: 'Item no encontrado' });
-  const requeridos = calcularInsumosRequeridos([{ productoId: actual.productoId, cantidad: actual.cantidad }], [actual.producto]);
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => conEventoPedido(tx, req, pedidoId, 'QUITAR_PRODUCTO', async () => {
+    const actual = await tx.pedidoItem.findFirst({
+      where: { id: itemId, pedidoId },
+      include: { producto: { include: { componentes: true } }, pedido: { select: { inventarioDescontado: true } } },
+    });
+    if (!actual) throw Object.assign(new Error('Item no encontrado en este pedido'), { status: 404 });
+    const requeridos = calcularInsumosRequeridos([{ productoId: actual.productoId, cantidad: actual.cantidad }], [actual.producto]);
     if (actual.pedido.inventarioDescontado) {
       await revertirInsumos(tx, requeridos, { documentoReferencia: `Pedido #${actual.pedidoId}` });
     }
     await tx.pedidoItem.delete({ where: { id: itemId } });
-  });
+  }));
   const pedido = await prisma.pedido.findUnique({ where: { id: Number(req.params.id) }, include: pedidoInclude });
   res.json(pedido);
 }));
 
 router.put('/:id/observaciones', exigirPermiso('pedidos.observaciones'), wrap(async (req, res) => {
   const id = Number(req.params.id);
-  const actual = await prisma.pedido.findUnique({ where: { id }, select: { id: true, estado: true, cambios: true } });
-  if (!actual) return res.status(404).json({ error: 'Pedido no encontrado' });
-  if (actual.estado !== 'ABIERTO') return res.status(400).json({ error: 'Solo se pueden cambiar observaciones de pedidos abiertos' });
-
   const observaciones = req.body?.observaciones ? String(req.body.observaciones).trim() || null : null;
   const linea = `[${new Date().toLocaleString('es-CO')}] Observaciones actualizadas`;
-  const cambios = [actual.cambios, linea].filter(Boolean).join('\n');
-  const pedido = await prisma.$transaction(async (tx) => {
+  const pedido = await prisma.$transaction(async (tx) => conEventoPedido(tx, req, id, 'OBSERVACIONES', async (antes) => {
+    const cambios = [antes.cambios, linea].filter(Boolean).join('\n');
     await tx.pedido.update({ where: { id }, data: { observaciones, editado: true, cambios } });
     await tx.pedidoMesa.updateMany({ where: { pedidoId: id }, data: { editado: true, cambios } });
     await tx.preparacionCocina.updateMany({ where: { pedidoId: id }, data: { listo: false, fechaListo: null } });
     return tx.pedido.findUnique({ where: { id }, include: pedidoInclude });
-  });
+  }));
   await auditar({ req, accion: 'EDITAR', entidad: 'pedido', entidadId: id, detalle: 'Observaciones actualizadas' });
   res.json(pedido);
 }));
@@ -547,13 +573,9 @@ router.post('/:id/reenviar', exigirPermiso('pedidos.editar'), wrap(async (req, r
   const texto = (req.body?.cambios || '').trim();
   const { observaciones } = req.body;
   const puedeEditarObservaciones = req.usuario?.permisos?.includes('pedidos.observaciones');
-  const actual = await prisma.pedido.findUnique({ where: { id } });
-  if (!actual) return res.status(404).json({ error: 'Pedido no encontrado' });
-
   const linea = texto ? `[${new Date().toLocaleString('es-CO')}] ${texto}` : null;
-  const cambios = [actual.cambios, linea].filter(Boolean).join('\n');
-
-  const pedido = await prisma.$transaction(async (tx) => {
+  const pedido = await prisma.$transaction(async (tx) => conEventoPedido(tx, req, id, 'REENVIAR', async (antes) => {
+    const cambios = [antes.cambios, linea].filter(Boolean).join('\n');
     const actualizado = await tx.pedido.update({
       where: { id },
       data: {
@@ -567,7 +589,7 @@ router.post('/:id/reenviar', exigirPermiso('pedidos.editar'), wrap(async (req, r
     await tx.pedidoMesa.updateMany({ where: { pedidoId: id }, data: { editado: true, cambios: cambios || null } });
     await tx.preparacionCocina.updateMany({ where: { pedidoId: id }, data: { listo: false, fechaListo: null } });
     return actualizado;
-  });
+  }, { detalle: texto }));
   res.json(pedido);
 }));
 
@@ -579,22 +601,16 @@ router.post('/:id/cambiar-mesa', exigirPermiso('mesas.editar'), wrap(async (req,
   const nuevaMesaId = Number(req.body?.mesaId);
   if (!nuevaMesaId) return res.status(400).json({ error: 'mesaId es requerido' });
 
-  const pedido = await prisma.pedido.findUnique({ where: { id }, include: { mesa: true } });
-  if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
-  if (pedido.estado !== 'ABIERTO') return res.status(400).json({ error: 'Solo se pueden mover pedidos abiertos' });
-  if (pedido.mesaId === nuevaMesaId) return res.status(400).json({ error: 'El pedido ya está en esa mesa' });
-
-  const destino = await prisma.mesa.findUnique({ where: { id: nuevaMesaId } });
-  if (!destino) return res.status(404).json({ error: 'Mesa destino no encontrada' });
-  if (destino.estado === 'RESERVADA') return res.status(409).json({ error: `La mesa ${destino.numero} está reservada` });
-
-  const ocupada = await prisma.pedido.findFirst({ where: { mesaId: nuevaMesaId, estado: 'ABIERTO' } });
-  if (ocupada) return res.status(409).json({ error: `La mesa ${destino.numero} ya tiene un pedido abierto` });
-
-  const linea = `[${new Date().toLocaleString('es-CO')}] Movimiento de mesa: Mesa ${pedido.mesa?.numero ?? '?'} → Mesa ${destino.numero}`;
-  const cambios = [pedido.cambios, linea].filter(Boolean).join('\n');
-
-  const actualizado = await prisma.$transaction(async (tx) => {
+  const actualizado = await prisma.$transaction(async (tx) => conEventoPedido(tx, req, id, 'CAMBIAR_MESA', async (pedido) => {
+    if (pedido.mesaId === nuevaMesaId) throw Object.assign(new Error('El pedido ya está en esa mesa'), { status: 400 });
+    await tx.$queryRaw`SELECT "id" FROM "Mesa" WHERE "id" = ${nuevaMesaId} FOR UPDATE`;
+    const destino = await tx.mesa.findUnique({ where: { id: nuevaMesaId } });
+    if (!destino) throw Object.assign(new Error('Mesa destino no encontrada'), { status: 404 });
+    if (destino.estado !== 'LIBRE') throw Object.assign(new Error(`La mesa ${destino.numero} no está disponible`), { status: 409 });
+    const ocupada = await tx.pedido.findFirst({ where: { mesaId: nuevaMesaId, estado: 'ABIERTO' } });
+    if (ocupada) throw Object.assign(new Error(`La mesa ${destino.numero} ya tiene un pedido abierto`), { status: 409 });
+    const linea = `[${new Date().toLocaleString('es-CO')}] Movimiento de mesa: Mesa ${pedido.mesaNumero ?? '?'} → Mesa ${destino.numero}`;
+    const cambios = [pedido.cambios, linea].filter(Boolean).join('\n');
     if (pedido.mesaId) await tx.mesa.update({ where: { id: pedido.mesaId }, data: { estado: 'LIBRE' } });
     await tx.mesa.update({ where: { id: nuevaMesaId }, data: { estado: 'OCUPADA' } });
     return tx.pedido.update({
@@ -602,7 +618,7 @@ router.post('/:id/cambiar-mesa', exigirPermiso('mesas.editar'), wrap(async (req,
       data: { mesaId: nuevaMesaId, editado: true, cambios },
       include: pedidoInclude,
     });
-  });
+  }));
 
   res.json(actualizado);
 }));
@@ -610,24 +626,21 @@ router.post('/:id/cambiar-mesa', exigirPermiso('mesas.editar'), wrap(async (req,
 // Cancelar pedido, devolver los insumos consumidos al inventario y liberar la mesa
 router.post('/:id/cancelar', exigirPermiso('pedidos.eliminar'), wrap(async (req, res) => {
   const id = Number(req.params.id);
-  const actual = await prisma.pedido.findUnique({
-    where: { id },
-    include: { items: { include: { producto: { include: { componentes: true } } } } },
-  });
-  if (!actual) return res.status(404).json({ error: 'Pedido no encontrado' });
-  if (actual.estado !== 'ABIERTO') return res.status(400).json({ error: 'Solo se pueden cancelar pedidos abiertos' });
-
-  const itemsNorm = actual.items.map((it) => ({ productoId: it.productoId, cantidad: it.cantidad }));
-  const requeridos = calcularInsumosRequeridos(itemsNorm, actual.items.map((it) => it.producto));
-
-  const pedido = await prisma.$transaction(async (tx) => {
+  const motivo = validarMotivoCancelacion(req.body?.motivo);
+  const pedido = await prisma.$transaction(async (tx) => conEventoPedido(tx, req, id, 'CANCELAR', async () => {
+    const actual = await tx.pedido.findUnique({
+      where: { id },
+      include: { items: { include: { producto: { include: { componentes: true } } } } },
+    });
+    const itemsNorm = actual.items.map((it) => ({ productoId: it.productoId, cantidad: it.cantidad }));
+    const requeridos = calcularInsumosRequeridos(itemsNorm, actual.items.map((it) => it.producto));
     if (actual.inventarioDescontado) {
       await revertirInsumos(tx, requeridos, { documentoReferencia: `Pedido #${id} (cancelado)` });
     }
     const p = await tx.pedido.update({ where: { id }, data: { estado: 'CANCELADO' } });
     if (p.mesaId) await tx.mesa.update({ where: { id: p.mesaId }, data: { estado: 'LIBRE' } });
     return p;
-  });
+  }, { motivo }));
   res.json(pedido);
 }));
 
