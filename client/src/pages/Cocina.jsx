@@ -13,6 +13,7 @@ export default function Cocina() {
   const [cocineroId, setCocineroId] = useState('');
   const [cargando, setCargando] = useState(true);
   const [marcando, setMarcando] = useState(null);
+  const [itemMarcando, setItemMarcando] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(true);
   const [revisionHistorial, setRevisionHistorial] = useState(0);
@@ -79,17 +80,19 @@ export default function Cocina() {
     setCocineroId(id);
   };
 
-  const marcarListo = async (pedidoId) => {
+  const marcarItemListo = async (pedido, item) => {
     try {
-      setMarcando(pedidoId);
-      const preparacion = await api.put(`/preparacion-cocina/${pedidoId}/listo`, { cocineroId: cocineroId || null });
-      setPreparaciones((actual) => ({ ...actual, [pedidoId]: preparacion }));
-      notify('Plato marcado como listo');
+      setMarcando(pedido.id);
+      setItemMarcando(item.id);
+      const preparacion = await api.put(`/preparacion-cocina/${pedido.id}/items/${item.id}/listo`, { cocineroId: cocineroId || null });
+      setPreparaciones((actual) => ({ ...actual, [pedido.id]: preparacion }));
+      notify(preparacion.listo ? 'Todos los platos de la comanda están listos' : `${item.producto?.nombre || 'Plato'} marcado como listo`);
       await Promise.all([cargar(), cargarHistorial()]);
     } catch (e) {
       notify(e.message, 'err');
     } finally {
       setMarcando(null);
+      setItemMarcando(null);
     }
   };
 
@@ -132,7 +135,7 @@ export default function Cocina() {
       <div className="page-header">
         <div className="page-header__text">
           <h1>Cocina</h1>
-          <p className="subtitle" style={{ margin: 0 }}>Comandas de los pedidos abiertos, con sus ingredientes. Marca "Plato listo" cuando termines.</p>
+          <p className="subtitle" style={{ margin: 0 }}>Comandas de los pedidos abiertos, con sus ingredientes. Marca cada plato con OK cuando esté listo.</p>
         </div>
         <div className="page-header__actions">
           <select aria-label="Cocinero responsable" value={cocineroId} onChange={(e) => elegirCocinero(e.target.value)} style={{ minWidth: 160 }}>
@@ -156,9 +159,23 @@ export default function Cocina() {
               </div>
               {p.mesera?.nombre && <div className="mini" style={{ opacity: .8 }}>{p.mesera.nombre}</div>}
               <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-                {p.items.map((it) => (
-                  <li key={it.id} style={{ marginBottom: 6 }}>
-                    <strong>{it.cantidad}x {it.producto?.nombre}</strong>
+                {p.items.map((it) => {
+                  const listo = (preparaciones[p.id]?.itemsListos || []).some((estado) => Number(estado.pedidoItemId) === it.id);
+                  return (
+                  <li key={it.id} style={{ marginBottom: 6, listStyle: 'none', marginLeft: -18 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <strong>{it.cantidad}x {it.producto?.nombre}</strong>
+                      <Button
+                        size="sm"
+                        variant={listo ? 'success' : 'ghost'}
+                        icon="check"
+                        title={listo ? 'Plato listo' : `Marcar ${it.producto?.nombre || 'plato'} como listo`}
+                        aria-label={listo ? `${it.producto?.nombre || 'Plato'} listo` : `Marcar ${it.producto?.nombre || 'plato'} como listo`}
+                        loading={marcando === p.id && itemMarcando === it.id}
+                        disabled={marcando !== null || listo}
+                        onClick={() => marcarItemListo(p, it)}
+                      >OK</Button>
+                    </div>
                     {it.notas && <span className="mini" style={{ display: 'block', opacity: .8 }}>{it.notas}</span>}
                     {it.producto?.componentes?.length > 0 && (
                       <div className="mini" style={{ opacity: .75, marginTop: 2 }}>
@@ -166,18 +183,9 @@ export default function Cocina() {
                       </div>
                     )}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
-              <Button
-                  variant="success"
-                  icon="check"
-                  style={{ width: '100%', marginTop: 10 }}
-                  loading={marcando === p.id}
-                  disabled={marcando !== null}
-                  onClick={() => marcarListo(p.id)}
-                >
-                  Plato listo
-              </Button>
             </div>
           ))}
         </div>

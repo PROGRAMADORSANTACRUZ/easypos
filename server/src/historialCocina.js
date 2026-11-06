@@ -97,7 +97,7 @@ export async function registrarResultadoCocinaTransaccion(tx, { pedidoId, estado
       create: { pedidoId, mesaId: pedido.mesaId, productos, cocineroId: responsableId, listo: false },
       update: estado === 'ENTREGADO'
         ? { cocineroId: responsableId }
-        : { productos, cocineroId: responsableId, listo: false, fechaListo: null },
+        : { productos, cocineroId: responsableId, listo: false, fechaListo: null, itemsListos: [] },
     });
     const detalle = {
       pedidoId, productos, mesa: pedido.mesa?.numero ?? null, tipo: pedido.tipo,

@@ -151,20 +151,23 @@ test('cocina solo muestra comandas pendientes y retira las listas sin esperar a 
   assert.deepEqual(pendientes.map((pedido) => pedido.id), [1]);
 });
 
-test('Plato listo registra una sola operacion y retira inmediatamente la comanda activa', async () => {
-  const inicio = fuenteCocina.indexOf('  const marcarListo = async');
+test('cada plato se marca por separado y la comanda se completa con la respuesta del servidor', async () => {
+  const inicio = fuenteCocina.indexOf('  const marcarItemListo = async');
   const fin = fuenteCocina.indexOf('\n  const registrarResultado', inicio);
   assert.ok(inicio >= 0 && fin > inicio);
   const llamadas = [];
   let preparaciones = {};
   const contexto = {
-    cocineroId: '', setMarcando: () => {}, notify: () => {}, cargar: async () => {}, cargarHistorial: () => {},
+    cocineroId: '', setMarcando: () => {}, setItemMarcando: () => {}, notify: () => {}, cargar: async () => {}, cargarHistorial: () => {},
     setPreparaciones: (actualizar) => { preparaciones = actualizar(preparaciones); },
-    api: { put: async (ruta, datos) => { llamadas.push([ruta, datos]); return { pedidoId: 7, listo: true }; } },
+    api: { put: async (ruta, datos) => { llamadas.push([ruta, datos]); return { pedidoId: 7, listo: false, itemsListos: [{ pedidoItemId: 12 }] }; } },
   };
-  await new Function(...Object.keys(contexto), `${fuenteCocina.slice(inicio, fin)}\nreturn marcarListo;`)(...Object.values(contexto))(7);
-  assert.deepEqual(llamadas, [['/preparacion-cocina/7/listo', { cocineroId: null }]]);
-  assert.equal(preparaciones[7].listo, true);
+  await new Function(...Object.keys(contexto), `${fuenteCocina.slice(inicio, fin)}\nreturn marcarItemListo;`)(...Object.values(contexto))(
+    { id: 7 }, { id: 12, producto: { nombre: 'Chuzo' } },
+  );
+  assert.deepEqual(llamadas, [['/preparacion-cocina/7/items/12/listo', { cocineroId: null }]]);
+  assert.equal(preparaciones[7].listo, false);
+  assert.equal(preparaciones[7].itemsListos[0].pedidoItemId, 12);
 });
 
 async function entregarEnMesa(estadoCocina, procesando = false) {

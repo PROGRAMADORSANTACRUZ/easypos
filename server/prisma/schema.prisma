@@ -632,6 +632,7 @@ model PreparacionCocina {
   mesaId      Int?
   mesa        Mesa?     @relation(fields: [mesaId], references: [id])
   productos   String    // resumen legible: "2x Hamburguesa, 1x Jugo de mora"
+  itemsListos Json      @default("[]")
   cocineroId  Int?
   cocinero    Cocinero? @relation(fields: [cocineroId], references: [id])
   listo       Boolean   @default(false)

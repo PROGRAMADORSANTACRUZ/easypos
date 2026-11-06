@@ -36,8 +36,10 @@ test('el historial SQL conserva eventos, exige motivo y rechaza modificar o borr
   const db = new PGlite();
   try {
     await db.exec('CREATE TABLE "Pedido" ("id" INTEGER PRIMARY KEY); INSERT INTO "Pedido" VALUES (1)');
+    await db.exec('CREATE TABLE "PreparacionCocina" ("consecutivo" SERIAL PRIMARY KEY, "pedidoId" INTEGER UNIQUE, "productos" TEXT NOT NULL, "listo" BOOLEAN NOT NULL DEFAULT FALSE)');
     await db.exec(await readFile(new URL('../prisma/migrations/20261106100000_historial_pedidos/migration.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../prisma/migrations/20261106110000_historial_listo_entrega/migration.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../prisma/migrations/20261106210000_cocina_por_plato/migration.sql', import.meta.url), 'utf8'));
     await db.query(`INSERT INTO "HistorialPedidos" ("pedidoId", "usuarioId", "usuarioCuenta", "usuarioNombre", "accion", "motivo", "despues")
       VALUES (1, $1, 'mesero1', 'Mesero uno', 'CANCELAR', 'Cliente se retira', '{"estado":"CANCELADO"}')`, ['00000000-0000-4000-8000-000000000001']);
     await assert.rejects(db.exec('UPDATE "HistorialPedidos" SET "motivo" = \'Otro\''), /no se puede modificar/);
@@ -45,11 +47,12 @@ test('el historial SQL conserva eventos, exige motivo y rechaza modificar o borr
     await assert.rejects(db.exec('DELETE FROM "Pedido" WHERE "id" = 1'), /foreign key/i);
     await assert.rejects(db.query(`INSERT INTO "HistorialPedidos" ("pedidoId", "usuarioId", "usuarioCuenta", "usuarioNombre", "accion", "motivo", "despues")
       VALUES (1, $1, 'mesero1', 'Mesero uno', 'CANCELAR', '   ', '{}')`, ['00000000-0000-4000-8000-000000000001']), /motivo_check/);
-    for (const accion of ['PLATO_LISTO', 'ENTREGAR']) {
+    for (const accion of ['PLATO_LISTO', 'PLATO_ITEM_LISTO', 'ENTREGAR']) {
       await db.query(`INSERT INTO "HistorialPedidos" ("pedidoId", "usuarioId", "usuarioCuenta", "usuarioNombre", "accion", "despues")
         VALUES (1, $1, 'mesero1', 'Mesero uno', $2, '{}')`, ['00000000-0000-4000-8000-000000000001', accion]);
     }
-    assert.equal((await db.query('SELECT count(*)::int AS total FROM "HistorialPedidos"')).rows[0].total, 3);
+    assert.equal((await db.query('SELECT count(*)::int AS total FROM "HistorialPedidos"')).rows[0].total, 4);
+    assert.deepEqual((await db.query('SELECT "itemsListos" FROM "PreparacionCocina"')).rows, []);
   } finally { await db.close(); }
 });
 
@@ -135,6 +138,7 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true } = 
         return { count: 1 };
       },
     },
+    cocinero: { findUnique: async ({ where }) => ({ id: where.id, nombre: 'Cocinero prueba', activo: true }) },
     auditoria: {
       findFirst: async ({ where }) => auditorias.toReversed().find((fila) => fila.entidadId === where.entidadId) || null,
       create: async ({ data }) => {
@@ -401,4 +405,33 @@ test('marcar plato listo requiere acceso a cocina', async (t) => {
   const { crear, solicitar } = await entorno(t, { cocina: false });
   await crear();
   assert.equal((await solicitar('PUT', '/preparacion-cocina/1/listo', {})).status, 403);
+});
+
+test('cocina marca cada plato y completa la comanda solo al confirmar todos', async (t) => {
+  const { crear, solicitar, pedidos, eventos } = await entorno(t);
+  await crear({ items: [
+    { productoId: 'producto-prueba', cantidad: 1 },
+    { productoId: 'producto-prueba', cantidad: 2 },
+  ] });
+  assert.equal(pedidos[0].items.length, 2);
+
+  const primero = await solicitar('PUT', '/preparacion-cocina/1/items/1/listo', { cocineroId: 7 }, {
+    'x-test-user': 'usuario-cocina', 'x-test-name': 'Cocina',
+  });
+  assert.equal(primero.status, 200);
+  assert.equal(primero.body.listo, false);
+  assert.deepEqual(primero.body.itemsListos.map((item) => item.pedidoItemId), [1]);
+  assert.equal((await solicitar('PUT', '/preparacion-cocina/1/items/1/listo', {})).status, 409);
+
+  const segundo = await solicitar('PUT', '/preparacion-cocina/1/items/2/listo', {});
+  assert.equal(segundo.status, 200);
+  assert.deepEqual(segundo.body.itemsListos.map((item) => item.pedidoItemId), [1, 2]);
+  assert.equal(segundo.body.listo, true);
+  assert.ok(Date.parse(segundo.body.fechaListo));
+  assert.deepEqual(segundo.body.itemsListos.map((item) => item.pedidoItemId), [1, 2]);
+  assert.equal(segundo.body.itemsListos[0].usuarioNombre, 'Cocina');
+  assert.deepEqual(eventos.filter((evento) => evento.accion === 'PLATO_ITEM_LISTO').map((evento) => evento.detalle), [
+    JSON.stringify({ pedidoItemId: 1, accion: 'PLATO_ITEM_LISTO' }),
+    JSON.stringify({ pedidoItemId: 2, accion: 'PLATO_ITEM_LISTO' }),
+  ]);
 });
