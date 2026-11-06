@@ -706,7 +706,7 @@ export default function TomarPedido() {
                     <Icon name="clientes" size={16} /> Reservar mesa
                   </button>
                 )}
-                {puedeCrearPedido && <button className="btn btn-primary" style={{ flex: 1 }} disabled={procesando} onClick={enviarPedido}>Enviar pedido</button>}
+                {puedeCrearPedido && <button className="btn btn-green" style={{ flex: 1 }} disabled={procesando} onClick={enviarPedido}>Enviar pedido</button>}
               </>
             ) : editando && puedeEditarPedido ? (
               <button className="btn btn-green" style={{ flex: 1 }} disabled={procesando} onClick={reenviarPedido}>
