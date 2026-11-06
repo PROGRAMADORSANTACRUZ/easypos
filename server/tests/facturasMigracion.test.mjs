@@ -21,6 +21,36 @@ const migracionFacturaDetalle = await readFile(new URL('../prisma/migrations/202
 const migracionOrdenTipoDocumento = await readFile(new URL('../prisma/migrations/20261105100000_factura_detalle_tipodocumento_orden/migration.sql', import.meta.url), 'utf8');
 const migracionFacturaVentaDetalle = await readFile(new URL('../prisma/migrations/20261105110000_factura_venta_detalle_documento_bodega/migration.sql', import.meta.url), 'utf8');
 const migracionDetallesFechaUsuario = await readFile(new URL('../prisma/migrations/20261105120000_detalles_factura_fecha_usuario/migration.sql', import.meta.url), 'utf8');
+const migracionCompletarDetalles = await readFile(new URL('../prisma/migrations/20261106120000_completar_metadatos_detalles/migration.sql', import.meta.url), 'utf8');
+
+test('completa metadatos nulos de ambos detalles sin modificar snapshots previos ni importes', async () => {
+  const db = new PGlite();
+  const productoId = '00000000-0000-4000-8000-000000000071';
+  const operacionId = '00000000-0000-4000-8000-000000000072';
+  const detalleId = '00000000-0000-4000-8000-000000000073';
+  try {
+    await db.exec(`
+      CREATE TABLE "UnidadesMedida" ("Id" uuid PRIMARY KEY, "Abreviatura" varchar(10));
+      CREATE TABLE "Producto" ("Id" uuid PRIMARY KEY, "Codigo" varchar(50), "Nombre" varchar(250), "UnidadId" uuid);
+      INSERT INTO "Producto" VALUES ('${productoId}', '0004', 'CHUZO DE CHORIZO', NULL);
+    `);
+    for (const [cabecera, detalle, vinculo] of [['Factura', 'FacturaDetalle', 'FacturaId'], ['FacturaVenta', 'FacturaVentaDetalle', 'FacturaVentaId']]) {
+      await db.exec(`
+        CREATE TABLE "${cabecera}" ("CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10), "TipoDocumento" varchar(20), "numero" integer, "fecha" timestamp(3), "Usuario" varchar(50));
+        CREATE TABLE "${cabecera}Operacion" ("Id" uuid PRIMARY KEY, "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10), "TipoDocumento" varchar(20), "numero" integer);
+        CREATE TABLE "${detalle}" ("Id" uuid PRIMARY KEY, "${vinculo}" uuid, "ProductoId" uuid, "TipoDocumento" varchar(20), "numero" integer, "CodigoProducto" varchar(50), "NombreProducto" varchar(250), "Cantidad" double precision, "Unidad" varchar(10), "PrecioUnitario" double precision, "IVA" double precision, "Total" double precision, "fecha" timestamp(3), "usuario" varchar(50));
+        INSERT INTO "${cabecera}" VALUES ('004', '420', 'FEV', 7, '2026-11-06 12:50:43.075', 'admin');
+        INSERT INTO "${cabecera}Operacion" VALUES ('${operacionId}', '004', '420', 'FEV', 7);
+        INSERT INTO "${detalle}" VALUES ('${detalleId}', '${operacionId}', '${productoId}', NULL, NULL, NULL, 'Nombre historico', 1, NULL, 8000, 640, 8640, NULL, NULL);
+      `);
+    }
+    await db.exec(migracionCompletarDetalles);
+    for (const tabla of ['FacturaDetalle', 'FacturaVentaDetalle']) {
+      const fila = (await db.query(`SELECT "TipoDocumento", "numero", "CodigoProducto", "NombreProducto", "Cantidad", "Unidad", "PrecioUnitario", "IVA", "Total", "usuario", to_char("fecha", 'YYYY-MM-DD HH24:MI:SS.MS') AS fecha FROM "${tabla}"`)).rows[0];
+      assert.deepEqual(fila, { TipoDocumento: 'FEV', numero: 7, CodigoProducto: '0004', NombreProducto: 'Nombre historico', Cantidad: 1, Unidad: 'UND', PrecioUnitario: 8000, IVA: 640, Total: 8640, usuario: 'admin', fecha: '2026-11-06 12:50:43.075' });
+    }
+  } finally { await db.close(); }
+});
 const usuario = '00000000-0000-4000-8000-000000000001';
 const tipo = '00000000-0000-4000-8000-000000000002';
 const facturaId = '00000000-0000-4000-8000-000000000003';

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { crearPartesPedido } from '../src/routes/facturas.js';
+import { crearPartesPedido, calcularLineaPedido } from '../src/routes/facturas.js';
 
 const pedido = {
   items: [{
@@ -11,6 +11,20 @@ const pedido = {
     producto: { nombre: 'Producto de prueba', iva: 19 },
   }],
 };
+
+test('la factura unica de una division conserva codigo, nombre y unidad de sus productos', () => {
+  const item = {
+    ...pedido.items[0], cantidad: 1, precioUnit: 8000,
+    producto: { codigo: '0004', nombre: 'CHUZO DE CHORIZO', iva: 8, unidad: { abreviatura: 'UND' } },
+  };
+  const linea = calcularLineaPedido(item, true);
+  assert.equal(linea.productoCodigo, '0004');
+  assert.equal(linea.productoNombre, 'CHUZO DE CHORIZO');
+  assert.equal(linea.unidad, 'UND');
+  assert.equal(linea.subtotal, 8000);
+  assert.equal(linea.impuesto, 640);
+  assert.equal(linea.total, 8640);
+});
 
 test('reparte subtotal, IVA y propina en partes iguales sin perder centavos ni cantidades', () => {
   const partes = crearPartesPedido(pedido, {

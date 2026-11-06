@@ -181,7 +181,22 @@ export function crearAdaptadorFacturas(modelos) {
         const aplicados = camposMetodoPago.map((campo) => metodosConImporte[campo]).filter((pago) => pago !== '0');
         datos.metodoPago = aplicados.length === 1 ? aplicados[0].split(' $')[0] : aplicados.join(' + ');
       }
-      await cabeceras.create({ data: { ...datosCabecera, prefijo: datos.prefijo, ...Object.fromEntries(claves.map((campo) => [campo, datos[campo]])) } });
+      const cabecera = await cabeceras.create({ data: { ...datosCabecera, prefijo: datos.prefijo, ...Object.fromEntries(claves.map((campo) => [campo, datos[campo]])) } });
+      if (datos.detalle?.create) {
+        const completar = (detalle) => ({
+          ...detalle,
+          companiaCodigo: datos.companiaCodigo,
+          centroOperacionCodigo: datos.centroOperacionCodigo,
+          tipoDocumentoCodigo: datos.tipoDocumentoCodigo,
+          numeroFactura: datos.numeroFactura,
+          fecha: cabecera.createdAt,
+          usuario: datosCabecera.usuarioNombre,
+        });
+        datos.detalle = {
+          ...datos.detalle,
+          create: Array.isArray(datos.detalle.create) ? datos.detalle.create.map(completar) : completar(datos.detalle.create),
+        };
+      }
       const consulta = argumentos(modelo, { ...originales, data: datos });
       return presentar(modelo, await tabla.create(consulta), originales);
     }

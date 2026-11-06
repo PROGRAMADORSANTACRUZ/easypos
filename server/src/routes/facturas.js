@@ -129,11 +129,19 @@ function repartirCantidad(total, partes, factorConversion = 1) {
   });
 }
 
-function calcularLineaPedido(item, electronica) {
+export function calcularLineaPedido(item, electronica) {
   const totalLinea = redondear(item.precioUnit * item.cantidad);
   const impuesto = impuestoSobrePrecio(totalLinea, item.producto.iva || 0, !electronica);
   const subtotal = electronica ? totalLinea : redondear(totalLinea - impuesto);
-  return { item, subtotal, impuesto, total: electronica ? redondear(subtotal + impuesto) : totalLinea };
+  return {
+    item,
+    productoCodigo: item.producto?.codigo || null,
+    productoNombre: item.producto?.nombre || null,
+    unidad: item.producto?.unidad?.abreviatura || 'UND',
+    subtotal,
+    impuesto,
+    total: electronica ? redondear(subtotal + impuesto) : totalLinea,
+  };
 }
 
 export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, electronica, propina }) {
