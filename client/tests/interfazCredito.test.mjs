@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import ExcelJS from 'exceljs';
+import { calcularTotalesPedido } from '../src/totalesPedido.js';
 
 const fuente = await readFile(new URL('../src/pages/Facturas.jsx', import.meta.url), 'utf8');
 const inicio = fuente.indexOf('  const exportarInterfaz = async () => {');
@@ -19,6 +20,12 @@ function factura(datos = {}) {
     ...datos,
   };
 }
+
+test('el total cobrado coincide con el IVA que agrega el servidor', () => {
+  const items = [{ precioUnit: 8000, cantidad: 1, producto: { iva: 19 } }];
+  assert.deepEqual(calcularTotalesPedido(items, true), { subtotal: 8000, impuesto: 1520, total: 9520 });
+  assert.deepEqual(calcularTotalesPedido(items, false), { subtotal: 6722.69, impuesto: 1277.31, total: 8000 });
+});
 
 async function exportar(facturas, electronica = false) {
   let archivo;

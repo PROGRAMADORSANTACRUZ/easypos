@@ -12,6 +12,7 @@ import { tipoDocumentoListo } from '../tipoDocumentoListo.js';
 import { diaColombia } from '../fechaComercial.js';
 import PagosMultiples from '../components/PagosMultiples.jsx';
 import { etiquetaPagos, resumirPagos, formasPagoActivas, esPagoEfectivo } from '../pagosMultiples.js';
+import { calcularTotalesPedido } from '../totalesPedido.js';
 
 // Número visible de la factura: prefijo + consecutivo DIAN, o el ID corto si aún no tiene numeración.
 function numeroDian(f) {
@@ -881,7 +882,8 @@ export default function Facturas({ electronica = true }) {
   const etiquetaCredito = (cli) => `CRÉDITO${cli?.creditoDias ? ` ${cli.creditoDias} días` : ''}`;
 
   const fecha = (d) => new Date(d).toLocaleString('es-CO');
-  const totalPedido = (p) => p.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0);
+  const totalesPedido = (p) => calcularTotalesPedido(p.items, electronica);
+  const totalPedido = (p) => totalesPedido(p).total;
 
   const imprimirGenerada = async (factura, efectivo, ventana) => {
     try {
@@ -897,7 +899,7 @@ export default function Facturas({ electronica = true }) {
     if (!centroFacturacion) return notify('No tienes un centro de operaciones asignado para facturar. Contacta al administrador.', 'err');
     if (!tipoFactura) return notify(`Configura el tipo de documento ${claseDocumento}.`, 'err');
     if (!apertura) return notify('Abre la caja antes de facturar', 'err');
-    const total = totalPedido(pedido);
+    const { subtotal, total } = totalesPedido(pedido);
     const cliId = (clientesSel[pedido.id] ?? idDefault) || null;
     const cli = clienteDe(cliId);
 
@@ -937,7 +939,7 @@ export default function Facturas({ electronica = true }) {
     const cobrarPropina = electronica && propinaOn[pedido.id] !== false;
     const prop = !cobrarPropina
       ? 0
-      : (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(total));
+      : (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(subtotal));
     const totalPagar = total + prop;
     const resumen = resumirPagos(pagoPedido.pagos, totalPagar, mediosActivos);
     if (pagoPedido.recibe !== '' || !resumen.valido) return notify('Asigna los importes a las formas de pago hasta cubrir el total', 'err');
@@ -998,7 +1000,7 @@ export default function Facturas({ electronica = true }) {
 
     const cobrarPropina = electronica && propinaOn[pedido.id] !== false;
     const propina = cobrarPropina
-      ? (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(totalPedido(pedido)))
+      ? (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(totalesPedido(pedido).subtotal))
       : 0;
     const ventanaCount = emisionDivision === 'UNA' ? 1 : nPartes;
     const ventanas = Array.from({ length: ventanaCount }, () => abrirVentanaVacia());
@@ -1430,14 +1432,14 @@ export default function Facturas({ electronica = true }) {
       {cobrando && (() => {
         const p = cobrando;
         const esDomi = p.tipo === 'DOMICILIO';
-        const totalP = totalPedido(p);
+        const { subtotal, impuesto, total: totalP } = totalesPedido(p);
         const cliCred = clienteDe(clientesSel[p.id] ?? idDefault);
         const credito = cliCred?.condicionPago === 'CREDITO';
         const cupoExcedido = credito && cliCred.creditoCupo != null && totalP > cliCred.creditoCupo;
         const cobrarPropina = electronica && propinaOn[p.id] !== false;
         const propP = !cobrarPropina
           ? 0
-          : (propinas[p.id] !== undefined ? Math.max(0, Number(propinas[p.id]) || 0) : sugPropina(totalP));
+          : (propinas[p.id] !== undefined ? Math.max(0, Number(propinas[p.id]) || 0) : sugPropina(subtotal));
         const totalPagarP = totalP + propP;
         const nombreCli = p.clienteRel?.nombre || p.cliente || 'Consumidor Final';
         const nPartes = Math.max(2, Math.min(12, Number(cantidadPartes) || 2));
@@ -1507,7 +1509,8 @@ export default function Facturas({ electronica = true }) {
                       </div>
                     ))}
                   </div>
-                  <div className="total-line"><span>Subtotal</span><span>{money(totalP)}</span></div>
+                  <div className="total-line"><span>Subtotal</span><span>{money(subtotal)}</span></div>
+                  {impuesto > 0 && <div className="total-line"><span>IVA</span><span>{money(impuesto)}</span></div>}
                   {propP > 0 && <div className="total-line"><span>Propina</span><span>{money(propP)}</span></div>}
                   <div className="total-line grand"><span>Total a pagar</span><span>{money(totalPagarP)}</span></div>
                 </div>
@@ -1696,8 +1699,8 @@ export default function Facturas({ electronica = true }) {
                           <input
                             type="number"
                             min="0"
-                            placeholder={String(sugPropina(totalP))}
-                            value={propinas[p.id] ?? String(sugPropina(totalP))}
+                            placeholder={String(sugPropina(subtotal))}
+                            value={propinas[p.id] ?? String(sugPropina(subtotal))}
                             onChange={(e) => setPropinas({ ...propinas, [p.id]: e.target.value })}
                           />
                         </div>
