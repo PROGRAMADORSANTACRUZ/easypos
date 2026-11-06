@@ -9,6 +9,7 @@ import {
   Landmark, Antenna, Plug, Circle, Calculator, Gift,
   Pencil, Trash2, X, Plus, Minus, DollarSign, Save, Check, Ban, RotateCw, Download,
   ArrowLeft, ArrowRight, Shuffle, Lock, Snowflake, Menu, MapPin, Navigation, LocateFixed, ChefHat,
+  Eye, EyeOff,
 } from 'lucide-react';
 
 const MAP = {
@@ -75,6 +76,8 @@ const MAP = {
   forward: ArrowRight,
   swap: Shuffle,
   lock: Lock,
+  eye: Eye,
+  eyeOff: EyeOff,
   freeze: Snowflake,
   cash: Banknote,
   card: CreditCard,

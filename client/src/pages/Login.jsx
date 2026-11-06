@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api, setTenantActual } from '../api.js';
+import { Icon } from '../icons.jsx';
 
 export default function Login({ onLogin }) {
   const [restaurantes, setRestaurantes] = useState([]);
   const [restauranteId, setRestauranteId] = useState('');
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
+  const [mostrarPassword, setMostrarPassword] = useState(false);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
 
@@ -70,8 +72,21 @@ export default function Login({ onLogin }) {
             <input value={usuario} onChange={(e) => setUsuario(e.target.value)} autoFocus required placeholder="Tu usuario" />
           </div>
           <div className="field">
-            <label>Contraseña</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
+            <label htmlFor="login-password">Contraseña</label>
+            <div className="login-password">
+              <input id="login-password" type={mostrarPassword ? 'text' : 'password'} autoComplete="current-password"
+                value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
+              <button
+                type="button"
+                className="login-password__toggle"
+                aria-label={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                aria-pressed={mostrarPassword}
+                title={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                onClick={() => setMostrarPassword((visible) => !visible)}
+              >
+                <Icon name={mostrarPassword ? 'eyeOff' : 'eye'} size={18} />
+              </button>
+            </div>
           </div>
           {error && <div className="login-error">{error}</div>}
           <button className="btn btn-primary" style={{ width: '100%', marginTop: 4 }} disabled={cargando}>

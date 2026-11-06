@@ -1074,6 +1074,27 @@ tbody tr:last-child td { border-bottom: none; }
   line-height: 1;
 }
 .login-form__subtitle { color: var(--muted); font-size: var(--fs-body); margin: 0; }
+.login-password { position: relative; }
+.login-password input { padding-right: 44px; }
+.login-password__toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+.login-password__toggle:hover { color: var(--heading); background: var(--panel-2); }
+.login-password__toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 .login-error {
   background: var(--red-soft);
   color: var(--red);
