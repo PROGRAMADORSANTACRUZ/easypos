@@ -243,16 +243,16 @@ export default function Usuarios() {
           <form id="usuario-form" onSubmit={guardarUsuario}>
             <div className="field">
               <label>Nombre completo</label>
-              <input value={uForm.nombre} onChange={(e) => setUForm({ ...uForm, nombre: e.target.value })} required />
+              <input autoCapitalize="characters" style={{ textTransform: 'uppercase' }} value={uForm.nombre} onChange={(e) => setUForm({ ...uForm, nombre: e.target.value.toUpperCase() })} required />
             </div>
             <div className="grid form-2col" style={{ gap: 12 }}>
               <div className="field">
                 <label>Usuario (acceso)</label>
-                <input autoCapitalize="characters" value={uForm.usuario} onChange={(e) => setUForm({ ...uForm, usuario: e.target.value.toUpperCase() })} required />
+                <input autoCapitalize="characters" style={{ textTransform: 'uppercase' }} value={uForm.usuario} onChange={(e) => setUForm({ ...uForm, usuario: e.target.value.toUpperCase() })} required />
               </div>
               <div className="field">
                 <label>Correo</label>
-                <input type="email" value={uForm.correo} onChange={(e) => setUForm({ ...uForm, correo: e.target.value })} placeholder="correo@ejemplo.com" />
+                <input autoCapitalize="characters" style={{ textTransform: 'uppercase' }} type="email" value={uForm.correo} onChange={(e) => setUForm({ ...uForm, correo: e.target.value.toUpperCase() })} placeholder="correo@ejemplo.com" />
               </div>
             </div>
             <div className="field">

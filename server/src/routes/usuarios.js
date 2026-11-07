@@ -40,7 +40,8 @@ function validarPassword(password) {
 
 // No exponemos el hash de la contraseña en las respuestas
 const sinHash = ({ passwordHash, modulosFacturacion, ...rest }) => rest;
-const normalizarUsuario = (usuario) => typeof usuario === 'string' ? usuario.toUpperCase() : usuario;
+const normalizarMayusculas = (valor) => typeof valor === 'string' ? valor.toUpperCase() : valor;
+const normalizarUsuario = normalizarMayusculas;
 
 // Calcula roles y permisos efectivos de un usuario (RBAC)
 async function conRolesYPermisos(u) {
@@ -64,14 +65,15 @@ router.post('/login', wrap(async (req, res) => {
   const { usuario, password } = req.body;
   if (!usuario || !password) return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
 
-  const clave = claveIntento(req, usuario);
+  const usuarioNormalizado = normalizarUsuario(usuario);
+  const clave = claveIntento(req, usuarioNormalizado);
   const intento = intentosLogin.get(clave);
   if (intento?.bloqueadoHasta > Date.now()) {
     const minutos = Math.ceil((intento.bloqueadoHasta - Date.now()) / 60000);
     return res.status(429).json({ error: `Demasiados intentos fallidos. Intenta de nuevo en ${minutos} min.` });
   }
 
-  const u = await prisma.usuario.findUnique({ where: { usuario } });
+  const u = await prisma.usuario.findFirst({ where: { usuario: { equals: usuarioNormalizado, mode: 'insensitive' } } });
   if (!u || !bcrypt.compareSync(password, u.passwordHash)) {
     registrarFallo(clave);
     return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
@@ -180,8 +182,10 @@ async function reemplazarMesasAsignadas(tx, usuarioId, mesaIds) {
 
 router.post('/', soloAdmin, wrap(async (req, res) => {
   const { nombre, usuario, correo, password, roles, centrosOperacionCodigos, mesaIds } = req.body;
+  const nombreNormalizado = normalizarMayusculas(nombre);
   const usuarioNormalizado = normalizarUsuario(usuario);
-  if (!nombre || !usuarioNormalizado || !password) {
+  const correoNormalizado = correo ? normalizarMayusculas(correo) : correo;
+  if (!nombreNormalizado || !usuarioNormalizado || !password) {
     return res.status(400).json({ error: 'nombre, usuario y contraseña son requeridos' });
   }
   const errorPass = validarPassword(password);
@@ -194,7 +198,7 @@ router.post('/', soloAdmin, wrap(async (req, res) => {
   if (existe) return res.status(409).json({ error: 'Ese usuario ya existe' });
   const creado = await prisma.$transaction(async (tx) => {
     const nuevoUsuario = await tx.usuario.create({
-      data: { nombre, usuario: usuarioNormalizado, correo: correo || null, passwordHash: bcrypt.hashSync(password, 10) },
+      data: { nombre: nombreNormalizado, usuario: usuarioNormalizado, correo: correoNormalizado || null, passwordHash: bcrypt.hashSync(password, 10) },
     });
     await asignarRoles(nuevoUsuario.id, roles, tx);
     await tx.usuarioCentroOperacion.createMany({
@@ -210,7 +214,9 @@ router.post('/', soloAdmin, wrap(async (req, res) => {
 router.put('/:id', soloAdmin, wrap(async (req, res) => {
   const id = req.params.id;
   const { nombre, usuario, correo, password, activo, roles, centrosOperacionCodigos, mesaIds } = req.body;
+  const nombreNormalizado = nombre === undefined ? undefined : normalizarMayusculas(nombre);
   const usuarioNormalizado = usuario === undefined ? undefined : normalizarUsuario(usuario);
+  const correoNormalizado = correo === undefined ? undefined : normalizarMayusculas(correo);
   if (usuarioNormalizado !== undefined) {
     const existe = await prisma.usuario.findFirst({
       where: { usuario: { equals: usuarioNormalizado, mode: 'insensitive' }, id: { not: id } },
@@ -236,9 +242,9 @@ router.put('/:id', soloAdmin, wrap(async (req, res) => {
     const usuarioActualizado = await tx.usuario.update({
       where: { id },
       data: {
-        ...(nombre !== undefined && { nombre }),
+        ...(nombreNormalizado !== undefined && { nombre: nombreNormalizado }),
         ...(usuarioNormalizado !== undefined && { usuario: usuarioNormalizado }),
-        ...(correo !== undefined && { correo }),
+        ...(correoNormalizado !== undefined && { correo: correoNormalizado }),
         ...(password !== undefined && password !== '' && { passwordHash: bcrypt.hashSync(password, 10) }),
         ...(activo !== undefined && { activo }),
       },

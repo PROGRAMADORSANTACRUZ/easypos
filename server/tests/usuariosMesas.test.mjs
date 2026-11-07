@@ -61,7 +61,7 @@ async function entorno(t) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${firmarToken(admin)}` },
       body: JSON.stringify({
-        nombre: 'Mesero Prueba', usuario, password: 'clave123',
+        nombre: 'Mesero Prueba', usuario, correo: 'mesero@ejemplo.com', password: 'clave123',
         roles: ['MESERO'], centrosOperacionCodigos: ['420'], mesaIds,
       }),
     });
@@ -74,7 +74,9 @@ test('ADMIN puede asignar mesas normales a un MESERO', async (t) => {
   const { solicitar, mesas } = await entorno(t);
   const response = await solicitar([1]);
   assert.equal(response.status, 201);
+  assert.equal(response.body.nombre, 'MESERO PRUEBA');
   assert.equal(response.body.usuario, 'MESERO1');
+  assert.equal(response.body.correo, 'MESERO@EJEMPLO.COM');
   assert.equal(mesas.get(1).usuarioAsignadoId, response.body.id);
   assert.equal(mesas.get(0).usuarioAsignadoId, null);
 });

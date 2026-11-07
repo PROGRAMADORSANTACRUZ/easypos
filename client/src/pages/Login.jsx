@@ -26,11 +26,13 @@ export default function Login({ onLogin }) {
 
   const enviar = async (e) => {
     e.preventDefault();
+    const usuarioNormalizado = String(new FormData(e.currentTarget).get('usuario') || usuario).toUpperCase();
+    setUsuario(usuarioNormalizado);
     setError('');
     setCargando(true);
     setTenantActual(restauranteId || null);
     try {
-      const user = await api.post('/usuarios/login', { usuario, password });
+      const user = await api.post('/usuarios/login', { usuario: usuarioNormalizado, password });
       onLogin(user);
     } catch (err) {
       setError(err.message);
@@ -69,7 +71,7 @@ export default function Login({ onLogin }) {
           )}
           <div className="field">
             <label>Usuario</label>
-            <input value={usuario} onChange={(e) => setUsuario(e.target.value)} autoFocus required placeholder="Tu usuario" />
+            <input name="usuario" autoCapitalize="characters" style={{ textTransform: 'uppercase' }} value={usuario} onChange={(e) => setUsuario(e.target.value.toUpperCase())} autoFocus required placeholder="Tu usuario" />
           </div>
           <div className="field">
             <label htmlFor="login-password">Contraseña</label>
