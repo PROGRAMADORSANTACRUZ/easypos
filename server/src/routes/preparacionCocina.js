@@ -24,9 +24,12 @@ router.get('/', wrap(async (req, res) => {
   const ultimos = new Map(eventos.map((evento) => [evento.entidadId, evento]));
   res.json(items.map((item) => {
     const productos = item.pedido.items.map((it) => `${it.cantidad}x ${it.producto?.nombre || ''}`).join(', ');
-    const idsActuales = new Set(item.pedido.items.map((it) => it.id));
+    const itemsActuales = new Map(item.pedido.items.map((it) => [it.id, it]));
     const itemsListos = item.productos === productos && Array.isArray(item.itemsListos)
-      ? item.itemsListos.filter((estado) => idsActuales.has(Number(estado.pedidoItemId)))
+      ? item.itemsListos.filter((estado) => {
+        const actual = itemsActuales.get(Number(estado.pedidoItemId));
+        return actual && Number(estado.cantidad ?? actual.cantidad) === actual.cantidad;
+      })
       : [];
     return { ...item, itemsListos, estadoCocina: estadoPreparacion(item, ultimos.get(String(item.pedidoId))) };
   }));
@@ -78,9 +81,12 @@ router.put('/:pedidoId/items/:pedidoItemId/listo', wrap(async (req, res) => {
         }
         const anterior = await tx.preparacionCocina.findUnique({ where: { pedidoId } });
         const productos = pedido.items.map((item) => `${item.cantidad}x ${item.producto?.nombre || ''}`).join(', ');
-        const idsActuales = new Set(pedido.items.map((item) => item.id));
+        const itemsActuales = new Map(pedido.items.map((item) => [item.id, item]));
         const previos = anterior?.productos === productos && Array.isArray(anterior.itemsListos)
-          ? anterior.itemsListos.filter((estado) => idsActuales.has(Number(estado.pedidoItemId)))
+          ? anterior.itemsListos.filter((estado) => {
+            const actual = itemsActuales.get(Number(estado.pedidoItemId));
+            return actual && Number(estado.cantidad ?? actual.cantidad) === actual.cantidad;
+          })
           : [];
         if (previos.some((estado) => Number(estado.pedidoItemId) === pedidoItemId)) {
           throw Object.assign(new Error('Este plato ya está marcado como listo'), { status: 409 });
@@ -91,6 +97,7 @@ router.put('/:pedidoId/items/:pedidoItemId/listo', wrap(async (req, res) => {
         const fechaListoItem = new Date();
         const itemsListos = [...previos, {
           pedidoItemId,
+          cantidad: pedidoItem.cantidad,
           fechaListo: fechaListoItem.toISOString(),
           cocineroId: responsableId,
           cocinero: cocinero?.nombre || '',

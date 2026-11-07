@@ -4,7 +4,7 @@ import { Icon } from '../icons.jsx';
 import { useAuth, useToast } from '../App.jsx';
 import { PageHeader, Modal, Button } from '../components/ui/index.jsx';
 
-const uVacio = { nombre: '', usuario: '', correo: '', password: '', roles: [], centrosOperacionCodigos: [], activo: true };
+const uVacio = { nombre: '', usuario: '', correo: '', password: '', roles: [], centrosOperacionCodigos: [], mesaIds: [], activo: true };
 
 const resumirCentros = (centros) => {
   const grupos = new Map();
@@ -26,6 +26,7 @@ export default function Usuarios() {
   const [usuarios, setUsuarios] = useState([]);
   const [roles, setRoles] = useState([]);
   const [centrosOperacion, setCentrosOperacion] = useState([]);
+  const [mesas, setMesas] = useState([]);
   const [uForm, setUForm] = useState(uVacio);
   const [editId, setEditId] = useState(null);
   const [modalUsuario, setModalUsuario] = useState(false);
@@ -33,14 +34,16 @@ export default function Usuarios() {
 
   const cargar = async () => {
     try {
-      const [us, rs, centros] = await Promise.all([
+      const [us, rs, centros, mesasDisponibles] = await Promise.all([
         api.get('/usuarios'),
         api.get('/roles'),
         api.get('/centros-operaciones'),
+        esAdmin ? api.get('/mesas') : Promise.resolve([]),
       ]);
       setUsuarios(us);
       setRoles(rs);
       setCentrosOperacion(centros);
+      setMesas(mesasDisponibles.filter((mesa) => !mesa.esFantasma));
     } catch (e) {
       notify(e.message, 'err');
     }
@@ -48,10 +51,14 @@ export default function Usuarios() {
   useEffect(() => { cargar(); }, []);
 
   const toggleRol = (nombre) => {
-    setUForm((f) => ({
-      ...f,
-      roles: f.roles.includes(nombre) ? f.roles.filter((r) => r !== nombre) : [...f.roles, nombre],
-    }));
+    setUForm((f) => {
+      const quitar = f.roles.includes(nombre);
+      return {
+        ...f,
+        roles: quitar ? f.roles.filter((r) => r !== nombre) : [...f.roles, nombre],
+        ...(nombre === 'MESERO' && quitar && { mesaIds: [] }),
+      };
+    });
   };
 
   const editarUsuario = (u) => {
@@ -63,6 +70,7 @@ export default function Usuarios() {
       password: '',
       roles: u.roles || [],
       centrosOperacionCodigos: (u.centrosOperacion || []).filter((centro) => centro.estado === 'Activo').map((centro) => centro.codigo),
+      mesaIds: (u.mesasAsignadas || []).map((mesa) => mesa.id),
       activo: u.activo,
     });
     setModalUsuario(true);
@@ -79,6 +87,7 @@ export default function Usuarios() {
   const guardarUsuario = async (e) => {
     e.preventDefault();
     if (!uForm.centrosOperacionCodigos.length) return notify('Asigna al menos un centro de operaciones', 'err');
+    if (uForm.roles.includes('MESERO') && !uForm.mesaIds.length) return notify('Asigna al menos una mesa a este mesero', 'err');
     try {
       if (editId) {
         const payload = { ...uForm };
@@ -120,6 +129,11 @@ export default function Usuarios() {
     };
   });
 
+  const alternarMesa = (id) => setUForm((form) => ({
+    ...form,
+    mesaIds: form.mesaIds.includes(id) ? form.mesaIds.filter((actual) => actual !== id) : [...form.mesaIds, id],
+  }));
+
   const alternarActivo = async (u) => {
     try {
       await api.put(`/usuarios/${u.id}`, { activo: !u.activo });
@@ -160,7 +174,7 @@ export default function Usuarios() {
           <h3 style={{ marginTop: 0 }}>Usuarios del sistema</h3>
           <table>
             <thead>
-              <tr><th>Nombre</th><th>Usuario</th><th>Correo</th><th>Roles</th><th>Compañías / centros</th><th>Estado</th><th></th></tr>
+              <tr><th>Nombre</th><th>Usuario</th><th>Correo</th><th>Roles</th><th>Compañías / centros</th><th>Mesas</th><th>Estado</th><th></th></tr>
             </thead>
             <tbody>
               {usuarios.map((u) => (
@@ -171,6 +185,13 @@ export default function Usuarios() {
                   <td>
                     {(u.roles || []).map((r) => <span key={r} className="badge blue" style={{ marginRight: 4 }}>{r}</span>)}
                     {(!u.roles || u.roles.length === 0) && <span className="mini">—</span>}
+                  </td>
+                  <td>
+                    {u.mesasAsignadas?.length ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 180 }}>
+                        {u.mesasAsignadas.map((mesa) => <span key={mesa.id} className="badge blue">{mesa.numero}</span>)}
+                      </div>
+                    ) : <span className="mini">—</span>}
                   </td>
                   <td>
                     {u.centrosOperacion?.length ? (
@@ -200,7 +221,7 @@ export default function Usuarios() {
                   </td>
                 </tr>
               ))}
-              {usuarios.length === 0 && <tr><td colSpan={7} className="empty">Sin usuarios.</td></tr>}
+              {usuarios.length === 0 && <tr><td colSpan={8} className="empty">Sin usuarios.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -257,6 +278,25 @@ export default function Usuarios() {
                 {roles.length === 0 && <span className="mini">Sin roles definidos.</span>}
               </div>
             </div>
+            {uForm.roles.includes('MESERO') && (
+              <div className="field">
+                <label>Mesas asignadas <span className="mini">(obligatorio para meseros)</span></label>
+                {mesas.length === 0 ? <p className="empty">No hay mesas normales disponibles.</p> : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
+                    {mesas.map((mesa) => {
+                      const propietario = usuarios.find((actual) => actual.id !== editId
+                        && actual.mesasAsignadas?.some((asignada) => asignada.id === mesa.id));
+                      return (
+                        <label key={mesa.id} className="mini" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', alignItems: 'start', gap: 6, border: '1px solid var(--border)', borderRadius: 6, padding: 8 }}>
+                          <input type="checkbox" checked={uForm.mesaIds.includes(mesa.id)} onChange={() => alternarMesa(mesa.id)} />
+                          <span>Mesa {mesa.numero}{propietario && <small style={{ display: 'block', color: 'var(--muted)' }}>Asignada a {propietario.nombre}; se reasignará al guardar</small>}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="field">
               <label>Compañías y centros permitidos <span className="mini">(obligatorio)</span></label>
               <div style={{ display: 'grid', gap: 10 }}>

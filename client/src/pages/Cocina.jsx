@@ -160,11 +160,12 @@ export default function Cocina() {
               {p.mesera?.nombre && <div className="mini" style={{ opacity: .8 }}>{p.mesera.nombre}</div>}
               <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
                 {p.items.map((it) => {
-                  const listo = (preparaciones[p.id]?.itemsListos || []).some((estado) => Number(estado.pedidoItemId) === it.id);
+                  const listo = (preparaciones[p.id]?.itemsListos || []).some((estado) => Number(estado.pedidoItemId) === it.id
+                    && Number(estado.cantidad ?? it.cantidad) === it.cantidad);
                   return (
                   <li key={it.id} style={{ marginBottom: 6, listStyle: 'none', marginLeft: -18 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <strong>{it.cantidad}x {it.producto?.nombre}</strong>
+                      <strong>{it.cantidad}x {it.producto?.nombre} {it.cantidadMesa00 > 0 && <span className="badge blue">Mesa 00 ×{it.cantidadMesa00}</span>}</strong>
                       <Button
                         size="sm"
                         variant={listo ? 'success' : 'ghost'}

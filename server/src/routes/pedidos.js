@@ -4,8 +4,9 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { calcularInsumosRequeridos, validarStockSuficiente, descontarInsumos, revertirInsumos } from '../inventarioKits.js';
 import { imprimirComandaPorEstacion } from '../impresionCocina.js';
-import { conEventoPedido, registrarEventoPedido, validarMotivoCancelacion } from '../historialPedidos.js';
+import { conEventoPedido, registrarEventoPedido, validarAccesoMesaMesero, validarMotivoCancelacion } from '../historialPedidos.js';
 import { consultarEntregaPedido, registrarResultadoCocinaTransaccion } from '../historialCocina.js';
+import { descontarStockMesa00, devolverStockMesa00, itemsDeInventarioNormal } from '../stockMesa00.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -78,6 +79,27 @@ async function sincronizarCocina(tx, pedidoId, { soloNuevosItems } = {}) {
   });
   if (!pedido) return;
 
+  const preparacionAnterior = await tx.preparacionCocina.findUnique({ where: { pedidoId } });
+  const itemsActuales = new Map(pedido.items.map((item) => [item.id, item]));
+  const itemsListos = soloNuevosItems && Array.isArray(preparacionAnterior?.itemsListos)
+    ? preparacionAnterior.itemsListos.filter((estado) => {
+      const item = itemsActuales.get(Number(estado.pedidoItemId));
+      return item && Number(estado.cantidad ?? item.cantidad) === item.cantidad;
+    })
+    : [];
+  for (const item of pedido.items) {
+    if (item.cantidadMesa00 < item.cantidad || itemsListos.some((estado) => Number(estado.pedidoItemId) === item.id)) continue;
+    itemsListos.push({
+      pedidoItemId: item.id,
+      cantidad: item.cantidad,
+      fechaListo: new Date().toISOString(),
+      cocineroId: null,
+      cocinero: 'Mesa 00',
+      usuario: 'mesa00',
+      usuarioNombre: 'Mesa 00',
+    });
+  }
+
   if (soloNuevosItems) {
     // Agregar solo las filas que aun no existen en PedidoMesa para este pedido
     const existentes = await tx.pedidoMesa.findMany({ where: { pedidoId }, select: { productoId: true } });
@@ -114,18 +136,24 @@ async function sincronizarCocina(tx, pedidoId, { soloNuevosItems } = {}) {
   }
 
   const resumen = pedido.items.map((it) => `${it.cantidad}x ${it.producto?.nombre || ''}`).join(', ');
+  const listo = pedido.items.length > 0 && itemsListos.length === pedido.items.length;
   await tx.preparacionCocina.upsert({
     where: { pedidoId },
-    create: { pedidoId, mesaId: pedido.mesaId, productos: resumen, listo: false },
-    update: { productos: resumen, listo: false, fechaListo: null },
+    create: { pedidoId, mesaId: pedido.mesaId, productos: resumen, itemsListos, listo, fechaListo: listo ? new Date() : null },
+    update: { productos: resumen, itemsListos, listo, fechaListo: listo ? new Date() : null },
   });
 }
 
 // Listar pedidos (filtro opcional ?estado=ABIERTO)
 router.get('/', wrap(async (req, res) => {
   const { estado } = req.query;
+  const where = estado ? { estado } : {};
+  if (req.usuario?.roles?.includes('MESERO') && !req.usuario.roles.includes('ADMIN')) {
+    const mesasAsignadas = await prisma.mesa.findMany({ where: { esFantasma: false, usuarioAsignadoId: req.usuario.id }, select: { id: true } });
+    where.mesaId = { in: mesasAsignadas.map((mesa) => mesa.id) };
+  }
   const pedidos = await prisma.pedido.findMany({
-    where: estado ? { estado } : undefined,
+    where: Object.keys(where).length ? where : undefined,
     include: pedidoInclude,
     orderBy: { createdAt: 'desc' },
   });
@@ -167,11 +195,16 @@ router.get('/:id', wrap(async (req, res) => {
     include: pedidoInclude,
   });
   if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
+  await validarAccesoMesaMesero(prisma, req.usuario, pedido.mesaId);
   res.json(pedido);
 }));
 
 router.get('/:id/entrega', exigirPermiso('pedidos.ver'), wrap(async (req, res) => {
-  res.json(await consultarEntregaPedido(prisma, Number(req.params.id)));
+  const pedidoId = Number(req.params.id);
+  const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: { mesaId: true } });
+  if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
+  await validarAccesoMesaMesero(prisma, req.usuario, pedido.mesaId);
+  res.json(await consultarEntregaPedido(prisma, pedidoId));
 }));
 
 router.post('/:id/entregar', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
@@ -204,8 +237,16 @@ router.post('/', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
   const validacion = normalizarCantidades(items, productos);
   if (validacion.error) return res.status(400).json({ error: validacion.error });
   const itemsNorm = validacion.items;
+  for (const item of itemsNorm) {
+    const cantidadMesa00 = Number(item.cantidadMesa00 ?? 0);
+    if (!Number.isSafeInteger(cantidadMesa00) || cantidadMesa00 < 0 || cantidadMesa00 > item.cantidad) {
+      return res.status(400).json({ error: 'La cantidad tomada de Mesa 00 debe ser un entero dentro de la cantidad del producto' });
+    }
+    item.cantidadMesa00 = cantidadMesa00;
+  }
   const precioDe = (id) => productos.find((p) => p.id === String(id))?.precio ?? 0;
-  const requeridos = calcularInsumosRequeridos(itemsNorm, productos);
+  const itemsInventario = itemsDeInventarioNormal(itemsNorm);
+  const requeridos = itemsInventario.length ? calcularInsumosRequeridos(itemsInventario, productos) : new Map();
 
   let pedido;
   try {
@@ -215,15 +256,21 @@ router.post('/', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
         select: {
           id: true,
           numero: true,
+          esFantasma: true,
           estado: true,
           reservaClienteId: true,
           reservaCliente: { select: { nombre: true, razonSocial: true } },
         },
       });
       if (!mesa) throw Object.assign(new Error('Mesa no encontrada'), { status: 404 });
+      if (mesa.esFantasma) throw Object.assign(new Error('La mesa 00 almacena existencias y no recibe pedidos facturables'), { status: 400 });
+      await validarAccesoMesaMesero(tx, req.usuario, mesa.id);
       if (mesa.estado === 'OCUPADA') throw Object.assign(new Error(`La mesa ${mesa.numero} ya está ocupada`), { status: 409 });
       const pedidoAbierto = await tx.pedido.findFirst({ where: { mesaId: Number(mesaId), estado: 'ABIERTO' }, select: { id: true } });
       if (pedidoAbierto) throw Object.assign(new Error(`La mesa ${mesa.numero} ya tiene un pedido abierto`), { status: 409 });
+      for (const item of itemsNorm.filter((linea) => linea.cantidadMesa00 > 0)) {
+        await descontarStockMesa00(tx, item.productoId, item.cantidadMesa00);
+      }
       await validarStockSuficiente(tx, requeridos);
       const responsable = await tx.mesera.upsert({
         where: { codigo: `usuario:${req.usuario.id}` },
@@ -242,6 +289,7 @@ router.post('/', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
             create: itemsNorm.map((item) => ({
               productoId: item.productoId,
               cantidad: item.cantidad,
+              cantidadMesa00: item.cantidadMesa00,
               precioUnit: precioDe(item.productoId),
               notas: item.notas || null,
             })),
@@ -455,16 +503,24 @@ router.post('/:id/items', exigirPermiso('pedidos.editar'), wrap(async (req, res)
   if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
 
   const cant = Number(cantidad) || 1;
-  const requeridos = calcularInsumosRequeridos([{ productoId: String(productoId), cantidad: cant }], [producto]);
+  const cantidadMesa00 = Number(req.body?.cantidadMesa00 ?? 0);
+  if (!Number.isSafeInteger(cantidadMesa00) || cantidadMesa00 < 0 || cantidadMesa00 > cant) {
+    return res.status(400).json({ error: 'La cantidad tomada de Mesa 00 debe ser un entero dentro de la cantidad agregada' });
+  }
+  const cantidadInventario = cant - cantidadMesa00;
+  const requeridos = cantidadInventario > 0
+    ? calcularInsumosRequeridos([{ productoId: String(productoId), cantidad: cantidadInventario }], [producto])
+    : new Map();
 
   try {
     await prisma.$transaction(async (tx) => conEventoPedido(tx, req, pedidoId, 'AGREGAR_PRODUCTO', async () => {
       const pedido = await tx.pedido.findUnique({ where: { id: pedidoId }, select: { inventarioDescontado: true } });
       if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
+      if (cantidadMesa00 > 0) await descontarStockMesa00(tx, String(productoId), cantidadMesa00);
       await validarStockSuficiente(tx, requeridos);
-      const existente = await tx.pedidoItem.findFirst({
-        where: { pedidoId, productoId: String(productoId) },
-      });
+      const existente = cantidadMesa00 === 0 ? await tx.pedidoItem.findFirst({
+        where: { pedidoId, productoId: String(productoId), cantidadMesa00: 0 },
+      }) : null;
       if (existente) {
         await tx.pedidoItem.update({
           where: { id: existente.id },
@@ -476,12 +532,13 @@ router.post('/:id/items', exigirPermiso('pedidos.editar'), wrap(async (req, res)
             pedidoId,
             productoId: String(productoId),
             cantidad: cant,
+            cantidadMesa00,
             precioUnit: producto.precio,
             notas: notas || null,
           },
         });
       }
-      if (pedido.inventarioDescontado) {
+      if (pedido.inventarioDescontado && cantidadInventario > 0) {
         await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${pedidoId}` });
       }
       await sincronizarCocina(tx, pedidoId, { soloNuevosItems: true });
@@ -507,21 +564,34 @@ router.put('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async (re
         include: { producto: { include: { componentes: true } }, pedido: { select: { inventarioDescontado: true } } },
       });
       if (!actual) throw Object.assign(new Error('Item no encontrado en este pedido'), { status: 404 });
-      const diferencia = (cant && cant > 0 ? cant : 0) - actual.cantidad;
-      if (diferencia > 0) {
-        const requeridos = calcularInsumosRequeridos([{ productoId: actual.productoId, cantidad: diferencia }], [actual.producto]);
+      const solicitudesPendientes = await tx.solicitudMovimientoMesa00.aggregate({
+        where: { pedidoId, pedidoItemId: itemId, estado: 'PENDIENTE' },
+        _sum: { cantidad: true },
+      });
+      if (Math.max(0, cant || 0) < (solicitudesPendientes._sum.cantidad || 0)) {
+        throw Object.assign(new Error('La cantidad debe cubrir las solicitudes pendientes de Mesa 00'), { status: 409 });
+      }
+      const cantidadMesa00Actual = Number(actual.cantidadMesa00) || 0;
+      const cantidadMesa00Restante = Math.min(cantidadMesa00Actual, Math.max(0, cant || 0));
+      const cantidadMesa00Devuelta = cantidadMesa00Actual - cantidadMesa00Restante;
+      if (cantidadMesa00Devuelta > 0) await devolverStockMesa00(tx, actual.productoId, cantidadMesa00Devuelta);
+      const inventarioActual = actual.cantidad - cantidadMesa00Actual;
+      const inventarioNuevo = Math.max(0, cant || 0) - cantidadMesa00Restante;
+      const diferenciaInventario = inventarioNuevo - inventarioActual;
+      if (diferenciaInventario > 0) {
+        const requeridos = calcularInsumosRequeridos([{ productoId: actual.productoId, cantidad: diferenciaInventario }], [actual.producto]);
         await validarStockSuficiente(tx, requeridos);
         if (actual.pedido.inventarioDescontado) {
           await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${actual.pedidoId}` });
         }
-      } else if (diferencia < 0 && actual.pedido.inventarioDescontado) {
-        const requeridos = calcularInsumosRequeridos([{ productoId: actual.productoId, cantidad: -diferencia }], [actual.producto]);
+      } else if (diferenciaInventario < 0 && actual.pedido.inventarioDescontado) {
+        const requeridos = calcularInsumosRequeridos([{ productoId: actual.productoId, cantidad: -diferenciaInventario }], [actual.producto]);
         await revertirInsumos(tx, requeridos, { documentoReferencia: `Pedido #${actual.pedidoId}` });
       }
       if (!cant || cant <= 0) {
         await tx.pedidoItem.delete({ where: { id: itemId } });
       } else {
-        await tx.pedidoItem.update({ where: { id: itemId }, data: { cantidad: cant } });
+        await tx.pedidoItem.update({ where: { id: itemId }, data: { cantidad: cant, cantidadMesa00: cantidadMesa00Restante } });
       }
     }));
   } catch (e) {
@@ -541,7 +611,11 @@ router.delete('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async 
       include: { producto: { include: { componentes: true } }, pedido: { select: { inventarioDescontado: true } } },
     });
     if (!actual) throw Object.assign(new Error('Item no encontrado en este pedido'), { status: 404 });
-    const requeridos = calcularInsumosRequeridos([{ productoId: actual.productoId, cantidad: actual.cantidad }], [actual.producto]);
+    const pendientes = await tx.solicitudMovimientoMesa00.count({ where: { pedidoId, pedidoItemId: itemId, estado: 'PENDIENTE' } });
+    if (pendientes) throw Object.assign(new Error('Resuelve primero la solicitud pendiente de Mesa 00'), { status: 409 });
+    const cantidadMesa00 = Number(actual.cantidadMesa00) || 0;
+    if (cantidadMesa00 > 0) await devolverStockMesa00(tx, actual.productoId, cantidadMesa00);
+    const requeridos = calcularInsumosRequeridos(itemsDeInventarioNormal([actual]), [actual.producto]);
     if (actual.pedido.inventarioDescontado) {
       await revertirInsumos(tx, requeridos, { documentoReferencia: `Pedido #${actual.pedidoId}` });
     }
@@ -606,6 +680,8 @@ router.post('/:id/cambiar-mesa', exigirPermiso('mesas.editar'), wrap(async (req,
     await tx.$queryRaw`SELECT "id" FROM "Mesa" WHERE "id" = ${nuevaMesaId} FOR UPDATE`;
     const destino = await tx.mesa.findUnique({ where: { id: nuevaMesaId } });
     if (!destino) throw Object.assign(new Error('Mesa destino no encontrada'), { status: 404 });
+    if (destino.esFantasma) throw Object.assign(new Error('La mesa 00 solo recibe traslados aprobados por un administrador'), { status: 400 });
+    await validarAccesoMesaMesero(tx, req.usuario, destino.id);
     if (destino.estado !== 'LIBRE') throw Object.assign(new Error(`La mesa ${destino.numero} no está disponible`), { status: 409 });
     const ocupada = await tx.pedido.findFirst({ where: { mesaId: nuevaMesaId, estado: 'ABIERTO' } });
     if (ocupada) throw Object.assign(new Error(`La mesa ${destino.numero} ya tiene un pedido abierto`), { status: 409 });
@@ -628,14 +704,19 @@ router.post('/:id/cancelar', exigirPermiso('pedidos.eliminar'), wrap(async (req,
   const id = Number(req.params.id);
   const motivo = validarMotivoCancelacion(req.body?.motivo);
   const pedido = await prisma.$transaction(async (tx) => conEventoPedido(tx, req, id, 'CANCELAR', async () => {
+    const pendientes = await tx.solicitudMovimientoMesa00.count({ where: { pedidoId: id, estado: 'PENDIENTE' } });
+    if (pendientes) throw Object.assign(new Error('Resuelve primero las solicitudes pendientes de Mesa 00'), { status: 409 });
     const actual = await tx.pedido.findUnique({
       where: { id },
       include: { items: { include: { producto: { include: { componentes: true } } } } },
     });
-    const itemsNorm = actual.items.map((it) => ({ productoId: it.productoId, cantidad: it.cantidad }));
+    const itemsNorm = itemsDeInventarioNormal(actual.items);
     const requeridos = calcularInsumosRequeridos(itemsNorm, actual.items.map((it) => it.producto));
     if (actual.inventarioDescontado) {
       await revertirInsumos(tx, requeridos, { documentoReferencia: `Pedido #${id} (cancelado)` });
+    }
+    for (const item of actual.items) {
+      if (Number(item.cantidadMesa00) > 0) await devolverStockMesa00(tx, item.productoId, Number(item.cantidadMesa00));
     }
     const p = await tx.pedido.update({ where: { id }, data: { estado: 'CANCELADO' } });
     if (p.mesaId) await tx.mesa.update({ where: { id: p.mesaId }, data: { estado: 'LIBRE' } });

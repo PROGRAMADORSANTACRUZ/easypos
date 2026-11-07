@@ -8,6 +8,7 @@ process.env.JWT_SECRET ||= 'prueba-pedidos-usuario';
 process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:1/test';
 const { default: pedidosRouter } = await import('../src/routes/pedidos.js');
 const { tenantStorage } = await import('../src/prisma.js');
+const { default: mesasRouter } = await import('../src/routes/mesas.js');
 const { filtroHistorialPedidos, estadoActualPedido } = await import('../src/historialPedidos.js');
 const { default: reportesRouter } = await import('../src/routes/reportes.js');
 const { permisoPorMetodo } = await import('../src/middleware/auth.js');
@@ -19,6 +20,23 @@ test('el estado actual prioriza cancelado y facturado sobre el plato listo de co
   assert.equal(estadoActualPedido({ estado: 'CANCELADO', preparacion: { listo: true } }), 'CANCELADO');
   assert.equal(estadoActualPedido({ estado: 'ABIERTO', preparacion: { listo: false } }), 'EN_COCINA');
   assert.equal(estadoActualPedido({ estado: 'ABIERTO', preparacion: null }), 'PENDIENTE');
+});
+
+test('cada mesero solo lista y opera las mesas asignadas', async (t) => {
+  const { crear, solicitar } = await entorno(t, {
+    mesasAsignadas: { 1: 'usuario-mesero-1', 2: 'usuario-mesero-2' },
+  });
+  await crear({}, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' });
+  await crear({ mesaId: 2 }, { 'x-test-user': 'usuario-mesero-2', 'x-test-role': 'MESERO' });
+
+  const primera = await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' });
+  const segunda = await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-mesero-2', 'x-test-role': 'MESERO' });
+  assert.deepEqual(primera.body.map((mesa) => mesa.numero), [1]);
+  assert.deepEqual(segunda.body.map((mesa) => mesa.numero), [2]);
+
+  assert.equal((await solicitar('GET', '/pedidos/2', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).status, 403);
+  const pedidoAjeno = await crear({ mesaId: 2 }, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' });
+  assert.equal(pedidoAjeno.status, 403);
 });
 
 test('el filtro del historial incluye dias completos de Colombia y busca el motivo sin distinguir mayusculas', () => {
@@ -56,8 +74,9 @@ test('el historial SQL conserva eventos, exige motivo y rechaza modificar o borr
   } finally { await db.close(); }
 });
 
-async function entorno(t, { ocupada = false, reportes = true, cocina = true } = {}) {
+async function entorno(t, { ocupada = false, reportes = true, cocina = true, mesa00Stock = 0, mesasAsignadas = {} } = {}) {
   const responsables = new Map();
+  const propietariosMesa = new Map(Object.entries(mesasAsignadas).map(([mesaId, usuarioId]) => [Number(mesaId), usuarioId]));
   const pedidos = [];
   const movimientos = [];
   const eventos = [];
@@ -65,10 +84,13 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true } = 
   let actual;
   let falloHistorial = false;
   const producto = { id: 'producto-prueba', nombre: 'Producto', precio: 8000, componentes: [], unidad: null };
+  const stockFantasma = new Map(mesa00Stock > 0 ? [[producto.id, { productoId: producto.id, cantidad: mesa00Stock }]] : []);
   const db = {
     producto: { findMany: async () => [producto], findUnique: async () => producto },
     mesa: {
-      findUnique: async ({ where }) => ({ id: where.id, numero: where.id, estado: ocupada ? 'OCUPADA' : 'LIBRE' }),
+      findUnique: async ({ where }) => ({ id: where.id, numero: where.id, esFantasma: where.id === 99, usuarioAsignadoId: propietariosMesa.get(where.id) || null, estado: ocupada ? 'OCUPADA' : 'LIBRE' }),
+      findMany: async ({ where }) => [...propietariosMesa].filter(([id, usuarioId]) => where.usuarioAsignadoId === undefined || usuarioId === where.usuarioAsignadoId).map(([id, usuarioAsignadoId]) => ({ id, numero: id, usuarioAsignadoId, esFantasma: false })),
+      count: async ({ where }) => where.usuarioAsignadoId?.not === null ? propietariosMesa.size : 0,
       update: async () => ({}),
     },
     mesera: {
@@ -81,6 +103,8 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true } = 
     },
     pedido: {
       findFirst: async () => null,
+      findMany: async ({ where }) => pedidos.filter((item) => (!where?.estado || item.estado === where.estado)
+        && (!where?.mesaId?.in || where.mesaId.in.includes(item.mesaId))),
       create: async ({ data }) => {
         actual = {
           ...data,
@@ -92,7 +116,7 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true } = 
         pedidos.push(actual);
         return actual;
       },
-      findUnique: async ({ where }) => actual?.id === where.id ? actual : null,
+      findUnique: async ({ where }) => pedidos.find((item) => item.id === where.id) || null,
       update: async ({ data }) => Object.assign(actual, data),
     },
     pedidoItem: {
@@ -104,10 +128,19 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true } = 
       },
       update: async ({ where, data }) => {
         const item = actual.items.find((linea) => linea.id === where.id);
-        item.cantidad = typeof data.cantidad === 'object' ? item.cantidad + data.cantidad.increment : data.cantidad;
+        for (const [campo, valor] of Object.entries(data)) {
+          item[campo] = valor && typeof valor === 'object' && 'increment' in valor
+            ? Number(item[campo] || 0) + valor.increment
+            : valor;
+        }
         return item;
       },
       delete: async ({ where }) => { actual.items = actual.items.filter((linea) => linea.id !== where.id); },
+      create: async ({ data }) => {
+        const linea = { ...data, id: Math.max(0, ...actual.items.map((item) => item.id)) + 1, producto };
+        actual.items.push(linea);
+        return linea;
+      },
     },
     pedidoMesa: {
       create: async ({ data }) => { movimientos.push(data); return data; },
@@ -127,6 +160,10 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true } = 
         && (!where.motivo || (evento.motivo || '').toLowerCase().includes(where.motivo.contains.toLowerCase()))
       )).toReversed().map((evento) => ({ ...evento, pedido: evento.pedido || (actual?.id === evento.pedidoId ? actual : null) })),
     },
+    solicitudMovimientoMesa00: {
+      aggregate: async () => ({ _sum: { cantidad: 0 } }),
+      count: async () => 0,
+    },
     preparacionCocina: {
       findUnique: async () => actual?.preparacion || null,
       upsert: async ({ create, update }) => {
@@ -137,6 +174,22 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true } = 
         if (actual.preparacion) Object.assign(actual.preparacion, data);
         return { count: 1 };
       },
+    },
+    stockMesa00: {
+      findUnique: async ({ where }) => stockFantasma.get(where.productoId) || null,
+      findMany: async () => [...stockFantasma.values()],
+      update: async ({ where, data }) => Object.assign(stockFantasma.get(where.productoId), data),
+      delete: async ({ where }) => stockFantasma.delete(where.productoId),
+      upsert: async ({ where, create, update }) => {
+        const actualStock = stockFantasma.get(where.productoId);
+        if (actualStock) actualStock.cantidad += update.cantidad.increment;
+        else stockFantasma.set(where.productoId, create);
+        return stockFantasma.get(where.productoId);
+      },
+    },
+    solicitudMovimientoMesa00: {
+      aggregate: async () => ({ _sum: { cantidad: 0 } }),
+      count: async () => 0,
     },
     cocinero: { findUnique: async ({ where }) => ({ id: where.id, nombre: 'Cocinero prueba', activo: true }) },
     auditoria: {
@@ -158,6 +211,7 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true } = 
       try { return await trabajo(db); } catch (error) {
         actual = anterior;
         pedidos.splice(0, pedidos.length, ...pedidosAntes);
+        actual = pedidos.find((pedido) => pedido.id === anterior?.id) || pedidos.at(-1);
         eventos.length = eventosAntes;
         movimientos.length = movimientosAntes;
         auditorias.length = auditoriasAntes;
@@ -175,18 +229,20 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true } = 
       nombre: req.header('x-test-name') || 'Mesero uno',
       usuario: req.header('x-test-user') || 'mesero1',
       permisos: ['pedidos.ver', 'pedidos.crear', 'pedidos.editar', 'pedidos.eliminar', 'pedidos.observaciones', 'mesas.editar', ...(reportes ? ['reportes.ver'] : []), ...(cocina ? ['cocina.ver'] : [])],
+      roles: req.header('x-test-role') ? [req.header('x-test-role')] : [],
     };
     tenantStorage.run(db, next);
   });
   app.use('/pedidos', pedidosRouter);
+  app.use('/mesas', mesasRouter);
   app.use('/reportes', permisoPorMetodo('reportes'), reportesRouter);
   app.use('/preparacion-cocina', preparacionRouter);
-  app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: error.message }));
+  app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: error.message, stack: error.stack }));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const solicitar = async (method, ruta, datos, headers = {}) => {
-    const path = ruta.startsWith('/reportes/') || ruta.startsWith('/preparacion-cocina/') ? ruta : `/pedidos${ruta}`;
+    const path = ruta.startsWith('/reportes/') || ruta.startsWith('/preparacion-cocina/') || ruta.startsWith('/mesas') || ruta.startsWith('/pedidos') ? ruta : `/pedidos${ruta}`;
     const respuesta = await fetch(`http://127.0.0.1:${server.address().port}${path}`, {
       method,
       headers: { 'Content-Type': 'application/json', ...headers },
@@ -197,7 +253,7 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true } = 
   const crear = (datos = {}, headers = {}) => solicitar('POST', '', {
     mesaId: 1, items: [{ productoId: producto.id, cantidad: 1 }], ...datos,
   }, headers);
-  return { crear, solicitar, pedidos, movimientos, responsables, eventos, auditorias, fallarHistorial: () => { falloHistorial = true; } };
+  return { crear, solicitar, pedidos, movimientos, responsables, eventos, auditorias, stockFantasma, fallarHistorial: () => { falloHistorial = true; } };
 }
 
 test('el pedido y su bitacora se asignan al mesero autenticado sin selector', async (t) => {
@@ -235,6 +291,24 @@ test('no cambia el responsable ni crea movimientos si la mesa ya esta ocupada', 
   assert.equal(pedidos.length, 0);
   assert.equal(movimientos.length, 0);
   assert.equal(responsables.size, 0);
+});
+
+test('cada MESERO ve y opera solo sus mesas asignadas', async (t) => {
+  const { crear, solicitar } = await entorno(t, {
+    mesasAsignadas: { 1: 'usuario-mesero-1', 2: 'usuario-mesero-2' },
+  });
+  assert.equal((await crear({}, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).status, 201);
+  assert.equal((await crear({ mesaId: 2 }, { 'x-test-user': 'usuario-mesero-2', 'x-test-role': 'MESERO' })).status, 201);
+
+  const primera = await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' });
+  const segunda = await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-mesero-2', 'x-test-role': 'MESERO' });
+  assert.deepEqual(primera.body.map((mesa) => mesa.numero), [1]);
+  assert.deepEqual(segunda.body.map((mesa) => mesa.numero), [2]);
+  assert.deepEqual((await solicitar('GET', '/pedidos?estado=ABIERTO', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).body.map((pedido) => pedido.mesaId), [1]);
+  assert.equal((await solicitar('GET', '/pedidos/2', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).status, 403);
+  assert.equal((await crear({ mesaId: 2 }, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).status, 403);
+  assert.deepEqual((await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-sin-mesas', 'x-test-role': 'MESERO' })).body, []);
+  assert.equal((await crear({}, { 'x-test-user': 'usuario-sin-mesas', 'x-test-role': 'MESERO' })).status, 403);
 });
 
 test('registra quien edita y los valores anteriores y posteriores de productos y observaciones', async (t) => {
@@ -344,7 +418,7 @@ test('el reporte muestra el estado actual sin modificar el estado historico del 
 });
 
 test('cocina marca listo y el mesero entrega con fecha, hora y actores separados', async (t) => {
-  const { crear, solicitar, eventos, auditorias } = await entorno(t);
+  const { crear, solicitar, pedidos, eventos, auditorias } = await entorno(t);
   await crear();
   assert.equal((await solicitar('POST', '/1/entregar', {})).status, 409);
   const listo = await solicitar('PUT', '/preparacion-cocina/1/listo', {}, {
@@ -356,7 +430,7 @@ test('cocina marca listo y el mesero entrega con fecha, hora y actores separados
   assert.equal(eventos[1].accion, 'PLATO_LISTO');
   assert.equal(eventos[1].usuarioId, 'usuario-cocina');
   assert.equal(eventos[1].antes.platoListo, false);
-  assert.equal(eventos[1].despues.platoListo, true);
+  assert.equal(eventos[1].despues.platoListo, true, JSON.stringify({ despues: eventos[1].despues, preparacion: pedidos[0].preparacion }));
   assert.equal((await solicitar('PUT', '/preparacion-cocina/1/listo', {})).status, 409);
   assert.equal((await solicitar('GET', '/1/entrega')).body.estadoCocina, 'LISTO');
   const entrega = await solicitar('POST', '/1/entregar', { usuarioId: 'suplantado', fecha: '2000-01-01' }, {
@@ -434,4 +508,61 @@ test('cocina marca cada plato y completa la comanda solo al confirmar todos', as
     JSON.stringify({ pedidoItemId: 1, accion: 'PLATO_ITEM_LISTO' }),
     JSON.stringify({ pedidoItemId: 2, accion: 'PLATO_ITEM_LISTO' }),
   ]);
+});
+
+test('tomar 2 de 3 unidades de Mesa00 agrega la línea y deja 1 disponible en un pedido abierto', async (t) => {
+  const { crear, solicitar, pedidos, stockFantasma } = await entorno(t, { mesa00Stock: 3 });
+  await crear();
+  const respuesta = await solicitar('POST', '/1/items', { productoId: 'producto-prueba', cantidad: 2, cantidadMesa00: 2 });
+  assert.equal(respuesta.status, 201);
+  assert.equal(pedidos[0].items.at(-1).cantidad, 2);
+  assert.equal(pedidos[0].items.at(-1).cantidadMesa00, 2);
+  assert.equal(stockFantasma.get('producto-prueba').cantidad, 1);
+});
+
+test('tomar Mesa00 al crear un pedido reserva solo la cantidad pedida y resta el saldo', async (t) => {
+  const { crear, pedidos, stockFantasma } = await entorno(t, { mesa00Stock: 3 });
+  const respuesta = await crear({ items: [{ productoId: 'producto-prueba', cantidad: 2, cantidadMesa00: 2 }] });
+  assert.equal(respuesta.status, 201);
+  assert.equal(pedidos[0].items[0].cantidadMesa00, 2);
+  assert.equal(stockFantasma.get('producto-prueba').cantidad, 1);
+  assert.equal(pedidos[0].preparacion.listo, true);
+  assert.equal(pedidos[0].preparacion.itemsListos[0].usuarioNombre, 'Mesa 00');
+});
+
+test('una línea mixta de Mesa00 y menú normal queda pendiente de cocina', async (t) => {
+  const { crear, pedidos, stockFantasma } = await entorno(t, { mesa00Stock: 2 });
+  const respuesta = await crear({ items: [{ productoId: 'producto-prueba', cantidad: 3, cantidadMesa00: 2 }] });
+  assert.equal(respuesta.status, 201);
+  assert.equal(pedidos[0].preparacion.listo, false);
+  assert.deepEqual(pedidos[0].preparacion.itemsListos, []);
+  assert.equal(stockFantasma.has('producto-prueba'), false);
+});
+
+test('editar o eliminar una línea devuelve solo sus unidades de origen Mesa00', async (t) => {
+  const { crear, solicitar, pedidos, stockFantasma } = await entorno(t, { mesa00Stock: 3 });
+  await crear({ items: [{ productoId: 'producto-prueba', cantidad: 3, cantidadMesa00: 3 }] });
+  assert.equal(stockFantasma.has('producto-prueba'), false);
+  assert.equal((await solicitar('PUT', '/1/items/1', { cantidad: 2 })).status, 200);
+  assert.equal(pedidos[0].items[0].cantidadMesa00, 2);
+  assert.equal(stockFantasma.get('producto-prueba').cantidad, 1);
+  assert.equal((await solicitar('DELETE', '/1/items/1')).status, 200);
+  assert.equal(stockFantasma.get('producto-prueba').cantidad, 3);
+});
+
+test('cancelar un pedido devuelve a Mesa00 las unidades sugeridas que aún no se facturan', async (t) => {
+  const { crear, solicitar, stockFantasma } = await entorno(t, { mesa00Stock: 2 });
+  await crear({ items: [{ productoId: 'producto-prueba', cantidad: 2, cantidadMesa00: 2 }] });
+  const cancelado = await solicitar('POST', '/1/cancelar', { motivo: 'Cliente ya no lo desea' });
+  assert.equal(cancelado.status, 200);
+  assert.equal(stockFantasma.get('producto-prueba').cantidad, 2);
+});
+
+test('rechaza pedidos normales dirigidos manualmente a la mesa fantasma', async (t) => {
+  const { crear, pedidos, movimientos } = await entorno(t);
+  const respuesta = await crear({ mesaId: 99 });
+  assert.equal(respuesta.status, 400);
+  assert.match(respuesta.body.error, /no recibe pedidos facturables/);
+  assert.equal(pedidos.length, 0);
+  assert.equal(movimientos.length, 0);
 });

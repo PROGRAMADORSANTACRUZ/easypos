@@ -116,6 +116,7 @@ router.get('/', wrap(async (_req, res) => {
     include: {
       roles: { include: { rol: true } },
       centrosOperacion: { include: { centroOperacion: { include: { compania: true } } } },
+      mesasAsignadas: { where: { esFantasma: false }, orderBy: { numero: 'asc' }, select: { id: true, numero: true } },
     },
   });
   res.json(
@@ -123,6 +124,7 @@ router.get('/', wrap(async (_req, res) => {
       ...sinHash(u),
       roles: u.roles.map((ur) => ur.rol.nombre),
       centrosOperacion: u.centrosOperacion.map(({ centroOperacion }) => centroOperacion),
+      mesasAsignadas: u.mesasAsignadas,
     }))
   );
 }));
@@ -145,8 +147,38 @@ async function validarCentrosOperacion(codigos, { obligatorio = false } = {}) {
   return { centros, error: null };
 }
 
+async function validarMesasAsignadas(mesaIds, roles, { requerido = false } = {}) {
+  if (mesaIds === undefined) {
+    if (requerido && roles?.includes('MESERO')) return { ids: [], error: 'Asigna al menos una mesa a este mesero' };
+    return { ids: undefined, error: null };
+  }
+  if (!Array.isArray(mesaIds)) return { ids: [], error: 'La asignación de mesas no es válida' };
+  const ids = [...new Set(mesaIds.map(Number))];
+  if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) return { ids: [], error: 'Selecciona mesas válidas' };
+  if (ids.length && !roles?.includes('MESERO')) return { ids: [], error: 'Las mesas solo se pueden asignar a usuarios con rol MESERO' };
+  if (requerido && roles?.includes('MESERO') && !ids.length) return { ids: [], error: 'Asigna al menos una mesa a este mesero' };
+  if (!ids.length) return { ids, error: null };
+  const mesas = await prisma.mesa.findMany({
+    where: { id: { in: ids }, esFantasma: false },
+    select: { id: true },
+  });
+  if (mesas.length !== ids.length) return { ids: [], error: 'Selecciona mesas existentes; Mesa 00 no se puede asignar' };
+  return { ids, error: null };
+}
+
+async function reemplazarMesasAsignadas(tx, usuarioId, mesaIds) {
+  if (mesaIds === undefined) return;
+  await tx.mesa.updateMany({
+    where: { usuarioAsignadoId: usuarioId, ...(mesaIds.length ? { id: { notIn: mesaIds } } : {}) },
+    data: { usuarioAsignadoId: null },
+  });
+  if (mesaIds.length) {
+    await tx.mesa.updateMany({ where: { id: { in: mesaIds }, esFantasma: false }, data: { usuarioAsignadoId: usuarioId } });
+  }
+}
+
 router.post('/', soloAdmin, wrap(async (req, res) => {
-  const { nombre, usuario, correo, password, roles, centrosOperacionCodigos } = req.body;
+  const { nombre, usuario, correo, password, roles, centrosOperacionCodigos, mesaIds } = req.body;
   if (!nombre || !usuario || !password) {
     return res.status(400).json({ error: 'nombre, usuario y contraseña son requeridos' });
   }
@@ -154,6 +186,8 @@ router.post('/', soloAdmin, wrap(async (req, res) => {
   if (errorPass) return res.status(400).json({ error: errorPass });
   const validacionCentros = await validarCentrosOperacion(centrosOperacionCodigos, { obligatorio: true });
   if (validacionCentros.error) return res.status(400).json({ error: validacionCentros.error });
+  const validacionMesas = await validarMesasAsignadas(mesaIds, roles, { requerido: true });
+  if (validacionMesas.error) return res.status(400).json({ error: validacionMesas.error });
   const existe = await prisma.usuario.findUnique({ where: { usuario } });
   if (existe) return res.status(409).json({ error: 'Ese usuario ya existe' });
   const creado = await prisma.$transaction(async (tx) => {
@@ -164,6 +198,7 @@ router.post('/', soloAdmin, wrap(async (req, res) => {
     await tx.usuarioCentroOperacion.createMany({
       data: validacionCentros.centros.map((centroOperacionCodigo) => ({ usuarioId: nuevoUsuario.id, centroOperacionCodigo })),
     });
+    await reemplazarMesasAsignadas(tx, nuevoUsuario.id, validacionMesas.ids);
     return nuevoUsuario;
   });
   await auditar({ req, accion: 'CREAR', entidad: 'Usuario', entidadId: creado.id, detalle: usuario });
@@ -172,11 +207,18 @@ router.post('/', soloAdmin, wrap(async (req, res) => {
 
 router.put('/:id', soloAdmin, wrap(async (req, res) => {
   const id = req.params.id;
-  const { nombre, usuario, correo, password, activo, roles, centrosOperacionCodigos } = req.body;
+  const { nombre, usuario, correo, password, activo, roles, centrosOperacionCodigos, mesaIds } = req.body;
   const validacionCentros = centrosOperacionCodigos === undefined
     ? { centros: undefined, error: null }
     : await validarCentrosOperacion(centrosOperacionCodigos, { obligatorio: true });
   if (validacionCentros.error) return res.status(400).json({ error: validacionCentros.error });
+  let rolesParaValidar = roles;
+  if (mesaIds !== undefined && !Array.isArray(rolesParaValidar)) {
+    const asignaciones = await prisma.usuarioRol.findMany({ where: { usuarioId: id }, include: { rol: { select: { nombre: true } } } });
+    rolesParaValidar = asignaciones.map((asignacion) => asignacion.rol.nombre);
+  }
+  const validacionMesas = await validarMesasAsignadas(mesaIds, rolesParaValidar, { requerido: rolesParaValidar?.includes('MESERO') });
+  if (validacionMesas.error) return res.status(400).json({ error: validacionMesas.error });
   if (password !== undefined && password !== '') {
     const errorPass = validarPassword(password);
     if (errorPass) return res.status(400).json({ error: errorPass });
@@ -201,6 +243,11 @@ router.put('/:id', soloAdmin, wrap(async (req, res) => {
       await tx.usuarioCentroOperacion.createMany({
         data: validacionCentros.centros.map((centroOperacionCodigo) => ({ usuarioId: id, centroOperacionCodigo })),
       });
+    }
+    if (activo === false || (Array.isArray(roles) && !roles.includes('MESERO') && mesaIds === undefined)) {
+      await reemplazarMesasAsignadas(tx, id, []);
+    } else {
+      await reemplazarMesasAsignadas(tx, id, validacionMesas.ids);
     }
     return usuarioActualizado;
   });

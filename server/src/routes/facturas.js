@@ -6,6 +6,7 @@ import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
 import { centroPermitido, filtroParesCentros } from '../centrosUsuario.js';
 import { calcularInsumosRequeridos, descontarInsumos, validarStockSuficiente } from '../inventarioKits.js';
 import { validarPagosActivos } from '../pagosFactura.js';
+import { itemsDeInventarioNormal, validarSinSolicitudesMesa00Pendientes } from '../stockMesa00.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -395,7 +396,7 @@ router.post('/dividir', wrap(async (req, res) => {
   const apertura = await aperturaActiva(req.headers['x-usuario-id']);
   if (!apertura) return res.status(409).json({ error: 'Debes abrir la caja antes de facturar' });
   const requeridos = calcularInsumosRequeridos(
-    pedido.items.map((item) => ({ productoId: item.productoId, cantidad: item.cantidad })),
+    itemsDeInventarioNormal(pedido.items),
     pedido.items.map((item) => item.producto),
   );
 
@@ -450,6 +451,8 @@ router.post('/dividir', wrap(async (req, res) => {
   }));
 
   const creadas = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Pedido" WHERE "id" = ${id} FOR UPDATE`;
+    await validarSinSolicitudesMesa00Pendientes(tx, id);
     await validarPagosActivos(tx, pagos);
     const cerrado = await tx.pedido.updateMany({
       where: { id, estado: 'ABIERTO' },
@@ -559,7 +562,7 @@ router.post('/', wrap(async (req, res) => {
   if (pedido.estado !== 'ABIERTO') return res.status(400).json({ error: 'El pedido no esta abierto' });
   if (pedido.items.length === 0) return res.status(400).json({ error: 'El pedido no tiene items' });
   const requeridos = calcularInsumosRequeridos(
-    pedido.items.map((item) => ({ productoId: item.productoId, cantidad: item.cantidad })),
+    itemsDeInventarioNormal(pedido.items),
     pedido.items.map((item) => item.producto),
   );
 
@@ -578,6 +581,8 @@ router.post('/', wrap(async (req, res) => {
   catch (error) { if (error.status) return res.status(error.status).json({ error: error.message }); throw error; }
 
   const factura = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Pedido" WHERE "id" = ${id} FOR UPDATE`;
+    await validarSinSolicitudesMesa00Pendientes(tx, id);
     if (!credito) await validarPagosActivos(tx, pagos, { total, propina: electronica === false ? 0 : Math.max(0, Number(propina) || 0) });
     // Cerrar pedido, asignar cliente y liberar mesa (los domicilios no tienen mesa)
     const cerrado = await tx.pedido.updateMany({

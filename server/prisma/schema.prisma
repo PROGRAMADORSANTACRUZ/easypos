@@ -43,6 +43,7 @@ model Usuario {
   fechaCreacion DateTime     @default(now()) @map("FechaCreacion")
   roles         UsuarioRol[]
   centrosOperacion UsuarioCentroOperacion[]
+  mesasAsignadas Mesa[]
   auditorias    Auditoria[]
   aperturasCaja AperturaCaja[]
   movimientosCaja MovimientoCaja[]
@@ -208,6 +209,9 @@ model Mesa {
   id        Int       @id @default(autoincrement())
   numero    Int       @unique
   capacidad Int       @default(4)
+  esFantasma Boolean  @default(false)
+  usuarioAsignadoId String? @db.Uuid
+  usuarioAsignado Usuario? @relation(fields: [usuarioAsignadoId], references: [id], onDelete: SetNull)
   estado    String    @default("LIBRE") // LIBRE | OCUPADA | RESERVADA
   reservaNombre String? @db.VarChar(150)
   reservaTelefono String? @db.VarChar(50)
@@ -505,6 +509,8 @@ model Producto {
   facturaVentaDetalles FacturaVentaDetalle[]
   listaPrecios ProductoListaPrecio[]
   cortesiaDetalles CortesiaDetalle[]
+  stockMesa00 StockMesa00?
+  solicitudesMesa00 SolicitudMovimientoMesa00[]
   createdAt   DateTime        @default(now())
 }
 
@@ -555,6 +561,7 @@ model Pedido {
   preparacion PreparacionCocina?
   divisionesCuenta DivisionCuenta[]
   eventos   PedidoEvento[]
+  solicitudesMesa00 SolicitudMovimientoMesa00[]
   createdAt DateTime     @default(now())
 
   @@index([usuarioId, tipo, createdAt])
@@ -598,8 +605,43 @@ model PedidoItem {
   productoId String   @db.Uuid
   producto   Producto @relation(fields: [productoId], references: [id])
   cantidad   Int      @default(1)
+  cantidadMesa00 Int  @default(0)
   precioUnit Float
   notas      String?
+}
+
+model StockMesa00 {
+  productoId String   @id @db.Uuid
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+  cantidad   Int      @default(0)
+  actualizado DateTime @updatedAt
+
+  @@map("StockMesa00")
+}
+
+model SolicitudMovimientoMesa00 {
+  id                 String    @id @default(uuid()) @db.Uuid
+  pedidoId           Int
+  pedido             Pedido    @relation(fields: [pedidoId], references: [id], onDelete: Restrict)
+  pedidoItemId       Int
+  productoId         String    @db.Uuid
+  producto           Producto  @relation(fields: [productoId], references: [id], onDelete: Restrict)
+  productoNombre     String    @db.VarChar(250)
+  cantidad           Int
+  estado             String    @default("PENDIENTE") @db.VarChar(12)
+  solicitadoPorId    String    @db.Uuid
+  solicitadoPor      String    @db.VarChar(50)
+  solicitanteNombre  String    @db.VarChar(200)
+  decididoPorId      String?   @db.Uuid
+  decididoPor        String?   @db.VarChar(50)
+  decisionNombre     String?   @db.VarChar(200)
+  respuesta          String?
+  createdAt          DateTime  @default(now())
+  decididoAt         DateTime?
+
+  @@index([estado, createdAt])
+  @@index([pedidoId, pedidoItemId, estado])
+  @@map("SolicitudesMovimientoMesa00")
 }
 
 // Consecutivo/bitacora de cada linea de pedido tomada por el mesero (una fila por producto).

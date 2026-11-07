@@ -176,7 +176,11 @@ export default function TomarPedido() {
 
   const [mesa, setMesa] = useState(null);
   const [productos, setProductos] = useState([]);
+  const [stockMesa00, setStockMesa00] = useState([]);
   const [pedido, setPedido] = useState(null);      // pedido abierto existente
+  const [solicitudesMesa00, setSolicitudesMesa00] = useState([]);
+  const [cantidadesTomaMesa00, setCantidadesTomaMesa00] = useState({});
+  const [cantidadesMoverMesa00, setCantidadesMoverMesa00] = useState({});
   const [estadoEntrega, setEstadoEntrega] = useState(null);
   const [errorEntrega, setErrorEntrega] = useState('');
   const [editandoObservaciones, setEditandoObservaciones] = useState(false);
@@ -202,22 +206,26 @@ export default function TomarPedido() {
 
   const cargar = async () => {
     try {
-      const [mesas, ps, abiertos] = await Promise.all([
+      const [mesas, ps, abiertos, stock00] = await Promise.all([
         api.get('/mesas'),
         api.get('/productos'),
         api.get('/pedidos?estado=ABIERTO'),
+        api.get('/mesa00/stock').catch(() => []),
       ]);
       const m = mesas.find((x) => x.id === Number(mesaId));
       setMesa(m);
       setProductos(ps.filter((p) => p.activo !== false && p.precio > 0));
+      setStockMesa00(stock00);
       setMesasLibres(mesas.filter((x) => x.estado === 'LIBRE' && x.id !== Number(mesaId)));
       const abierto = abiertos.find((p) => p.mesaId === Number(mesaId));
       setPedido(abierto || null);
       setEditando(!abierto); // nuevo pedido = editando; pedido existente = bloqueado
       if (abierto) {
+        setSolicitudesMesa00(await api.get(`/mesa00/pedidos/${abierto.id}/solicitudes`).catch(() => []));
         setObservaciones(abierto.observaciones || '');
         setEditandoObservaciones(false);
       } else {
+        setSolicitudesMesa00([]);
         setEditandoObservaciones(false);
         const prepedido = (m?.reservaItems || []).map((linea) => {
           const producto = ps.find((productoCatalogo) => productoCatalogo.id === linea.productoId);
@@ -289,16 +297,21 @@ export default function TomarPedido() {
     if (pedido) {
       return pedido.items.map((it) => ({
         id: it.id,
+        carritoIndex: null,
         nombre: it.producto.nombre,
         cantidad: it.cantidad,
+        cantidadMesa00: it.cantidadMesa00 || 0,
         precioUnit: it.precioUnit,
       }));
     }
-    return carrito.map((c) => ({
-      id: c.producto.id,
+    return carrito.map((c, carritoIndex) => ({
+      id: `${c.producto.id}-${c.desdeMesa00 ? 'mesa00' : 'normal'}-${carritoIndex}`,
+      carritoIndex,
+      productoId: c.producto.id,
       nombre: c.producto.nombre,
       cantidad: c.cantidad,
       precioUnit: c.producto.precio,
+      cantidadMesa00: c.cantidadMesa00 || 0,
       notas: c.notas || '',
     }));
   }, [pedido, carrito]);
@@ -321,10 +334,56 @@ export default function TomarPedido() {
       }
     } else {
       setCarrito((prev) => {
-        const existe = prev.find((c) => c.producto.id === producto.id);
-        if (existe) return prev.map((c) => (c.producto.id === producto.id ? { ...c, cantidad: c.cantidad + 1 } : c));
-        return [...prev, { producto, cantidad: 1 }];
+        const existe = prev.find((c) => c.producto.id === producto.id && !c.desdeMesa00);
+        if (existe) return prev.map((c) => (c === existe ? { ...c, cantidad: c.cantidad + 1 } : c));
+        return [...prev, { producto, cantidad: 1, cantidadMesa00: 0, desdeMesa00: false }];
       });
+    }
+  };
+
+  const tomarSugeridoMesa00 = async (producto) => {
+    const cantidad = Number(cantidadesTomaMesa00[producto.id] || 1);
+    const enCarrito = carrito.filter((item) => item.producto.id === producto.id && item.desdeMesa00)
+      .reduce((total, item) => total + item.cantidad, 0);
+    const disponible = producto.cantidadMesa00 - (pedido ? 0 : enCarrito);
+    if (!Number.isSafeInteger(cantidad) || cantidad < 1 || cantidad > disponible) {
+      return notify(`Solo hay ${disponible} unidades disponibles en Mesa 00`, 'err');
+    }
+    if (pedido) {
+      if (!puedeEditar) return notify('Habilita la edición del pedido para agregar productos', 'err');
+      try {
+        const actualizado = await api.post(`/pedidos/${pedido.id}/items`, {
+          productoId: producto.id, cantidad, cantidadMesa00: cantidad,
+        });
+        setPedido(actualizado);
+        setStockMesa00((actual) => actual.map((item) => item.id === producto.id
+          ? { ...item, cantidadMesa00: item.cantidadMesa00 - cantidad } : item).filter((item) => item.cantidadMesa00 > 0));
+        notify(`${cantidad} ${producto.nombre} agregado${cantidad === 1 ? '' : 's'} desde Mesa 00`);
+      } catch (error) {
+        notify(error.message, 'err');
+      }
+      return;
+    }
+    if (!puedeCrearPedido) return notify('No tienes permiso para crear un pedido', 'err');
+    setCarrito((actual) => {
+      const existente = actual.find((item) => item.producto.id === producto.id && item.desdeMesa00);
+      if (existente) return actual.map((item) => item === existente
+        ? { ...item, cantidad: item.cantidad + cantidad, cantidadMesa00: item.cantidadMesa00 + cantidad }
+        : item);
+      return [...actual, { producto, cantidad, cantidadMesa00: cantidad, desdeMesa00: true }];
+    });
+    notify(`${cantidad} ${producto.nombre} reservado desde Mesa 00`);
+  };
+
+  const solicitarTrasladoMesa00 = async (item) => {
+    const cantidad = Number(cantidadesMoverMesa00[item.id] || 1);
+    if (!Number.isSafeInteger(cantidad) || cantidad < 1) return notify('Indica una cantidad válida', 'err');
+    try {
+      const solicitud = await api.post(`/mesa00/pedidos/${pedido.id}/solicitudes`, { pedidoItemId: item.id, cantidad });
+      setSolicitudesMesa00((actuales) => [...actuales, solicitud]);
+      notify('Solicitud enviada al administrador; la comanda no cambió');
+    } catch (error) {
+      notify(error.message, 'err');
     }
   };
 
@@ -337,7 +396,7 @@ export default function TomarPedido() {
         notify(e.message, 'err');
       }
     } else {
-      setCarrito((prev) => prev.filter((c) => c.producto.id !== item.id));
+      setCarrito((prev) => prev.filter((_, indice) => indice !== item.carritoIndex));
     }
   };
 
@@ -356,7 +415,7 @@ export default function TomarPedido() {
     } else {
       setCarrito((prev) =>
         prev
-          .map((c) => (c.producto.id === item.id ? { ...c, cantidad: nuevaCant } : c))
+          .map((c, indice) => (indice === item.carritoIndex ? { ...c, cantidad: nuevaCant, cantidadMesa00: Math.min(c.cantidadMesa00 || 0, nuevaCant) } : c))
           .filter((c) => c.cantidad > 0)
       );
     }
@@ -369,10 +428,17 @@ export default function TomarPedido() {
     try {
       const nuevo = await api.post('/pedidos', {
         mesaId: Number(mesaId),
-        items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad, notas: c.notas || null })),
+        items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad, cantidadMesa00: c.cantidadMesa00 || 0, notas: c.notas || null })),
         ...(puedeEditarObservaciones && { observaciones: observaciones.trim() || null }),
       });
       setPedido(nuevo);
+      const tomadasMesa00 = new Map();
+      for (const item of carrito) {
+        if (item.cantidadMesa00 > 0) tomadasMesa00.set(item.producto.id, (tomadasMesa00.get(item.producto.id) || 0) + item.cantidadMesa00);
+      }
+      setStockMesa00((actual) => actual.map((item) => tomadasMesa00.has(item.id)
+        ? { ...item, cantidadMesa00: item.cantidadMesa00 - tomadasMesa00.get(item.id) } : item)
+        .filter((item) => item.cantidadMesa00 > 0));
       setCarrito([]);
       setEditando(false);
       imprimirComanda(nuevo, { reimpresion: false });
@@ -598,6 +664,43 @@ export default function TomarPedido() {
               <button key={c} className={`cat-chip ${filtroCat === c ? 'active' : ''}`} onClick={() => setFiltroCat(c)}>{c}</button>
             ))}
           </div>
+          {stockMesa00.length > 0 && (
+            <section aria-label="Productos disponibles en Mesa 00" style={{ margin: '14px 0', padding: 12, border: '1px solid var(--border)', borderRadius: 8 }}>
+              <div className="row between" style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                <strong>Sugeridos de Mesa 00</strong>
+                <span className="mini">Existencia interna no facturable</span>
+              </div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {stockMesa00.map((producto) => {
+                  const enCarrito = carrito.filter((item) => item.producto.id === producto.id)
+                    .reduce((total, item) => total + (item.cantidadMesa00 || 0), 0);
+                  const disponible = producto.cantidadMesa00 - (pedido ? 0 : enCarrito);
+                  return (
+                    <div key={producto.id} className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
+                      <div>
+                        <strong>{producto.nombre}</strong>
+                        <div className="mini">{disponible} disponibles · {money(producto.precio)}</div>
+                      </div>
+                      <div className="row" style={{ gap: 6 }}>
+                        <input
+                          aria-label={`Cantidad de ${producto.nombre} desde Mesa 00`}
+                          type="number" min="1" max={disponible} step="1"
+                          value={cantidadesTomaMesa00[producto.id] || 1}
+                          onChange={(event) => setCantidadesTomaMesa00((actual) => ({ ...actual, [producto.id]: event.target.value }))}
+                          style={{ width: 76 }}
+                        />
+                        <button
+                          type="button" className="btn btn-sm btn-green"
+                          disabled={disponible < 1 || procesando || (pedido && !puedeEditar)}
+                          onClick={() => tomarSugeridoMesa00(producto)}
+                        >Tomar</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
           {productos.length === 0 ? (
             <p className="empty">No hay productos.</p>
           ) : productosFiltrados.length === 0 ? (
@@ -648,7 +751,34 @@ export default function TomarPedido() {
                     <td>
                       <div style={{ fontWeight: 600, textTransform: 'uppercase' }}>{it.nombre}</div>
                       <div className="mini">{money(it.precioUnit)} c/u</div>
+                      {it.cantidadMesa00 > 0 && <span className="badge blue">Mesa 00 · {it.cantidadMesa00}</span>}
                       {it.notas && <div className="mini">{it.notas}</div>}
+                      {pedido && puedeEditarPedido && (() => {
+                        const pendientes = solicitudesMesa00.filter((solicitud) => solicitud.pedidoItemId === it.id && solicitud.estado === 'PENDIENTE')
+                          .reduce((total, solicitud) => total + solicitud.cantidad, 0);
+                        const disponible = Math.max(0, it.cantidad - pendientes);
+                        return (
+                          <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                            {disponible > 0 && <>
+                              <input
+                                aria-label={`Cantidad de ${it.nombre} para Mesa 00`}
+                                type="number" min="1" max={disponible} step="1"
+                                value={cantidadesMoverMesa00[it.id] || 1}
+                                onChange={(event) => setCantidadesMoverMesa00((actual) => ({ ...actual, [it.id]: event.target.value }))}
+                                style={{ width: 72 }}
+                              />
+                              <button type="button" className="btn btn-sm" disabled={procesando} onClick={() => solicitarTrasladoMesa00(it)}>
+                                Solicitar traslado a Mesa 00
+                              </button>
+                            </>}
+                            {solicitudesMesa00.filter((solicitud) => solicitud.pedidoItemId === it.id).map((solicitud) => (
+                              <span key={solicitud.id} className="badge orange">
+                                Mesa 00 ×{solicitud.cantidad} · {solicitud.estado === 'PENDIENTE' ? 'Pendiente ADMIN' : solicitud.estado.toLowerCase()}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td>
                       {puedeEditar ? (

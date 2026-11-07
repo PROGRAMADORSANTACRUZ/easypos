@@ -36,6 +36,7 @@ import Auditoria from './pages/Auditoria.jsx';
 import Reportes from './pages/Reportes.jsx';
 import Clientes from './pages/Clientes.jsx';
 import Login from './pages/Login.jsx';
+import SolicitudesMesa00 from './pages/SolicitudesMesa00.jsx';
 import { Icon } from './icons.jsx';
 import { LoadingState, Logo } from './components/ui/index.jsx';
 import { api, limpiarSesionActual, setTenantActual, setUsuarioActual } from './api.js';
@@ -124,6 +125,7 @@ export const NAV_GRUPOS = [
       { permiso: 'cuentas.ver', ruta: '/cuentas', label: 'Cuentas por cobrar', icon: 'cuentas' },
       { permiso: 'clientes.ver', ruta: '/clientes', label: 'Clientes', icon: 'clientes' },
       { permiso: 'caja.ver', ruta: '/caja', label: 'Caja', icon: 'caja' },
+      { permiso: 'usuarios.ver', ruta: '/admin/mesa-00', label: 'Solicitudes Mesa 00', icon: 'caja', soloAdmin: true },
     ],
   },
   {
@@ -192,6 +194,7 @@ export default function App() {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [colapsado, setColapsado] = useState(false);
   const [user, setUser] = useState(() => DEV_BYPASS ? DEV_USER : null);
+  const [solicitudesMesa00Pendientes, setSolicitudesMesa00Pendientes] = useState(0);
   const [restaurandoSesion, setRestaurandoSesion] = useState(!DEV_BYPASS);
   const [tema, setTema] = useState('dark');
   const navigate = useNavigate();
@@ -200,6 +203,23 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = tema;
   }, [tema]);
+
+  useEffect(() => {
+    if (!user?.roles?.includes('ADMIN')) {
+      setSolicitudesMesa00Pendientes(0);
+      return undefined;
+    }
+    let activo = true;
+    const consultar = async () => {
+      try {
+        const resultado = await api.get('/mesa00/solicitudes/pendientes/count');
+        if (activo) setSolicitudesMesa00Pendientes(resultado.count || 0);
+      } catch { if (activo) setSolicitudesMesa00Pendientes(0); }
+    };
+    consultar();
+    const intervalo = setInterval(consultar, 15000);
+    return () => { activo = false; clearInterval(intervalo); };
+  }, [user?.id]);
 
   useEffect(() => {
     if (DEV_BYPASS) return;
@@ -240,7 +260,7 @@ export default function App() {
   // Renderiza una categoría colapsable con sus módulos visibles según permisos
   const renderGrupo = (grupo) => {
     if (!moduloHabilitado(user, grupo.id)) return null;
-    const visibles = grupo.items.filter((it) => puede(user, it.permiso));
+    const visibles = grupo.items.filter((it) => puede(user, it.permiso) && (!it.soloAdmin || user?.roles?.includes('ADMIN')));
     if (visibles.length === 0) return null;
     const abierto = grupoAbierto === grupo.id;
     const activo = grupoDeRuta(location.pathname) === grupo.id;
@@ -260,6 +280,9 @@ export default function App() {
             {visibles.map((it) => (
               <NavLink key={it.ruta} to={it.ruta} className={({ isActive }) => `nav-subitem ${isActive ? 'active' : ''}`}>
                 <Icon name={it.icon} size={16} /> {it.label}
+                {it.ruta === '/admin/mesa-00' && solicitudesMesa00Pendientes > 0 && (
+                  <span className="badge orange" style={{ marginLeft: 'auto' }}>{solicitudesMesa00Pendientes}</span>
+                )}
               </NavLink>
             ))}
           </div>
@@ -470,6 +493,7 @@ export default function App() {
                 <Route key={e.ruta} path={e.ruta} element={e.ruta === '/listas-precios' ? <ListasPrecios /> : <CrudPage cfg={e.cfg} />} />
               ))}
               {puede(user, 'auditoria.ver') && <Route path="/auditoria" element={<Auditoria />} />}
+              {user?.roles?.includes('ADMIN') && <Route path="/admin/mesa-00" element={<SolicitudesMesa00 />} />}
               {puede(user, 'reportes.ver') && <Route path="/reportes" element={<Reportes />} />}
               <Route path="*" element={<Navigate to={rutaInicio} replace />} />
             </Routes>
