@@ -12,7 +12,7 @@ export const MODULOS_RESTAURANTE_DEFAULT = GRUPOS_MODULOS_RESTAURANTE.map(({ id 
 
 const RUTAS_MODULO = [
   ['ventas', ['/api/mesas', '/api/meseras', '/api/cocineros', '/api/preparacion-cocina', '/api/cajas', '/api/aperturas', '/api/pagos', '/api/pedidos', '/api/mesa00', '/api/ventas-congeladas', '/api/cortesias', '/api/cuentas']],
-  ['inventario', ['/api/inventario', '/api/bodegas', '/api/existencias', '/api/movimientos', '/api/compras', '/api/proveedores']],
+  ['inventario', ['/api/inventario', '/api/bajas', '/api/bodegas', '/api/existencias', '/api/movimientos', '/api/compras', '/api/proveedores']],
   ['dian', ['/api/resoluciones', '/api/notas-credito', '/api/notas-debito', '/api/retenciones', '/api/eventos-dian', '/api/logs-integraciones', '/api/factus']],
   ['parametros', ['/api/companias', '/api/centros-operaciones', '/api/asignacion-cajas', '/api/tipos-documento']],
   ['reportes', ['/api/reportes']],

@@ -105,7 +105,8 @@ async function entornoRutas(t, { componentes = [], stockInsumo = 10 } = {}) {
       count: async ({ where }) => solicitudes.filter((item) => item.estado === where.estado && (where.pedidoId === undefined || item.pedidoId === where.pedidoId)).length,
       create: async ({ data }) => { const item = { id: `sol-${solicitudes.length + 1}`, estado: 'PENDIENTE', createdAt: new Date(), ...data }; solicitudes.push(item); return item; },
       findUnique: async ({ where }) => { const item = solicitudes.find((actual) => actual.id === where.id); return item ? { ...item, producto } : null; },
-      findMany: async ({ where }) => solicitudes.filter((item) => item.pedidoId === where.pedidoId).map((item) => ({ ...item })),
+      findMany: async ({ where }) => solicitudes.filter((item) => (!where || where.estado === undefined || item.estado === where.estado)
+        && (!where || where.pedidoId === undefined || item.pedidoId === where.pedidoId)).map((item) => ({ ...item })),
       update: async ({ where, data }) => Object.assign(solicitudes.find((item) => item.id === where.id), data),
     },
     stockMesa00: {
@@ -178,7 +179,9 @@ test('solicitar no cambia la comanda; ADMIN aprueba cantidad parcial y rechaza n
   assert.equal(pedido.items[0].cantidad, 3);
   assert.equal(stock.size, 0);
   assert.equal((await solicitar('GET', '/mesa00/solicitudes')).status, 403);
-  assert.equal((await solicitar('GET', '/mesa00/solicitudes/pendientes/count', undefined, true)).body.count, 1);
+  const pendientes = await solicitar('GET', '/mesa00/solicitudes/pendientes/count', undefined, true);
+  assert.equal(pendientes.body.count, 1);
+  assert.deepEqual(pendientes.body.ids, [solicitud.body.id]);
 
   const aprobada = await solicitar('POST', `/mesa00/solicitudes/${solicitud.body.id}/aprobar`, {}, true);
   assert.equal(aprobada.status, 200);

@@ -7,6 +7,7 @@ import { PageHeader, Modal, Button, EmptyState } from '../components/ui/index.js
 const puede = (user, codigo) => (user?.permisos || []).includes(codigo);
 
 const TIPOS = ['ENTRADA', 'SALIDA', 'AJUSTE'];
+const TIPOS_FILTRO = [...TIPOS, 'BAJA'];
 
 export default function Movimientos() {
   const { user } = useAuth();
@@ -120,7 +121,7 @@ export default function Movimientos() {
           </select>
           <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} style={{ width: 'auto', minWidth: 150 }}>
             <option value="">Todos los tipos</option>
-            {TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
+            {TIPOS_FILTRO.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
         {movimientos.length === 0 ? (
@@ -141,7 +142,7 @@ export default function Movimientos() {
               {movimientos.map((m) => (
                 <tr key={m.id}>
                   <td className="mini">{fmtFecha(m.fecha)}</td>
-                  <td><span className={`badge ${m.tipoMovimiento === 'ENTRADA' ? 'green' : m.tipoMovimiento === 'SALIDA' ? 'red' : 'gray'}`}>{m.tipoMovimiento}</span></td>
+                  <td><span className={`badge ${m.tipoMovimiento === 'ENTRADA' ? 'green' : ['SALIDA', 'BAJA'].includes(m.tipoMovimiento) ? 'red' : 'gray'}`}>{m.tipoMovimiento}</span></td>
                   <td>
                     {m.producto?.nombre
                       ? m.producto.nombre
@@ -154,7 +155,7 @@ export default function Movimientos() {
                   <td style={{ textAlign: 'right' }}>{money(m.costoUnitario)}</td>
                   <td className="mini">{m.documentoReferencia || '—'}</td>
                   <td style={{ textAlign: 'right' }}>
-                    {puedeEliminar && <button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminar(m)}><Icon name="delete" size={16} /></button>}
+                    {puedeEliminar && m.tipoMovimiento !== 'BAJA' && <button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminar(m)}><Icon name="delete" size={16} /></button>}
                   </td>
                 </tr>
               ))}

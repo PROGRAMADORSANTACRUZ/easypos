@@ -36,6 +36,8 @@ test('bloquea endpoints de grupos deshabilitados', () => {
 
 test('permite endpoints cuando el grupo está habilitado', () => {
   assert.equal(evaluar('/api/mesas', ['ventas']).siguiente, true);
+  assert.equal(evaluar('/api/bajas', ['inventario']).siguiente, true);
+  assert.equal(evaluar('/api/bajas/opciones', ['ventas']).status, 403);
 });
 
 test('permite consultar productos desde ventas, pero solo inventario puede modificarlos', () => {

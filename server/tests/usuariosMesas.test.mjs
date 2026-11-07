@@ -23,6 +23,8 @@ async function entorno(t) {
   const db = {
     usuario: {
       findUnique: async ({ where }) => where.id === admin.id ? admin : null,
+      findFirst: async ({ where }) => usuarios.find((user) => user.usuario.toUpperCase() === where.usuario.equals.toUpperCase()
+        && (!where.id?.not || user.id !== where.id.not)) || null,
       findMany: async () => usuarios,
       create: async ({ data }) => { const user = { id: `mesero-${secuencia++}`, ...data, activo: true }; usuarios.push(user); return user; },
     },
@@ -54,12 +56,12 @@ async function entorno(t) {
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
-  const solicitar = async (mesaIds) => {
+  const solicitar = async (mesaIds, usuario = `mesero${secuencia}`) => {
     const response = await fetch(`http://127.0.0.1:${server.address().port}/usuarios`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${firmarToken(admin)}` },
       body: JSON.stringify({
-        nombre: 'Mesero Prueba', usuario: `mesero${secuencia}`, password: 'clave123',
+        nombre: 'Mesero Prueba', usuario, password: 'clave123',
         roles: ['MESERO'], centrosOperacionCodigos: ['420'], mesaIds,
       }),
     });
@@ -72,8 +74,18 @@ test('ADMIN puede asignar mesas normales a un MESERO', async (t) => {
   const { solicitar, mesas } = await entorno(t);
   const response = await solicitar([1]);
   assert.equal(response.status, 201);
+  assert.equal(response.body.usuario, 'MESERO1');
   assert.equal(mesas.get(1).usuarioAsignadoId, response.body.id);
   assert.equal(mesas.get(0).usuarioAsignadoId, null);
+});
+
+test('no permite duplicar un usuario con diferencias de mayúsculas', async (t) => {
+  const { solicitar, mesas } = await entorno(t);
+  const creado = await solicitar([1], 'mesero1');
+  const duplicado = await solicitar([1], 'MESERO1');
+  assert.equal(creado.status, 201);
+  assert.equal(duplicado.status, 409);
+  assert.equal(mesas.get(1).usuarioAsignadoId, creado.body.id);
 });
 
 test('no permite asignar Mesa00 ni crear MESERO sin mesas', async (t) => {

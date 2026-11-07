@@ -15,6 +15,7 @@ import cocinerosRouter from './routes/cocineros.js';
 import preparacionCocinaRouter from './routes/preparacionCocina.js';
 import productosRouter from './routes/productos.js';
 import inventarioRouter from './routes/inventario.js';
+import bajasRouter from './routes/bajas.js';
 import ensamblesRouter from './routes/ensambles.js';
 import bodegasRouter from './routes/bodegas.js';
 import existenciasRouter from './routes/existencias.js';
@@ -106,6 +107,7 @@ app.use('/api/productos', requireAuth, (req, res, next) => {
   return permisoPorMetodo('productos')(req, res, next);
 }, productosRouter);
 app.use('/api/inventario', requireAuth, permisoPorMetodo('inventario'), inventarioRouter);
+app.use('/api/bajas', requireAuth, bajasRouter);
 app.use('/api/ensambles', requireAuth, permisoPorMetodo('inventario'), ensamblesRouter);
 app.use('/api/bodegas', requireAuth, permisoPorMetodo('bodegas'), bodegasRouter);
 app.use('/api/existencias', requireAuth, existenciasRouter);

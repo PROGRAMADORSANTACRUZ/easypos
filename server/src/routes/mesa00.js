@@ -38,7 +38,11 @@ router.get('/stock', exigirPermiso('pedidos.ver'), wrap(async (_req, res) => {
 }));
 
 router.get('/solicitudes/pendientes/count', soloAdmin, wrap(async (_req, res) => {
-  res.json({ count: await prisma.solicitudMovimientoMesa00.count({ where: { estado: 'PENDIENTE' } }) });
+  const solicitudes = await prisma.solicitudMovimientoMesa00.findMany({
+    where: { estado: 'PENDIENTE' },
+    select: { id: true },
+  });
+  res.json({ count: solicitudes.length, ids: solicitudes.map(({ id }) => id) });
 }));
 
 router.get('/solicitudes', soloAdmin, wrap(async (req, res) => {

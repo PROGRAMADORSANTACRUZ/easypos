@@ -44,6 +44,9 @@ router.get('/:id', wrap(async (req, res) => {
 // Registrar un movimiento de inventario (ajusta el stock de la existencia)
 router.post('/', wrap(async (req, res) => {
   const { productoId, bodegaId, tipoMovimiento, cantidad, costoUnitario, documentoReferencia, fecha } = req.body;
+  if (String(tipoMovimiento || '').toUpperCase() === 'BAJA') {
+    return res.status(400).json({ error: 'Las bajas deben registrarse mediante una solicitud aprobada' });
+  }
   const data = {
     productoId: productoId ? String(productoId) : null,
     bodegaId: bodegaId ? String(bodegaId) : null,
@@ -69,6 +72,9 @@ router.put('/:id', wrap(async (req, res) => {
     const mov = await prisma.$transaction(async (tx) => {
       const anterior = await tx.movimientoInventario.findUnique({ where: { id } });
       if (!anterior) { const e = new Error('P2025'); e.code = 'P2025'; throw e; }
+      if (String(anterior.tipoMovimiento || '').toUpperCase() === 'BAJA') {
+        throw Object.assign(new Error('Una baja aprobada no se puede modificar'), { status: 409 });
+      }
       // Revertir el efecto anterior sobre el stock
       await aplicarStock(tx, anterior.productoId, anterior.bodegaId, -efectoStock(anterior.tipoMovimiento, anterior.cantidad));
       const actualizado = await tx.movimientoInventario.update({
@@ -102,6 +108,9 @@ router.delete('/:id', wrap(async (req, res) => {
     await prisma.$transaction(async (tx) => {
       const anterior = await tx.movimientoInventario.findUnique({ where: { id } });
       if (!anterior) { const e = new Error('P2025'); e.code = 'P2025'; throw e; }
+      if (String(anterior.tipoMovimiento || '').toUpperCase() === 'BAJA') {
+        throw Object.assign(new Error('Una baja aprobada no se puede eliminar'), { status: 409 });
+      }
       // Revertir el efecto del movimiento sobre el stock
       await aplicarStock(tx, anterior.productoId, anterior.bodegaId, -efectoStock(anterior.tipoMovimiento, anterior.cantidad));
       await tx.movimientoInventario.delete({ where: { id } });

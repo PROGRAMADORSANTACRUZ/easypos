@@ -52,6 +52,8 @@ model Usuario {
   comisiones    ComisionVendedor[]
   pedidosDomicilio Pedido[]
   ventasCongeladas VentaCongelada[]
+  bajasSolicitadas BajaInventario[] @relation("BajaSolicitante")
+  bajasDecididas BajaInventario[] @relation("BajaDecisor")
 
   @@map("Usuarios")
 }
@@ -250,6 +252,7 @@ model Bodega {
   existencias Inventario[]
   existenciasInsumos InventarioItemBodega[]
   movimientos MovimientoInventario[]
+  bajasInventario BajaInventario[]
 }
 
 // Cajas registradoras / puntos de cobro
@@ -406,6 +409,37 @@ model MovimientoInventario {
   fecha               DateTime  @default(now()) @map("Fecha")
 }
 
+model BajaInventario {
+  id                 String          @id @default(uuid()) @db.Uuid
+  tipoItem           String          @db.VarChar(10)
+  productoId         String?         @db.Uuid
+  producto           Producto?       @relation("BajaProducto", fields: [productoId], references: [id], onDelete: Restrict)
+  itemId             Int?
+  item               InventarioItem? @relation("BajaInsumo", fields: [itemId], references: [id], onDelete: Restrict)
+  bodegaId           String          @db.Uuid
+  bodega             Bodega          @relation(fields: [bodegaId], references: [id], onDelete: Restrict)
+  cantidad           Float
+  fotos              Json
+  notas              String?         @db.Text
+  estado             String          @default("PENDIENTE") @db.VarChar(10)
+  solicitadoPorId    String          @db.Uuid
+  solicitadoPor      Usuario         @relation("BajaSolicitante", fields: [solicitadoPorId], references: [id], onDelete: Restrict)
+  solicitanteCuenta  String          @db.VarChar(50)
+  solicitanteNombre  String          @db.VarChar(200)
+  decididoPorId      String?         @db.Uuid
+  decididoPor        Usuario?        @relation("BajaDecisor", fields: [decididoPorId], references: [id], onDelete: Restrict)
+  decisionCuenta    String?          @db.VarChar(50)
+  decisionNombre    String?          @db.VarChar(200)
+  respuesta          String?         @db.Text
+  createdAt          DateTime        @default(now())
+  decididoAt         DateTime?
+
+  @@index([estado, createdAt])
+  @@index([productoId, bodegaId])
+  @@index([itemId, bodegaId])
+  @@map("BajasInventario")
+}
+
 // Insumos de inventario (ej. bollo, carne, queso, gaseosa)
 model InventarioItem {
   id         Int             @id @default(autoincrement())
@@ -435,6 +469,7 @@ model InventarioItem {
   componentes KitComponente[]
   comprasDetalle CompraDetalle[]
   movimientos MovimientoInventario[]
+  bajasInventario BajaInventario[] @relation("BajaInsumo")
   existenciasBodega InventarioItemBodega[]
   createdAt  DateTime        @default(now())
 }
@@ -505,6 +540,7 @@ model Producto {
   pedidosMesa PedidoMesa[]
   existencias Inventario[]
   movimientos MovimientoInventario[]
+  bajasInventario BajaInventario[] @relation("BajaProducto")
   facturaDetalles FacturaDetalle[]
   facturaVentaDetalles FacturaVentaDetalle[]
   listaPrecios ProductoListaPrecio[]

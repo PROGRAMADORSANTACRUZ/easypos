@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, Fragment } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, Fragment } from 'react';
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Mesas from './pages/Mesas.jsx';
 import Cocina from './pages/Cocina.jsx';
@@ -6,6 +6,7 @@ import Pedidos from './pages/Pedidos.jsx';
 import Repartidor from './pages/Repartidor.jsx';
 import TomarPedido from './pages/TomarPedido.jsx';
 import Inventario from './pages/Inventario.jsx';
+import Bajas from './pages/Bajas.jsx';
 import Ensamble from './pages/Ensamble.jsx';
 import Bodegas from './pages/Bodegas.jsx';
 import Movimientos from './pages/Movimientos.jsx';
@@ -51,6 +52,23 @@ export const useAuth = () => useContext(AuthCtx);
 // Poner en false (o borrar) para restaurar el login normal.
 export const DEV_BYPASS = false;
 const DEV_USER = { id: 0, nombre: 'Vista previa', roles: ['Dev'], permisos: [], __dev: true };
+
+const sonarSolicitud = (contexto) => {
+  if (!contexto || contexto.state !== 'running') return;
+  const ahora = contexto.currentTime;
+  const oscilador = contexto.createOscillator();
+  const volumen = contexto.createGain();
+  oscilador.type = 'sine';
+  oscilador.frequency.setValueAtTime(880, ahora);
+  oscilador.frequency.setValueAtTime(660, ahora + 0.16);
+  volumen.gain.setValueAtTime(0.0001, ahora);
+  volumen.gain.exponentialRampToValueAtTime(0.18, ahora + 0.02);
+  volumen.gain.exponentialRampToValueAtTime(0.0001, ahora + 0.38);
+  oscilador.connect(volumen);
+  volumen.connect(contexto.destination);
+  oscilador.start(ahora);
+  oscilador.stop(ahora + 0.4);
+};
 
 const GRUPO_POR_MODULO = {
   mesas: 'ventas', cocina: 'ventas', factura_venta: 'ventas', cortesias: 'ventas', pedidos: 'ventas',
@@ -135,6 +153,7 @@ export const NAV_GRUPOS = [
       { permiso: 'productos.ver', ruta: '/kits', label: 'Kits', icon: 'kits' },
       { permiso: 'inventario.ver', ruta: '/ensamble', label: 'Ensamble', icon: 'kits' },
       { permiso: 'inventario.ver', ruta: '/inventario', label: 'Inventario', icon: 'inventario' },
+      { permiso: 'inventario.ver', ruta: '/bajas', label: 'Bajas', icon: 'movimientos' },
       { permiso: 'bodegas.ver', ruta: '/bodegas', label: 'Bodegas', icon: 'bodegas' },
       { permiso: 'movimientos.ver', ruta: '/movimientos', label: 'Movimientos', icon: 'movimientos' },
       { permiso: 'compras.ver', ruta: '/compras', label: 'Compras', icon: 'compras' },
@@ -195,6 +214,8 @@ export default function App() {
   const [colapsado, setColapsado] = useState(false);
   const [user, setUser] = useState(() => DEV_BYPASS ? DEV_USER : null);
   const [solicitudesMesa00Pendientes, setSolicitudesMesa00Pendientes] = useState(0);
+  const audioSolicitudes = useRef(null);
+  const reanudacionAudio = useRef(null);
   const [restaurandoSesion, setRestaurandoSesion] = useState(!DEV_BYPASS);
   const [tema, setTema] = useState('dark');
   const navigate = useNavigate();
@@ -210,15 +231,44 @@ export default function App() {
       return undefined;
     }
     let activo = true;
+    let idsAnteriores = null;
+    const reanudarAudio = () => {
+      const contexto = audioSolicitudes.current;
+      if (!contexto || contexto.state === 'running') return Promise.resolve();
+      reanudacionAudio.current ||= contexto.resume().finally(() => { reanudacionAudio.current = null; });
+      return reanudacionAudio.current;
+    };
+    const desbloquearAudio = () => {
+      const AudioContexto = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContexto) return;
+      audioSolicitudes.current ||= new AudioContexto();
+      reanudarAudio().catch(() => {});
+    };
+    window.addEventListener('pointerdown', desbloquearAudio);
+    window.addEventListener('keydown', desbloquearAudio);
     const consultar = async () => {
       try {
         const resultado = await api.get('/mesa00/solicitudes/pendientes/count');
-        if (activo) setSolicitudesMesa00Pendientes(resultado.count || 0);
-      } catch { if (activo) setSolicitudesMesa00Pendientes(0); }
+        if (!activo) return;
+        const ids = resultado.ids || [];
+        if (idsAnteriores && ids.some((id) => !idsAnteriores.has(id))) {
+          try { navigator.vibrate?.([220, 120, 220]); } catch {}
+          const contexto = audioSolicitudes.current;
+          if (contexto?.state === 'suspended') reanudarAudio().then(() => sonarSolicitud(contexto)).catch(() => {});
+          else sonarSolicitud(contexto);
+        }
+        idsAnteriores = new Set(ids);
+        setSolicitudesMesa00Pendientes(resultado.count || 0);
+      } catch {}
     };
     consultar();
     const intervalo = setInterval(consultar, 15000);
-    return () => { activo = false; clearInterval(intervalo); };
+    return () => {
+      activo = false;
+      clearInterval(intervalo);
+      window.removeEventListener('pointerdown', desbloquearAudio);
+      window.removeEventListener('keydown', desbloquearAudio);
+    };
   }, [user?.id]);
 
   useEffect(() => {
@@ -465,6 +515,7 @@ export default function App() {
               {puede(user, 'productos.ver') && <Route path="/kits" element={<Kits />} />}
               {puede(user, 'inventario.ver') && <Route path="/ensamble" element={<Ensamble />} />}
               {puede(user, 'inventario.ver') && <Route path="/inventario" element={<Inventario />} />}
+              {puede(user, 'inventario.ver') && <Route path="/bajas" element={<Bajas />} />}
               {puede(user, 'bodegas.ver') && <Route path="/bodegas" element={<Bodegas />} />}
               {puede(user, 'movimientos.ver') && <Route path="/movimientos" element={<Movimientos />} />}
               {puede(user, 'caja.ver') && <Route path="/caja" element={<Caja />} />}

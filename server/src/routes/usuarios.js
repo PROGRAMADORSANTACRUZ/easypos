@@ -40,6 +40,7 @@ function validarPassword(password) {
 
 // No exponemos el hash de la contraseña en las respuestas
 const sinHash = ({ passwordHash, modulosFacturacion, ...rest }) => rest;
+const normalizarUsuario = (usuario) => typeof usuario === 'string' ? usuario.toUpperCase() : usuario;
 
 // Calcula roles y permisos efectivos de un usuario (RBAC)
 async function conRolesYPermisos(u) {
@@ -179,7 +180,8 @@ async function reemplazarMesasAsignadas(tx, usuarioId, mesaIds) {
 
 router.post('/', soloAdmin, wrap(async (req, res) => {
   const { nombre, usuario, correo, password, roles, centrosOperacionCodigos, mesaIds } = req.body;
-  if (!nombre || !usuario || !password) {
+  const usuarioNormalizado = normalizarUsuario(usuario);
+  if (!nombre || !usuarioNormalizado || !password) {
     return res.status(400).json({ error: 'nombre, usuario y contraseña son requeridos' });
   }
   const errorPass = validarPassword(password);
@@ -188,11 +190,11 @@ router.post('/', soloAdmin, wrap(async (req, res) => {
   if (validacionCentros.error) return res.status(400).json({ error: validacionCentros.error });
   const validacionMesas = await validarMesasAsignadas(mesaIds, roles, { requerido: true });
   if (validacionMesas.error) return res.status(400).json({ error: validacionMesas.error });
-  const existe = await prisma.usuario.findUnique({ where: { usuario } });
+  const existe = await prisma.usuario.findFirst({ where: { usuario: { equals: usuarioNormalizado, mode: 'insensitive' } } });
   if (existe) return res.status(409).json({ error: 'Ese usuario ya existe' });
   const creado = await prisma.$transaction(async (tx) => {
     const nuevoUsuario = await tx.usuario.create({
-      data: { nombre, usuario, correo: correo || null, passwordHash: bcrypt.hashSync(password, 10) },
+      data: { nombre, usuario: usuarioNormalizado, correo: correo || null, passwordHash: bcrypt.hashSync(password, 10) },
     });
     await asignarRoles(nuevoUsuario.id, roles, tx);
     await tx.usuarioCentroOperacion.createMany({
@@ -201,13 +203,20 @@ router.post('/', soloAdmin, wrap(async (req, res) => {
     await reemplazarMesasAsignadas(tx, nuevoUsuario.id, validacionMesas.ids);
     return nuevoUsuario;
   });
-  await auditar({ req, accion: 'CREAR', entidad: 'Usuario', entidadId: creado.id, detalle: usuario });
+  await auditar({ req, accion: 'CREAR', entidad: 'Usuario', entidadId: creado.id, detalle: usuarioNormalizado });
   res.status(201).json(sinHash(creado));
 }));
 
 router.put('/:id', soloAdmin, wrap(async (req, res) => {
   const id = req.params.id;
   const { nombre, usuario, correo, password, activo, roles, centrosOperacionCodigos, mesaIds } = req.body;
+  const usuarioNormalizado = usuario === undefined ? undefined : normalizarUsuario(usuario);
+  if (usuarioNormalizado !== undefined) {
+    const existe = await prisma.usuario.findFirst({
+      where: { usuario: { equals: usuarioNormalizado, mode: 'insensitive' }, id: { not: id } },
+    });
+    if (existe) return res.status(409).json({ error: 'Ese usuario ya existe' });
+  }
   const validacionCentros = centrosOperacionCodigos === undefined
     ? { centros: undefined, error: null }
     : await validarCentrosOperacion(centrosOperacionCodigos, { obligatorio: true });
@@ -228,7 +237,7 @@ router.put('/:id', soloAdmin, wrap(async (req, res) => {
       where: { id },
       data: {
         ...(nombre !== undefined && { nombre }),
-        ...(usuario !== undefined && { usuario }),
+        ...(usuarioNormalizado !== undefined && { usuario: usuarioNormalizado }),
         ...(correo !== undefined && { correo }),
         ...(password !== undefined && password !== '' && { passwordHash: bcrypt.hashSync(password, 10) }),
         ...(activo !== undefined && { activo }),

@@ -248,7 +248,7 @@ export default function Usuarios() {
             <div className="grid form-2col" style={{ gap: 12 }}>
               <div className="field">
                 <label>Usuario (acceso)</label>
-                <input value={uForm.usuario} onChange={(e) => setUForm({ ...uForm, usuario: e.target.value })} required />
+                <input autoCapitalize="characters" value={uForm.usuario} onChange={(e) => setUForm({ ...uForm, usuario: e.target.value.toUpperCase() })} required />
               </div>
               <div className="field">
                 <label>Correo</label>

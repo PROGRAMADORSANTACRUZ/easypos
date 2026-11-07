@@ -10,6 +10,7 @@ import { municipiosColombia } from '../municipiosColombia.js';
 
 // Escapa texto libre antes de insertarlo en el HTML del ticket (evita inyeccion via nombres/observaciones).
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+const normalizarCategoriaMenu = (valor) => String(valor || '').trim().toLocaleUpperCase('es');
 const fechaHoraLocalInput = (valor) => {
   if (!valor) return '';
   const fecha = new Date(valor);
@@ -192,7 +193,7 @@ export default function TomarPedido() {
   const [mesasLibres, setMesasLibres] = useState([]); // mesas disponibles para mover
   const [moviendo, setMoviendo] = useState(false);    // muestra el selector de mesa
   const [busquedaProd, setBusquedaProd] = useState(''); // filtro por nombre en el menú
-  const [filtroCat, setFiltroCat] = useState('');       // filtro por categoría en el menú
+  const [filtroCat, setFiltroCat] = useState('ENTRADAS'); // categoría inicial del menú
   const [observaciones, setObservaciones] = useState(''); // nota general del pedido (ej. "sin cebolla")
   const [confirmandoCancelar, setConfirmandoCancelar] = useState(false);
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
@@ -287,7 +288,7 @@ export default function TomarPedido() {
   const categoriasMenu = [...new Set(productos.map((p) => p.categoria?.nombre || 'Sin categoría'))];
   const productosFiltrados = productos.filter((p) => {
     const cat = p.categoria?.nombre || 'Sin categoría';
-    const okCat = filtroCat === '' || cat === filtroCat;
+    const okCat = normalizarCategoriaMenu(cat) === normalizarCategoriaMenu(filtroCat);
     const okBusca = !busquedaProd.trim() || p.nombre.toLowerCase().includes(busquedaProd.trim().toLowerCase());
     return okCat && okBusca;
   });
@@ -659,9 +660,8 @@ export default function TomarPedido() {
             onChange={(e) => setBusquedaProd(e.target.value)}
           />
           <div className="menu-cats">
-            <button className={`cat-chip ${filtroCat === '' ? 'active' : ''}`} onClick={() => setFiltroCat('')}>Todas</button>
             {categoriasMenu.map((c) => (
-              <button key={c} className={`cat-chip ${filtroCat === c ? 'active' : ''}`} onClick={() => setFiltroCat(c)}>{c}</button>
+              <button key={c} className={`cat-chip ${normalizarCategoriaMenu(filtroCat) === normalizarCategoriaMenu(c) ? 'active' : ''}`} onClick={() => setFiltroCat(c)}>{normalizarCategoriaMenu(c)}</button>
             ))}
           </div>
           {stockMesa00.length > 0 && (
