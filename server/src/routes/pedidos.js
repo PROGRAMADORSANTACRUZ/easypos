@@ -209,12 +209,76 @@ router.get('/:id/entrega', exigirPermiso('pedidos.ver'), wrap(async (req, res) =
 
 router.post('/:id/entregar', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
   const pedidoId = Number(req.params.id);
+  const pedidoItemIds = req.body?.pedidoItemIds;
+  if (pedidoItemIds !== undefined && (!Array.isArray(pedidoItemIds) || !pedidoItemIds.length
+    || pedidoItemIds.some((id) => !Number.isSafeInteger(Number(id)) || Number(id) <= 0)
+    || new Set(pedidoItemIds.map(Number)).size !== pedidoItemIds.length)) {
+    return res.status(400).json({ error: 'Selecciona uno o más platos válidos para entregar' });
+  }
   try {
     const resultado = await prisma.$transaction(async (tx) => conEventoPedido(tx, req, pedidoId, 'ENTREGAR', async (pedido) => {
-      if (pedido.tipo !== 'MESA') throw Object.assign(new Error('La entrega en mesa requiere un pedido de mesa'), { status: 400 });
-      await registrarResultadoCocinaTransaccion(tx, { pedidoId, estado: 'ENTREGADO', usuario: req.usuario });
+      const actual = await tx.pedido.findUnique({
+        where: { id: pedidoId },
+        include: { preparacion: true, items: { include: { producto: true } } },
+      });
+      if (actual.tipo !== 'MESA') throw Object.assign(new Error('La entrega en mesa requiere un pedido de mesa'), { status: 400 });
+      const preparacion = actual.preparacion;
+      if (!preparacion || !Array.isArray(preparacion.itemsListos)) {
+        throw Object.assign(new Error('Cocina aún no ha marcado platos como listos'), { status: 409 });
+      }
+      const productos = actual.items.map((item) => `${item.cantidad}x ${item.producto?.nombre || ''}`).join(', ');
+      if (preparacion.productos !== productos) {
+        throw Object.assign(new Error('La comanda cambió; cocina debe actualizar los platos listos'), { status: 409 });
+      }
+      const itemsActuales = new Map(actual.items.map((item) => [item.id, item]));
+      const itemsListos = preparacion.itemsListos.filter((estado) => {
+        const item = itemsActuales.get(Number(estado.pedidoItemId));
+        return item && Number(estado.cantidad ?? item.cantidad) === item.cantidad;
+      });
+      const idsParaEntregar = pedidoItemIds === undefined
+        ? itemsListos.filter((estado) => !estado.entregadoAt).map((estado) => Number(estado.pedidoItemId))
+        : pedidoItemIds.map(Number);
+      if (!idsParaEntregar.length) {
+        throw Object.assign(new Error('No hay platos listos pendientes de entrega'), { status: 409 });
+      }
+      for (const id of idsParaEntregar) {
+        const estado = itemsListos.find((item) => Number(item.pedidoItemId) === id);
+        if (!estado) throw Object.assign(new Error('Ese plato todavía no está listo en cocina'), { status: 409 });
+        if (estado.entregadoAt) throw Object.assign(new Error('Ese plato ya fue entregado'), { status: 409 });
+      }
+      const ahora = new Date();
+      const idsSet = new Set(idsParaEntregar);
+      const estadosActualizados = itemsListos.map((estado) => idsSet.has(Number(estado.pedidoItemId))
+        ? {
+          ...estado,
+          entregadoAt: ahora.toISOString(),
+          entregadoUsuarioId: req.usuario.id,
+          entregadoUsuario: req.usuario.usuario,
+          entregadoNombre: req.usuario.nombre,
+        }
+        : estado);
+      await tx.preparacionCocina.update({
+        where: { pedidoId },
+        data: { itemsListos: estadosActualizados },
+      });
+      await tx.auditoria.create({
+        data: {
+          usuarioId: req.usuario.id,
+          accion: 'COCINA_ENTREGA_PARCIAL',
+          entidad: 'PreparacionCocina',
+          entidadId: String(pedidoId),
+          detalle: JSON.stringify({ pedidoItemIds: idsParaEntregar, usuarioNombre: req.usuario.nombre, fecha: ahora.toISOString() }),
+        },
+      });
+      const todosEntregados = actual.items.length > 0 && actual.items.every((item) => {
+        const estado = estadosActualizados.find((actualizado) => Number(actualizado.pedidoItemId) === item.id);
+        return estado && Number(estado.cantidad ?? item.cantidad) === item.cantidad && estado.entregadoAt;
+      });
+      if (todosEntregados) {
+        await registrarResultadoCocinaTransaccion(tx, { pedidoId, estado: 'ENTREGADO', usuario: req.usuario });
+      }
       return consultarEntregaPedido(tx, pedidoId);
-    }, { detalle: 'Entrega de platos en mesa' }), { isolationLevel: 'Serializable' });
+    }, { detalle: JSON.stringify({ pedidoItemIds: pedidoItemIds?.map(Number) || null }) }), { isolationLevel: 'Serializable' });
     res.json(resultado);
   } catch (error) {
     if (error.code === 'P2034') return res.status(409).json({ error: 'El pedido cambió; actualiza e intenta de nuevo' });

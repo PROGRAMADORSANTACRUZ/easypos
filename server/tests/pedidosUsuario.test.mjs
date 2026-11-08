@@ -174,6 +174,7 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true, mes
     },
     preparacionCocina: {
       findUnique: async () => actual?.preparacion || null,
+      update: async ({ data }) => Object.assign(actual.preparacion, data),
       upsert: async ({ create, update }) => {
         actual.preparacion = actual.preparacion ? { ...actual.preparacion, ...update } : { consecutivo: 1, ...create };
         return actual.preparacion;
@@ -201,7 +202,8 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true, mes
     },
     cocinero: { findUnique: async ({ where }) => ({ id: where.id, nombre: 'Cocinero prueba', activo: true }) },
     auditoria: {
-      findFirst: async ({ where }) => auditorias.toReversed().find((fila) => fila.entidadId === where.entidadId) || null,
+      findFirst: async ({ where }) => auditorias.toReversed().find((fila) => fila.entidadId === where.entidadId
+        && (!where.accion?.in || where.accion.in.includes(fila.accion))) || null,
       create: async ({ data }) => {
         const fila = { id: auditorias.length + 1, createdAt: new Date(), ...data };
         auditorias.push(fila);
@@ -476,12 +478,47 @@ test('cocina marca listo y el mesero entrega con fecha, hora y actores separados
   assert.ok(Date.parse(entrega.body.entrega.fecha) >= Date.parse(listo.body.fechaListo));
   assert.equal(eventos[2].accion, 'ENTREGAR');
   assert.equal(eventos[2].usuarioId, 'usuario-mesero');
-  assert.equal(auditorias[0].accion, 'COCINA_ENTREGADO');
+  assert.deepEqual(auditorias.map((auditoria) => auditoria.accion), ['COCINA_ENTREGA_PARCIAL', 'COCINA_ENTREGADO']);
   assert.equal((await solicitar('POST', '/1/entregar', {})).status, 409);
   assert.equal(eventos.length, 3);
   const guardada = await solicitar('GET', '/1/entrega');
   assert.equal(guardada.body.entrega.fecha, entrega.body.entrega.fecha);
   assert.equal(guardada.body.entrega.usuarioNombre, 'Mesero');
+});
+
+test('el mesero confirma un plato listo sin entregar los demás y el pedido se completa al final', async (t) => {
+  const { crear, solicitar, eventos, auditorias } = await entorno(t);
+  await crear({ items: [
+    { productoId: 'producto-prueba', cantidad: 1 },
+    { productoId: 'producto-prueba', cantidad: 2 },
+  ] });
+  const cocina = { 'x-test-user': 'usuario-cocina', 'x-test-name': 'Cocina' };
+  const mesero = { 'x-test-user': 'usuario-mesero', 'x-test-name': 'Mesero' };
+  await solicitar('PUT', '/preparacion-cocina/1/items/1/listo', {}, cocina);
+
+  const listo = await solicitar('GET', '/1/entrega');
+  assert.equal(listo.body.estadoCocina, 'PENDIENTE');
+  assert.equal(listo.body.itemsListos[0].entregadoAt, undefined);
+
+  const primeraEntrega = await solicitar('POST', '/1/entregar', { pedidoItemIds: [1] }, mesero);
+  assert.equal(primeraEntrega.status, 200);
+  assert.equal(primeraEntrega.body.estadoCocina, 'PENDIENTE');
+  assert.equal(primeraEntrega.body.entrega, null);
+  assert.ok(primeraEntrega.body.itemsListos[0].entregadoAt);
+  assert.equal(primeraEntrega.body.itemsListos[0].entregadoNombre, 'Mesero');
+  assert.equal(primeraEntrega.body.itemsListos.length, 1);
+  assert.equal(auditorias.some((fila) => fila.accion === 'COCINA_ENTREGA_PARCIAL'), true);
+  assert.equal(eventos.filter((evento) => evento.accion === 'ENTREGAR').length, 1);
+
+  const duplicada = await solicitar('POST', '/1/entregar', { pedidoItemIds: [1] }, mesero);
+  assert.equal(duplicada.status, 409);
+  await solicitar('PUT', '/preparacion-cocina/1/items/2/listo', {}, cocina);
+  const segundaEntrega = await solicitar('POST', '/1/entregar', { pedidoItemIds: [2] }, mesero);
+  assert.equal(segundaEntrega.status, 200);
+  assert.equal(segundaEntrega.body.estadoCocina, 'ENTREGADO');
+  assert.equal(segundaEntrega.body.itemsListos.length, 2);
+  assert.ok(segundaEntrega.body.itemsListos.every((item) => item.entregadoAt));
+  assert.equal(segundaEntrega.body.entrega.usuarioNombre, 'Mesero');
 });
 
 test('no se entrega desde cocina ni una comanda que cambio tras marcarla lista', async (t) => {

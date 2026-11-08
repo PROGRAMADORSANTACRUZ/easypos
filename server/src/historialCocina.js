@@ -135,6 +135,7 @@ export async function consultarEntregaPedido(db, pedidoId) {
     estadoPedido: pedido.estado,
     estadoCocina: estado,
     fechaListo: pedido.preparacion?.fechaListo || null,
+    itemsListos: Array.isArray(pedido.preparacion?.itemsListos) ? pedido.preparacion.itemsListos : [],
     entrega: estado === 'ENTREGADO' ? {
       fecha: evento.createdAt,
       usuarioId: evento.usuarioId,

@@ -562,12 +562,18 @@ export default function TomarPedido() {
     }
   };
 
-  const entregarPedido = async () => {
-    if (procesando || !pedido || estadoEntrega?.estadoCocina !== 'LISTO') return;
+  const entregarPedido = async (pedidoItemIds) => {
+    if (procesando || !pedido || (estadoEntrega?.estadoPedido && estadoEntrega.estadoPedido !== 'ABIERTO')
+      || (!Array.isArray(estadoEntrega?.itemsListos) && estadoEntrega?.estadoCocina !== 'LISTO')) return;
+    const ids = pedidoItemIds ?? (Array.isArray(estadoEntrega?.itemsListos)
+      ? estadoEntrega.itemsListos.filter((estado) => !estado.entregadoAt).map((estado) => Number(estado.pedidoItemId))
+      : null);
+    if (Array.isArray(ids) && !ids.length) return notify('No hay platos listos pendientes de entrega', 'err');
     setProcesando(true);
     try {
-      setEstadoEntrega(await api.post(`/pedidos/${pedido.id}/entregar`, {}));
-      notify('Entrega registrada');
+      const resultado = await api.post(`/pedidos/${pedido.id}/entregar`, Array.isArray(ids) ? { pedidoItemIds: ids } : {});
+      setEstadoEntrega(resultado);
+      notify(resultado.estadoCocina === 'ENTREGADO' ? 'Entrega completa registrada' : 'Plato entregado en mesa');
     } catch (e) {
       notify(e.message, 'err');
     } finally {
@@ -638,8 +644,10 @@ export default function TomarPedido() {
           {errorEntrega && <p className="mini" role="alert">{errorEntrega}</p>}
         </div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          {pedido && puedeEditarPedido && estadoEntrega?.estadoCocina === 'LISTO' && estadoEntrega.estadoPedido === 'ABIERTO' && (
-            <Button variant="success" icon="check" disabled={procesando || editando} onClick={entregarPedido}>Entregar</Button>
+          {pedido && puedeEditarPedido && (Array.isArray(estadoEntrega?.itemsListos)
+            ? estadoEntrega.itemsListos.some((item) => !item.entregadoAt)
+            : estadoEntrega?.estadoCocina === 'LISTO') && estadoEntrega.estadoPedido === 'ABIERTO' && (
+            <Button variant="success" icon="check" disabled={procesando || editando} onClick={() => entregarPedido()}>Entregar platos listos</Button>
           )}
           {estadoEntrega?.entrega && <span className="badge green">Entregado</span>}
           {pedido && puedeEditarMesa && (
@@ -746,13 +754,29 @@ export default function TomarPedido() {
           ) : (
             <table>
               <tbody>
-                {items.map((it) => (
+                {items.map((it) => {
+                  const estadoItem = pedido && estadoEntrega?.itemsListos?.find((estado) => Number(estado.pedidoItemId) === Number(it.id)
+                    && Number(estado.cantidad ?? it.cantidad) === Number(it.cantidad));
+                  return (
                   <tr key={it.id}>
                     <td>
                       <div style={{ fontWeight: 600, textTransform: 'uppercase' }}>{it.nombre}</div>
                       <div className="mini">{money(it.precioUnit)} c/u</div>
                       {it.cantidadMesa00 > 0 && <span className="badge blue">Mesa 00 · {it.cantidadMesa00}</span>}
                       {it.notas && <div className="mini">{it.notas}</div>}
+                      {estadoItem && (
+                        <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                          <span className={`badge ${estadoItem.entregadoAt ? 'green' : 'orange'}`}>
+                            {estadoItem.entregadoAt ? 'Entregado en mesa' : 'Listo en cocina'}
+                          </span>
+                          {!estadoItem.entregadoAt && puedeEditarPedido && estadoEntrega.estadoPedido === 'ABIERTO' && (
+                            <Button size="sm" variant="success" icon="check" disabled={procesando || editando} onClick={() => entregarPedido([it.id])}>
+                              Confirmar entrega
+                            </Button>
+                          )}
+                          {estadoItem.entregadoAt && estadoItem.entregadoNombre && <span className="mini">{estadoItem.entregadoNombre}</span>}
+                        </div>
+                      )}
                       {pedido && puedeEditarPedido && (() => {
                         const pendientes = solicitudesMesa00.filter((solicitud) => solicitud.pedidoItemId === it.id && solicitud.estado === 'PENDIENTE')
                           .reduce((total, solicitud) => total + solicitud.cantidad, 0);
@@ -798,7 +822,8 @@ export default function TomarPedido() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
