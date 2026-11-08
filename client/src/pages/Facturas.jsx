@@ -602,6 +602,7 @@ export default function Facturas({ electronica = true }) {
   };
   const [facturas, setFacturas] = useState([]);
   const [pendientes, setPendientes] = useState([]);
+  const [pedidosExpandido, setPedidosExpandido] = useState({});
   const [pagosPedidos, setPagosPedidos] = useState({});
   const [formasPagoMaestro, setFormasPagoMaestro] = useState([]);
   const mediosActivos = formasPagoActivas(formasPagoMaestro);
@@ -1351,76 +1352,83 @@ export default function Facturas({ electronica = true }) {
             {pendientes.map((p) => {
               const totalP = totalPedido(p);
               const esDomi = p.tipo === 'DOMICILIO';
+              const expandido = Boolean(pedidosExpandido[p.id]);
               const nombreCli = p.clienteRel?.nombre || p.cliente || 'Consumidor Final';
               // Sin cliente asociado se muestra el NIT estándar DIAN del consumidor final.
               const cedulaCli = p.clienteRel?.documento || clienteDefault?.documento || '222222222222';
               const metodoDomi = (p.metodoPago || 'Efectivo');
               return (
-              <div key={p.id} className="factura-card">
-                {/* 1. Tipo de pedido / trazabilidad */}
-                <div className="fc-trace">
-                  {esDomi ? (
-                    <>
-                      <div><span className="fc-k">Entrada del día</span><strong>#{String(p.consecutivoDia || 0).padStart(3, '0')}</strong></div>
-                      <div><span className="fc-k">N° Pedido</span><strong>#{p.id}</strong></div>
-                    </>
-                  ) : (
-                    <>
-                      <div><span className="fc-k">Mesa</span><strong>N° {p.mesa?.numero ?? '—'}</strong></div>
-                      <div><span className="fc-k">Mesera</span><strong>{p.mesera?.nombre || '—'}</strong></div>
-                    </>
-                  )}
-                </div>
-
-                {/* 2. Información del cliente */}
-                <div className="fc-sec">
-                  <div className="fc-sec-title">Cliente</div>
-                  <div className="fc-cli">{nombreCli}</div>
-                  <div className="mini">CC/NIT: {cedulaCli || '—'}</div>
-                  {esDomi && (p.clienteRel?.telefono || p.clienteRel?.direccion) && (
-                    <div className="mini">{[p.clienteRel?.telefono, p.clienteRel?.direccion, p.clienteRel?.barrio].filter(Boolean).join(' · ')}</div>
-                  )}
-                </div>
-
-                {/* 3. Detalle del pedido */}
-                <div className="fc-sec fc-detalle">
-                  <div className="fc-sec-title">Detalle del pedido</div>
-                  {p.items.map((it) => (
-                    <div key={it.id} className="fc-item">
-                      <span className="fc-item-cant">{it.cantidad}×</span>
-                      <span className="fc-item-nom">{it.producto?.nombre}</span>
-                      <span className="fc-item-val">{money(it.precioUnit * it.cantidad)}</span>
-                    </div>
-                  ))}
-                  {p.editado && (
-                    <div className="fc-editado">
-                      <span className="badge orange">EDITADO</span>
-                      {p.cambios && <pre className="cambios-log">{p.cambios}</pre>}
-                    </div>
-                  )}
-                </div>
-
-                {/* 4. Método de pago */}
-                <div className="fc-sec">
-                  <div className="fc-sec-title">Método de pago</div>
-                  <div className="fc-metodo">
-                    <Icon name={esDomi && /TARJETA/i.test(metodoDomi) ? 'card' : 'cash'} size={15} />
-                    {esDomi ? metodoDomi : 'Se define al cobrar'}
+              <div key={p.id} className={`factura-card ${expandido ? 'is-expanded' : 'is-collapsed'}`}>
+                <button
+                  type="button"
+                  className={`fc-trace fc-trace-toggle ${expandido ? 'is-expanded' : 'is-collapsed'}`}
+                  aria-expanded={expandido}
+                  aria-label={`${expandido ? 'Contraer' : 'Expandir'} ${esDomi ? `domicilio ${p.consecutivoDia || p.id}` : `mesa ${p.mesa?.numero ?? ''}`}`}
+                  onClick={() => setPedidosExpandido((actuales) => ({ ...actuales, [p.id]: !actuales[p.id] }))}
+                >
+                  <div>
+                    <span className="fc-k">{esDomi ? (expandido ? 'Entrada del día' : 'Domicilio') : 'Mesa'}</span>
+                    <strong>{esDomi
+                      ? (expandido ? `#${String(p.consecutivoDia || 0).padStart(3, '0')}` : `Pedido #${p.id}`)
+                      : `N° ${p.mesa?.numero ?? '—'}`}</strong>
                   </div>
-                </div>
+                  {expandido && (
+                    <div><span className="fc-k">{esDomi ? 'N° Pedido' : 'Mesera'}</span><strong>{esDomi ? `#${p.id}` : (p.mesera?.nombre || '—')}</strong></div>
+                  )}
+                  <Icon name="chevronDown" size={18} style={{ transform: expandido ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform .15s' }} />
+                </button>
 
-                {/* Footer fijo */}
-                <div className="fc-foot">
-                  <div className="total-line grand"><span>Total</span><span>{money(totalP)}</span></div>
-                  <div className="fc-acciones">
-                    <button className="btn btn-green" onClick={() => imprimirPrefactura(p)}>
-                      <Icon name="receipt" size={16} /> Prefactura
-                    </button>
-                    <button className="btn btn-primary" onClick={() => abrirCobro(p)}>
-                      <Icon name="cash" size={17} /> Facturar
-                    </button>
+                {expandido && <>
+                  {/* 2. Información del cliente */}
+                  <div className="fc-sec">
+                    <div className="fc-sec-title">Cliente</div>
+                    <div className="fc-cli">{nombreCli}</div>
+                    <div className="mini">CC/NIT: {cedulaCli || '—'}</div>
+                    {esDomi && (p.clienteRel?.telefono || p.clienteRel?.direccion) && (
+                      <div className="mini">{[p.clienteRel?.telefono, p.clienteRel?.direccion, p.clienteRel?.barrio].filter(Boolean).join(' · ')}</div>
+                    )}
                   </div>
-                </div>
+
+                  {/* 3. Detalle del pedido */}
+                  <div className="fc-sec fc-detalle">
+                    <div className="fc-sec-title">Detalle del pedido</div>
+                    {p.items.map((it) => (
+                      <div key={it.id} className="fc-item">
+                        <span className="fc-item-cant">{it.cantidad}×</span>
+                        <span className="fc-item-nom">{it.producto?.nombre}</span>
+                        <span className="fc-item-val">{money(it.precioUnit * it.cantidad)}</span>
+                      </div>
+                    ))}
+                    {p.editado && (
+                      <div className="fc-editado">
+                        <span className="badge orange">EDITADO</span>
+                        {p.cambios && <pre className="cambios-log">{p.cambios}</pre>}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 4. Método de pago */}
+                  <div className="fc-sec">
+                    <div className="fc-sec-title">Método de pago</div>
+                    <div className="fc-metodo">
+                      <Icon name={esDomi && /TARJETA/i.test(metodoDomi) ? 'card' : 'cash'} size={15} />
+                      {esDomi ? metodoDomi : 'Se define al cobrar'}
+                    </div>
+                  </div>
+
+                  {/* Footer fijo */}
+                  <div className="fc-foot">
+                    <div className="total-line grand"><span>Total</span><span>{money(totalP)}</span></div>
+                    <div className="fc-acciones">
+                      <button className="btn btn-green" onClick={() => imprimirPrefactura(p)}>
+                        <Icon name="receipt" size={16} /> Prefactura
+                      </button>
+                      <button className="btn btn-primary" onClick={() => abrirCobro(p)}>
+                        <Icon name="cash" size={17} /> Facturar
+                      </button>
+                    </div>
+                  </div>
+                </>}
               </div>
               );
             })}

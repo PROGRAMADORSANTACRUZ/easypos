@@ -1282,6 +1282,16 @@ tbody tr:last-child td { border-bottom: none; }
   padding: 10px 12px;
   margin-bottom: 12px;
 }
+.fc-trace-toggle {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fc-trace-toggle.is-collapsed { grid-template-columns: minmax(0, 1fr) auto; margin-bottom: 0; }
+.fc-trace-toggle.is-expanded { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+.factura-card.is-collapsed { align-self: start; padding: 8px; }
 .fc-k { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
 .fc-trace strong { font-size: 16px; }
 .fc-sec { margin-bottom: 12px; }
