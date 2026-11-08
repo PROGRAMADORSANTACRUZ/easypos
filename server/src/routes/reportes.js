@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { diaColombia, inicioDiaColombia, finDiaColombia } from '../fechaColombia.js';
-import { filtroHistorialPedidos, estadoActualPedido } from '../historialPedidos.js';
+import { filtroHistorialPedidos, estadoActualPedido, estadoAntesDeReenvio } from '../historialPedidos.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -323,7 +323,18 @@ router.get('/historial-pedidos', wrap(async (req, res) => {
     include: { pedido: { select: { estado: true, preparacion: { select: { listo: true } } } } },
     orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
   });
-  res.json(eventos.map(({ pedido, ...evento }) => ({ ...evento, estado: estadoActualPedido(pedido) })));
+  const normalizados = await Promise.all(eventos.map(async ({ pedido, ...evento }) => {
+    let antes = evento.antes;
+    const itemsAntes = evento.antes?.items || [];
+    const itemsDespues = evento.despues?.items || [];
+    const mismaFirma = (items) => JSON.stringify(items.map((item) => [item.id ?? item.productoId ?? item.nombre, item.cantidad]).sort());
+    if (evento.accion === 'REENVIAR' && evento.detalle && mismaFirma(itemsAntes) === mismaFirma(itemsDespues)) {
+      const reconstruido = await estadoAntesDeReenvio(prisma, evento.pedidoId, evento.despues, evento.id);
+      if (mismaFirma(reconstruido?.items || []) !== mismaFirma(itemsDespues)) antes = reconstruido;
+    }
+    return { ...evento, antes, estado: estadoActualPedido(pedido) };
+  }));
+  res.json(normalizados);
 }));
 
 export default router;

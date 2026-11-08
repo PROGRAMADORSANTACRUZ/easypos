@@ -112,6 +112,28 @@ export async function registrarEventoPedido(tx, req, pedidoId, accion, antes = n
   });
 }
 
+export async function estadoAntesDeReenvio(tx, pedidoId, estadoActual, hastaId) {
+  const ultimoReenvio = await tx.pedidoEvento.findFirst({
+    where: { pedidoId, accion: 'REENVIAR', ...(hastaId !== undefined && { id: { lt: hastaId } }) },
+    orderBy: { id: 'desc' },
+    select: { id: true, despues: true },
+  });
+  const rangoId = {
+    ...(ultimoReenvio && { gt: ultimoReenvio.id }),
+    ...(hastaId !== undefined && { lt: hastaId }),
+  };
+  const primerCambio = await tx.pedidoEvento.findFirst({
+    where: {
+      pedidoId,
+      accion: { in: ['AGREGAR_PRODUCTO', 'CAMBIAR_CANTIDAD', 'QUITAR_PRODUCTO'] },
+      ...(Object.keys(rangoId).length && { id: rangoId }),
+    },
+    orderBy: { id: 'asc' },
+    select: { antes: true },
+  });
+  return primerCambio?.antes || ultimoReenvio?.despues || estadoActual;
+}
+
 export async function conEventoPedido(tx, req, pedidoId, accion, cambiar, opciones) {
   await tx.$queryRaw`SELECT "id" FROM "Pedido" WHERE "id" = ${pedidoId} FOR UPDATE`;
   const antes = await estadoPedido(tx, pedidoId);
@@ -119,7 +141,10 @@ export async function conEventoPedido(tx, req, pedidoId, accion, cambiar, opcion
   if (antes.estado !== 'ABIERTO') {
     throw Object.assign(new Error('Solo se pueden modificar pedidos abiertos'), { status: 409 });
   }
+  const antesEvento = opciones?.resolverAntes
+    ? await opciones.resolverAntes(tx, antes)
+    : antes;
   const resultado = await cambiar(antes);
-  await registrarEventoPedido(tx, req, pedidoId, accion, antes, opciones);
+  await registrarEventoPedido(tx, req, pedidoId, accion, antesEvento, opciones);
   return resultado;
 }

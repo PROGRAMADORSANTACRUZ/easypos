@@ -4,7 +4,7 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { calcularInsumosRequeridos, validarStockSuficiente, descontarInsumos, revertirInsumos } from '../inventarioKits.js';
 import { imprimirComandaPorEstacion } from '../impresionCocina.js';
-import { conEventoPedido, registrarEventoPedido, validarAccesoMesaMesero, validarMotivoCancelacion } from '../historialPedidos.js';
+import { conEventoPedido, registrarEventoPedido, estadoAntesDeReenvio, validarAccesoMesaMesero, validarMotivoCancelacion } from '../historialPedidos.js';
 import { consultarEntregaPedido, registrarResultadoCocinaTransaccion } from '../historialCocina.js';
 import { descontarStockMesa00, devolverStockMesa00, itemsDeInventarioNormal } from '../stockMesa00.js';
 
@@ -663,7 +663,7 @@ router.post('/:id/reenviar', exigirPermiso('pedidos.editar'), wrap(async (req, r
     await tx.pedidoMesa.updateMany({ where: { pedidoId: id }, data: { editado: true, cambios: cambios || null } });
     await tx.preparacionCocina.updateMany({ where: { pedidoId: id }, data: { listo: false, fechaListo: null } });
     return actualizado;
-  }, { detalle: texto }));
+  }, { detalle: texto, resolverAntes: (tx, antes) => estadoAntesDeReenvio(tx, id, antes) }));
   res.json(pedido);
 }));
 

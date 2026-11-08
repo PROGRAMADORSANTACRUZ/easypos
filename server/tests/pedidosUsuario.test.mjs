@@ -153,6 +153,14 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true, mes
         eventos.push({ id: eventos.length + 1, fecha: new Date().toISOString(), ...structuredClone(data) });
         return data;
       },
+      findFirst: async ({ where, orderBy }) => {
+        const encontrados = eventos.filter((evento) => evento.pedidoId === where.pedidoId
+          && (where.accion === undefined || (where.accion.in || [where.accion]).includes(evento.accion))
+          && (where.id?.gt === undefined || evento.id > where.id.gt)
+          && (where.id?.lt === undefined || evento.id < where.id.lt));
+        encontrados.sort((a, b) => orderBy.id === 'desc' ? b.id - a.id : a.id - b.id);
+        return encontrados[0] || null;
+      },
       findMany: async ({ where }) => eventos.filter((evento) => (
         (where.pedidoId === undefined || evento.pedidoId === where.pedidoId)
         && (!where.fecha?.gte || new Date(evento.fecha) >= where.fecha.gte)
@@ -330,6 +338,8 @@ test('registra quien edita y los valores anteriores y posteriores de productos y
   assert.equal((await solicitar('POST', '/1/reenviar', { cambios: 'Cantidad corregida' }, editor)).status, 200);
   assert.equal(eventos[4].accion, 'REENVIAR');
   assert.equal(eventos[4].detalle, 'Cantidad corregida');
+  assert.equal(eventos[4].antes.items[0].cantidad, 1);
+  assert.equal(eventos[4].despues.items[0].cantidad, 5);
   assert.equal((await solicitar('DELETE', '/1/items/1')).status, 200);
   assert.equal(eventos[5].accion, 'QUITAR_PRODUCTO');
   assert.equal(eventos[5].antes.items.length, 1);
@@ -415,6 +425,29 @@ test('el reporte muestra el estado actual sin modificar el estado historico del 
   pedidos[0].estado = 'CANCELADO';
   assert.equal((await solicitar('GET', '/reportes/historial-pedidos')).body[0].estado, 'CANCELADO');
   assert.equal(eventos[0].despues.estado, 'ABIERTO');
+});
+
+test('el reporte reconstruye el Antes legacy de REENVIAR sin modificar la bitácora', async (t) => {
+  const { crear, solicitar, eventos } = await entorno(t);
+  await crear();
+  assert.equal((await solicitar('PUT', '/1/items/1', { cantidad: 3 })).status, 200);
+  const despuesEdicion = structuredClone(eventos[1].despues);
+  const eventoLegacy = {
+    id: 99,
+    fecha: new Date().toISOString(),
+    pedidoId: 1,
+    accion: 'REENVIAR',
+    detalle: 'Producto 1→3',
+    antes: despuesEdicion,
+    despues: despuesEdicion,
+  };
+  eventos.push(eventoLegacy);
+
+  const respuesta = await solicitar('GET', '/reportes/historial-pedidos');
+  const reenviado = respuesta.body.find((evento) => evento.id === 99);
+  assert.equal(reenviado.antes.items[0].cantidad, 1);
+  assert.equal(reenviado.despues.items[0].cantidad, 3);
+  assert.equal(eventoLegacy.antes.items[0].cantidad, 3);
 });
 
 test('cocina marca listo y el mesero entrega con fecha, hora y actores separados', async (t) => {
