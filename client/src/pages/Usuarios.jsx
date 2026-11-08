@@ -5,6 +5,22 @@ import { useAuth, useToast } from '../App.jsx';
 import { PageHeader, Modal, Button } from '../components/ui/index.jsx';
 
 const uVacio = { nombre: '', usuario: '', correo: '', password: '', roles: [], centrosOperacionCodigos: [], mesaIds: [], activo: true };
+const normalizarTextoUsuario = (valor) => String(valor ?? '').toUpperCase();
+const mismoConjunto = (a, b) => JSON.stringify([...a].map(String).sort()) === JSON.stringify([...b].map(String).sort());
+
+function usuarioTieneCambios(formulario, original) {
+  return normalizarTextoUsuario(formulario.nombre) !== normalizarTextoUsuario(original.nombre)
+    || normalizarTextoUsuario(formulario.usuario) !== normalizarTextoUsuario(original.usuario)
+    || normalizarTextoUsuario(formulario.correo) !== normalizarTextoUsuario(original.correo)
+    || Boolean(formulario.password)
+    || formulario.activo !== original.activo
+    || !mismoConjunto(formulario.roles, original.roles || [])
+    || !mismoConjunto(
+      formulario.centrosOperacionCodigos,
+      (original.centrosOperacion || []).filter((centro) => centro.estado === 'Activo').map((centro) => centro.codigo),
+    )
+    || !mismoConjunto(formulario.mesaIds, (original.mesasAsignadas || []).map((mesa) => mesa.id));
+}
 
 const resumirCentros = (centros) => {
   const grupos = new Map();
@@ -88,6 +104,10 @@ export default function Usuarios() {
     e.preventDefault();
     if (!uForm.centrosOperacionCodigos.length) return notify('Asigna al menos un centro de operaciones', 'err');
     if (uForm.roles.includes('MESERO') && !uForm.mesaIds.length) return notify('Asigna al menos una mesa a este mesero', 'err');
+    if (editId) {
+      const original = usuarios.find((usuario) => usuario.id === editId);
+      if (original && !usuarioTieneCambios(uForm, original)) return notify('No hay cambios para guardar');
+    }
     try {
       if (editId) {
         const payload = { ...uForm };
