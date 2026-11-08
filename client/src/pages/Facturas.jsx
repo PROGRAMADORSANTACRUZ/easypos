@@ -12,7 +12,7 @@ import { tipoDocumentoListo } from '../tipoDocumentoListo.js';
 import { diaColombia } from '../fechaComercial.js';
 import PagosMultiples from '../components/PagosMultiples.jsx';
 import { etiquetaPagos, resumirPagos, formasPagoActivas, esPagoEfectivo } from '../pagosMultiples.js';
-import { calcularTotalesPedido } from '../totalesPedido.js';
+import { calcularPropinaSugerida, calcularTotalesPedido } from '../totalesPedido.js';
 
 // Número visible de la factura: prefijo + consecutivo DIAN, o el ID corto si aún no tiene numeración.
 function numeroDian(f) {
@@ -27,7 +27,7 @@ let tipoFacturaRecibo = null;
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 
 // Propina sugerida: 10% del total (editable por el cajero/cliente).
-export const sugPropina = (total) => Math.round((total || 0) * 0.1);
+export const sugPropina = calcularPropinaSugerida;
 const CENTROS_VACIOS = [];
 const centroPreferidoFacturas = (centros) => centros.find((centro) =>
   `${centro.nombre || ''} ${centro.descripcion || ''}`.toUpperCase().includes('VITRINA')) || centros[0];
@@ -955,7 +955,7 @@ export default function Facturas({ electronica = true }) {
     const cobrarPropina = propinaOn[pedido.id] !== false;
     const prop = !cobrarPropina
       ? 0
-      : (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(subtotal));
+      : (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(total));
     const totalPagar = total + prop;
     const resumen = resumirPagos(pagoPedido.pagos, totalPagar, mediosActivos);
     if (pagoPedido.recibe !== '' || !resumen.valido) return notify('Asigna los importes a las formas de pago hasta cubrir el total', 'err');
@@ -1016,7 +1016,7 @@ export default function Facturas({ electronica = true }) {
 
     const cobrarPropina = propinaOn[pedido.id] !== false;
     const propina = cobrarPropina
-      ? (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(totalesPedido(pedido).subtotal))
+      ? (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(totalesPedido(pedido).total))
       : 0;
     const ventanaCount = emisionDivision === 'UNA' ? 1 : nPartes;
     const ventanas = Array.from({ length: ventanaCount }, () => abrirVentanaVacia());
@@ -1141,7 +1141,7 @@ export default function Facturas({ electronica = true }) {
   });
 
   // Propina de la venta directa: sugerida al 10% mientras no se digite otra.
-  const propDirecta = sinPropinaDirecta ? 0 : propinaDirecta !== '' ? Math.max(0, Number(propinaDirecta) || 0) : sugPropina(subtotalDirecta);
+  const propDirecta = sinPropinaDirecta ? 0 : propinaDirecta !== '' ? Math.max(0, Number(propinaDirecta) || 0) : sugPropina(totalProductosDirecta);
   const totalPagarDirecta = totalProductosDirecta + propDirecta;
 
   // Condición del cliente seleccionado en la venta directa (crédito/contado según Clientes)
@@ -1458,7 +1458,7 @@ export default function Facturas({ electronica = true }) {
         const cobrarPropina = propinaOn[p.id] !== false;
         const propP = !cobrarPropina
           ? 0
-          : (propinas[p.id] !== undefined ? Math.max(0, Number(propinas[p.id]) || 0) : sugPropina(subtotal));
+          : (propinas[p.id] !== undefined ? Math.max(0, Number(propinas[p.id]) || 0) : sugPropina(totalP));
         const totalPagarP = totalP + propP;
         const nombreCli = p.clienteRel?.nombre || p.cliente || 'Consumidor Final';
         const nPartes = Math.max(2, Math.min(12, Number(cantidadPartes) || 2));
@@ -1713,8 +1713,8 @@ export default function Facturas({ electronica = true }) {
                           <input
                             type="number"
                             min="0"
-                            placeholder={String(sugPropina(subtotal))}
-                            value={propinas[p.id] ?? String(sugPropina(subtotal))}
+                            placeholder={String(sugPropina(totalP))}
+                            value={propinas[p.id] ?? String(sugPropina(totalP))}
                             onChange={(e) => setPropinas({ ...propinas, [p.id]: e.target.value })}
                           />
                         </div>
@@ -2073,8 +2073,8 @@ export default function Facturas({ electronica = true }) {
                         type="number"
                         min="0"
                         disabled={sinPropinaDirecta}
-                        placeholder={String(sugPropina(subtotalDirecta))}
-                        value={sinPropinaDirecta ? '0' : propinaDirecta !== '' ? propinaDirecta : String(sugPropina(subtotalDirecta))}
+                        placeholder={String(sugPropina(totalProductosDirecta))}
+                        value={sinPropinaDirecta ? '0' : propinaDirecta !== '' ? propinaDirecta : String(sugPropina(totalProductosDirecta))}
                         onChange={(e) => setPropinaDirecta(e.target.value)}
                       />
                     </div>

@@ -1,5 +1,7 @@
 const redondear = (valor) => Math.round((Number(valor) || 0) * 100) / 100;
 
+export const calcularPropinaSugerida = (totalCuenta) => Math.round((Number(totalCuenta) || 0) * 0.1);
+
 export function calcularTotalesPedido(items = [], electronica = true) {
   const precioProductos = redondear(items.reduce((suma, item) =>
     suma + (Number(item.precioUnit) || 0) * (Number(item.cantidad) || 0), 0));

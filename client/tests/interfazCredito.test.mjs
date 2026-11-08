@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import ExcelJS from 'exceljs';
-import { calcularTotalesPedido } from '../src/totalesPedido.js';
+import { calcularPropinaSugerida, calcularTotalesPedido } from '../src/totalesPedido.js';
 
 const fuente = await readFile(new URL('../src/pages/Facturas.jsx', import.meta.url), 'utf8');
 const inicio = fuente.indexOf('  const exportarInterfaz = async () => {');
@@ -31,6 +31,7 @@ test('el precio de $8.000 ya incluye el impoconsumo de $640', () => {
   const items = [{ precioUnit: 8000, cantidad: 1, producto: { iva: 8 } }];
   assert.deepEqual(calcularTotalesPedido(items, true), { subtotal: 7360, impuesto: 640, total: 8000 });
   assert.deepEqual(calcularTotalesPedido(items, false), { subtotal: 7360, impuesto: 640, total: 8000 });
+  assert.equal(calcularPropinaSugerida(calcularTotalesPedido(items, true).total), 800);
 });
 
 async function exportar(facturas, electronica = false) {
