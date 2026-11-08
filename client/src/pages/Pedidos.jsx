@@ -296,7 +296,7 @@ export default function Pedidos() {
   if (cargando) return <LoadingState />;
 
   return (
-    <div>
+    <div className="domicilios-page">
       <div className="row between">
         <div>
           <h1>Domicilios</h1>

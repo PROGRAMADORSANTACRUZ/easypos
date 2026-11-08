@@ -801,6 +801,28 @@ tbody tr:last-child td { border-bottom: none; }
   padding: 12px;
 }
 
+@media (max-width: 600px) {
+  .domicilios-page { min-width: 0; }
+  .domicilios-page > .grid.grid-2 { grid-template-columns: minmax(0, 1fr); }
+  .domicilios-page .menu-panel,
+  .domicilios-page .cuenta-panel { min-width: 0; padding: 14px; }
+  .domicilios-page .menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .domicilios-page .producto-card { min-height: 132px; aspect-ratio: auto; }
+  .domicilios-page .carrito-items { max-height: none; overflow: visible; padding-right: 0; }
+  .domicilios-page .carrito-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'info total' 'quantity remove';
+    gap: 8px;
+    padding: 10px;
+  }
+  .domicilios-page .ci-info { grid-area: info; min-width: 0; }
+  .domicilios-page .carrito-item .qty { grid-area: quantity; justify-self: start; max-width: 100%; }
+  .domicilios-page .carrito-item .qty-num { width: 48px; }
+  .domicilios-page .ci-total { grid-area: total; min-width: 0; justify-self: end; white-space: nowrap; }
+  .domicilios-page .ci-quitar { grid-area: remove; justify-self: end; }
+  .domicilios-page .carrito-footer .total-line { gap: 8px; }
+}
+
 /* ===== Modal Mis datos ===== */
 .datos-modal { max-width: 560px; }
 .modal-head {
