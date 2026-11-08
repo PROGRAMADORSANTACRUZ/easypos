@@ -1292,10 +1292,14 @@ tbody tr:last-child td { border-bottom: none; }
   cursor: pointer;
 }
 .fc-trace-toggle.is-collapsed { grid-template-columns: minmax(0, 1fr) auto; margin-bottom: 0; }
-.fc-trace-toggle.is-expanded { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+.fc-trace-toggle.is-expanded { grid-template-columns: minmax(0, 1fr) auto; }
+.fc-trace-toggle.is-expanded > div:first-child { grid-column: 1; grid-row: 1; }
+.fc-trace-toggle.is-expanded > div:nth-child(2) { grid-column: 1; grid-row: 2; }
+.fc-trace-toggle.is-expanded > svg { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
 .factura-card.is-collapsed { align-self: start; width: 100%; max-width: 250px; padding: 8px; }
+.factura-card.is-expanded { align-self: start; width: 100%; max-width: 250px; }
 .fc-k { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
-.fc-trace strong { font-size: 16px; }
+.fc-trace strong { display: block; min-width: 0; font-size: 16px; overflow-wrap: anywhere; }
 .fc-sec { margin-bottom: 12px; }
 .fc-sec-title {
   font-size: 11px;
@@ -1309,7 +1313,7 @@ tbody tr:last-child td { border-bottom: none; }
 .fc-detalle { flex: 1; }
 .fc-item {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
   align-items: baseline;
   padding: 3px 0;
@@ -1317,7 +1321,7 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .fc-item:last-child { border-bottom: none; }
 .fc-item-cant { font-weight: 800; color: var(--primary); font-size: 13px; }
-.fc-item-nom { text-transform: uppercase; font-size: 13px; line-height: 1.2; }
+.fc-item-nom { min-width: 0; text-transform: uppercase; font-size: 13px; line-height: 1.2; overflow-wrap: anywhere; }
 .fc-item-val { font-weight: 700; font-size: 13px; white-space: nowrap; }
 .fc-editado { margin-top: 8px; }
 .fc-metodo {
@@ -1333,7 +1337,7 @@ tbody tr:last-child td { border-bottom: none; }
   border-top: 1px solid var(--border);
 }
 .fc-cta { width: 100%; margin-top: 10px; padding: 11px; font-size: 15px; }
-.fc-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.fc-acciones { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
 .fc-acciones .btn { width: 100%; padding: 11px; font-size: 15px; }
 
 /* ===== Modal POS de cobro ===== */
@@ -1531,7 +1535,6 @@ tbody tr:last-child td { border-bottom: none; }
 /* ---------- Tablet vertical (≤768) ---------- */
 @media (max-width: 768px) {
   .cobro-grid { grid-template-columns: 1fr; }
-  .fc-acciones { grid-template-columns: 1fr 1fr; }
 }
 
 /* ---------- Teléfono grande (≤600) ---------- */
@@ -1577,7 +1580,6 @@ tbody tr:last-child td { border-bottom: none; }
   h1 { font-size: 20px; }
   .mesera-grid { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
   .mesa .num { font-size: 28px; }
-  .fc-acciones { grid-template-columns: 1fr; }
   .row .btn { flex: 1 1 auto; }               /* botones de acción llenan la fila */
   .toast { left: 12px; right: 12px; bottom: 12px; text-align: center; }
 }
