@@ -769,11 +769,6 @@ export default function TomarPedido() {
                           <span className={`badge ${estadoItem.entregadoAt ? 'green' : 'orange'}`}>
                             {estadoItem.entregadoAt ? 'Entregado en mesa' : 'Listo en cocina'}
                           </span>
-                          {!estadoItem.entregadoAt && puedeEditarPedido && estadoEntrega.estadoPedido === 'ABIERTO' && (
-                            <Button size="sm" variant="success" icon="check" disabled={procesando || editando} onClick={() => entregarPedido([it.id])}>
-                              Confirmar entrega
-                            </Button>
-                          )}
                           {estadoItem.entregadoAt && estadoItem.entregadoNombre && <span className="mini">{estadoItem.entregadoNombre}</span>}
                         </div>
                       )}
