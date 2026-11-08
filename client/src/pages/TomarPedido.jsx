@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
@@ -11,6 +11,24 @@ import { municipiosColombia } from '../municipiosColombia.js';
 // Escapa texto libre antes de insertarlo en el HTML del ticket (evita inyeccion via nombres/observaciones).
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 const normalizarCategoriaMenu = (valor) => String(valor || '').trim().toLocaleUpperCase('es');
+const sonarPlatoListo = (contexto) => {
+  if (!contexto || contexto.state !== 'running') return;
+  const frecuencias = [880, 1174, 880];
+  frecuencias.forEach((frecuencia, indice) => {
+    const inicio = contexto.currentTime + indice * 0.2;
+    const oscilador = contexto.createOscillator();
+    const volumen = contexto.createGain();
+    oscilador.type = 'sine';
+    oscilador.frequency.setValueAtTime(frecuencia, inicio);
+    volumen.gain.setValueAtTime(0.0001, inicio);
+    volumen.gain.exponentialRampToValueAtTime(0.75, inicio + 0.02);
+    volumen.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.18);
+    oscilador.connect(volumen);
+    volumen.connect(contexto.destination);
+    oscilador.start(inicio);
+    oscilador.stop(inicio + 0.2);
+  });
+};
 const fechaHoraLocalInput = (valor) => {
   if (!valor) return '';
   const fecha = new Date(valor);
@@ -184,6 +202,8 @@ export default function TomarPedido() {
   const [cantidadesMoverMesa00, setCantidadesMoverMesa00] = useState({});
   const [estadoEntrega, setEstadoEntrega] = useState(null);
   const [errorEntrega, setErrorEntrega] = useState('');
+  const audioPlatoListo = useRef(null);
+  const itemsListosAnteriores = useRef(null);
   const [editandoObservaciones, setEditandoObservaciones] = useState(false);
   const [carrito, setCarrito] = useState([]);       // items locales para pedido nuevo
   const [editando, setEditando] = useState(true); // un pedido enviado inicia bloqueado
@@ -271,17 +291,49 @@ export default function TomarPedido() {
     setErrorEntrega('');
     if (!pedido?.id) return;
     let activo = true;
+    itemsListosAnteriores.current = null;
+    const desbloquearAudio = () => {
+      const AudioContexto = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContexto) return;
+      audioPlatoListo.current ||= new AudioContexto();
+      if (audioPlatoListo.current.state === 'suspended') audioPlatoListo.current.resume().catch(() => {});
+    };
+    window.addEventListener('pointerdown', desbloquearAudio);
+    window.addEventListener('keydown', desbloquearAudio);
     const consultar = async () => {
       try {
         const estado = await api.get(`/pedidos/${pedido.id}/entrega`);
-        if (activo) { setEstadoEntrega(estado); setErrorEntrega(''); }
+        if (!activo) return;
+        const itemsListos = Array.isArray(estado.itemsListos) ? estado.itemsListos : [];
+        const clavesActuales = new Set(itemsListos.map((item) => `${item.pedidoItemId}:${item.cantidad ?? ''}:${item.fechaListo ?? ''}`));
+        const anteriores = itemsListosAnteriores.current;
+        if (anteriores) {
+          const nuevos = itemsListos.filter((item) => !anteriores.has(`${item.pedidoItemId}:${item.cantidad ?? ''}:${item.fechaListo ?? ''}`));
+          if (nuevos.length) {
+            const cantidad = nuevos.length;
+            const nombreMesa = mesa?.numero ? `Mesa ${mesa.numero}` : 'El pedido';
+            notify(`Cocina marcó ${cantidad} ${cantidad === 1 ? 'plato listo' : 'platos listos'} en ${nombreMesa}. Confirma la entrega.`);
+            try { navigator.vibrate?.([350, 120, 350, 120, 500]); } catch {}
+            const contexto = audioPlatoListo.current;
+            if (contexto?.state === 'suspended') contexto.resume().then(() => sonarPlatoListo(contexto)).catch(() => {});
+            else sonarPlatoListo(contexto);
+          }
+        }
+        itemsListosAnteriores.current = clavesActuales;
+        setEstadoEntrega(estado);
+        setErrorEntrega('');
       } catch (e) {
         if (activo) { setEstadoEntrega(null); setErrorEntrega(e.message); }
       }
     };
     consultar();
     const intervalo = setInterval(consultar, 5000);
-    return () => { activo = false; clearInterval(intervalo); };
+    return () => {
+      activo = false;
+      clearInterval(intervalo);
+      window.removeEventListener('pointerdown', desbloquearAudio);
+      window.removeEventListener('keydown', desbloquearAudio);
+    };
   }, [pedido?.id]);
 
   // Categorías y productos filtrados del menú
