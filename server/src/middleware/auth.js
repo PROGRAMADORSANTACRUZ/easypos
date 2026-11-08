@@ -127,7 +127,7 @@ export function requireAuth(req, res, next) {
       permisos,
       centrosOperacion: usuario.centrosOperacion.map(({ centroOperacion }) => centroOperacion),
     };
-    if (!req.headers['x-usuario-id']) req.headers['x-usuario-id'] = usuario.id;
+    req.headers['x-usuario-id'] = usuario.id;
     next();
   }).catch(next);
 }

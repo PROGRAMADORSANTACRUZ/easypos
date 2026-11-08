@@ -93,7 +93,6 @@ function aplicarEsquema(dbUrl) {
     cwd: SERVER_DIR,
     env: { ...process.env, DATABASE_URL: dbUrl },
     stdio: 'pipe',
-    shell: true,
   });
 }
 
@@ -118,7 +117,8 @@ router.post('/', wrap(async (req, res) => {
     await crearBaseDeDatos(process.env.DATABASE_URL, dbNombre);
     aplicarEsquema(dbUrl);
   } catch (e) {
-    return res.status(500).json({ error: `No se pudo crear la base de datos del restaurante: ${e.message}` });
+    console.error('No se pudo aprovisionar la base de datos del restaurante', { name: e.name, code: e.code || e.status || null });
+    return res.status(500).json({ error: 'No se pudo crear la base de datos del restaurante' });
   }
 
   const tenantPrisma = getTenantPrisma(dbUrl);

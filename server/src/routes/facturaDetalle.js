@@ -4,6 +4,18 @@ import { auditar } from '../auditoria.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const PERMISOS_LECTURA = ['facturas.ver', 'factura_venta.ver'];
+const PERMISOS_CREAR = ['facturas.crear', 'factura_venta.crear'];
+router.use((req, res, next) => {
+  const permisos = req.usuario?.permisos || [];
+  const permitidos = ['GET', 'HEAD'].includes(req.method)
+    ? PERMISOS_LECTURA
+    : req.method === 'DELETE'
+      ? ['facturas.anular', 'factura_venta.crear']
+      : PERMISOS_CREAR;
+  if (permitidos.some((permiso) => permisos.includes(permiso))) return next();
+  return res.status(403).json({ error: 'No tienes permiso para consultar o modificar detalles de facturas' });
+});
 
 const conRelaciones = { producto: { include: { unidad: true } }, compania: true, centroOperacion: true };
 

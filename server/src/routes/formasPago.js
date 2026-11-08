@@ -4,6 +4,14 @@ import { auditar } from '../auditoria.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const permisosLectura = ['empresa.ver', 'facturas.ver', 'facturas.crear', 'factura_venta.ver', 'factura_venta.crear'];
+
+router.use((req, res, next) => {
+  const permisos = req.usuario?.permisos || [];
+  if (['GET', 'HEAD'].includes(req.method) && permisosLectura.some((permiso) => permisos.includes(permiso))) return next();
+  if (!['GET', 'HEAD'].includes(req.method) && permisos.includes('empresa.editar')) return next();
+  return res.status(403).json({ error: 'No tienes permiso para consultar o editar formas de pago' });
+});
 
 const limpiar = (v) => {
   if (v === undefined) return undefined;

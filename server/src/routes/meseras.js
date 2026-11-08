@@ -23,13 +23,23 @@ router.put('/:id', wrap(async (req, res) => {
       ...(nombre !== undefined && { nombre }),
       ...(codigo !== undefined && { codigo: String(codigo) }),
       ...(activa !== undefined && { activa }),
+    const soloAdmin = wrap(async (req, res, next) => {
+      const asignacion = await prisma.usuarioRol.findFirst({ where: { usuarioId: req.usuario.id, rol: { nombre: 'ADMIN' } } });
+      if (!asignacion) return res.status(403).json({ error: 'Solo el administrador puede gestionar el catálogo de meseras' });
+      next();
+    });
     },
   });
+      if ((req.usuario?.permisos || []).includes('pedidos.ver')) return next();
+      return res.status(403).json({ error: 'No tienes permiso para consultar meseras' });
+    }, wrap(async (_req, res) => {
   res.json(mesera);
 }));
 
 router.delete('/:id', wrap(async (req, res) => {
   await prisma.mesera.delete({ where: { id: Number(req.params.id) } });
+  router.put('/:id', soloAdmin, wrap(async (req, res) => {
+  router.delete('/:id', soloAdmin, wrap(async (req, res) => {
   res.status(204).end();
 }));
 

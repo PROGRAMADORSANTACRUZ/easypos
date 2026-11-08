@@ -23,13 +23,23 @@ router.put('/:id', wrap(async (req, res) => {
       ...(nombre !== undefined && { nombre }),
       ...(codigo !== undefined && { codigo: String(codigo) }),
       ...(activo !== undefined && { activo }),
+    const soloAdmin = wrap(async (req, res, next) => {
+      const asignacion = await prisma.usuarioRol.findFirst({ where: { usuarioId: req.usuario.id, rol: { nombre: 'ADMIN' } } });
+      if (!asignacion) return res.status(403).json({ error: 'Solo el administrador puede gestionar el catálogo de cocineros' });
+      next();
+    });
     },
   });
+      if ((req.usuario?.permisos || []).includes('cocina.ver')) return next();
+      return res.status(403).json({ error: 'No tienes permiso para consultar cocineros' });
+    }, wrap(async (_req, res) => {
   res.json(cocinero);
 }));
 
 router.delete('/:id', wrap(async (req, res) => {
   await prisma.cocinero.delete({ where: { id: Number(req.params.id) } });
+  router.put('/:id', soloAdmin, wrap(async (req, res) => {
+  router.delete('/:id', soloAdmin, wrap(async (req, res) => {
   res.status(204).end();
 }));
 

@@ -110,10 +110,10 @@ app.use('/api/inventario', requireAuth, permisoPorMetodo('inventario'), inventar
 app.use('/api/bajas', requireAuth, bajasRouter);
 app.use('/api/ensambles', requireAuth, permisoPorMetodo('inventario'), ensamblesRouter);
 app.use('/api/bodegas', requireAuth, permisoPorMetodo('bodegas'), bodegasRouter);
-app.use('/api/existencias', requireAuth, existenciasRouter);
+app.use('/api/existencias', requireAuth, permisoPorMetodo('bodegas'), existenciasRouter);
 app.use('/api/movimientos', requireAuth, permisoPorMetodo('movimientos'), movimientosRouter);
 app.use('/api/cajas', requireAuth, permisoPorMetodo('caja'), cajasRouter);
-app.use('/api/asignacion-cajas', requireAuth, asignacionCajasRouter);
+app.use('/api/asignacion-cajas', requireAuth, permisoPorMetodo('empresa'), asignacionCajasRouter);
 app.use('/api/tipos-documento', requireAuth, tiposDocumentoRouter);
 app.use('/api/formas-pago', requireAuth, formasPagoRouter);
 app.use('/api/aperturas', requireAuth, aperturasRouter);
@@ -159,7 +159,7 @@ app.use('/api/clientes', requireAuth, permisoPorMetodo('clientes'), clientesRout
 app.use('/api/catalogos-siesa', requireAuth, permisoPorMetodo('clientes'), catalogosSiesaRouter);
 app.use('/api/cuentas', requireAuth, permisoPorMetodo('cuentas'), cuentasRouter);
 app.use('/api/roles', requireAuth, permisoPorMetodo('roles'), rolesRouter);
-app.use('/api/permisos', requireAuth, permisosRouter);
+app.use('/api/permisos', requireAuth, permisoPorMetodo('roles'), permisosRouter);
 app.use('/api/auditoria', requireAuth, permisoPorMetodo('auditoria'), auditoriaRouter);
 app.use('/api/plataforma/restaurantes', restaurantesRouter);
 

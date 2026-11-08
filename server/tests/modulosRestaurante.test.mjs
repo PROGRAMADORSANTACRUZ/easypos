@@ -27,6 +27,29 @@ test('los permisos efectivos provienen de roles e ignoran submódulos guardados 
   assert.equal(puedeLeerCatalogoParaPedidos('POST', '/', ['pedidos.ver']), false);
 });
 
+test('requireAuth reemplaza el usuario de auditoría enviado por el cliente', async () => {
+  process.env.JWT_SECRET ||= 'test-authenticated-audit-user';
+  const { requireAuth, firmarToken } = await import('../src/middleware/auth.js');
+  const { tenantStorage } = await import('../src/prisma.js');
+  const usuario = { id: 'usuario-autenticado', usuario: 'mesero1', nombre: 'Mesero', activo: true, roles: [], centrosOperacion: [] };
+  const db = { usuario: { findUnique: async () => usuario } };
+  const req = {
+    headers: {
+      authorization: `Bearer ${firmarToken(usuario)}`,
+      'x-usuario-id': 'usuario-suplantado',
+    },
+  };
+  const res = { clearCookie() {} };
+  let llamadaNext = false;
+  await new Promise((resolve, reject) => tenantStorage.run(db, () => requireAuth(req, res, (error) => {
+    if (error) return reject(error);
+    llamadaNext = true;
+    resolve();
+  })));
+  assert.equal(llamadaNext, true);
+  assert.equal(req.headers['x-usuario-id'], usuario.id);
+});
+
 test('bloquea endpoints de grupos deshabilitados', () => {
   const resultado = evaluar('/api/mesas', ['inventario']);
   assert.equal(resultado.siguiente, false);
@@ -38,6 +61,40 @@ test('permite endpoints cuando el grupo está habilitado', () => {
   assert.equal(evaluar('/api/mesas', ['ventas']).siguiente, true);
   assert.equal(evaluar('/api/bajas', ['inventario']).siguiente, true);
   assert.equal(evaluar('/api/bajas/opciones', ['ventas']).status, 403);
+});
+
+test('el middleware de módulos no permite escrituras con permisos de solo lectura', async () => {
+  process.env.JWT_SECRET ||= 'test-module-route-permissions';
+  const { permisoPorMetodo } = await import('../src/middleware/auth.js');
+  const revisar = (modulo, method, permisos) => {
+    let siguiente = false;
+    let status;
+    const res = { status(codigo) { status = codigo; return this; }, json() { return this; } };
+    permisoPorMetodo(modulo)({ method, usuario: { permisos } }, res, () => { siguiente = true; });
+    return { siguiente, status };
+  };
+  assert.equal(revisar('bodegas', 'GET', ['pedidos.ver']).status, 403);
+  assert.equal(revisar('bodegas', 'POST', ['bodegas.ver']).status, 403);
+  assert.equal(revisar('bodegas', 'POST', ['bodegas.crear']).siguiente, true);
+  assert.equal(revisar('cuentas', 'POST', ['facturas.ver']).status, 403);
+  assert.equal(revisar('cuentas', 'POST', ['cuentas.abonar']).siguiente, true);
+});
+
+test('asignación de cajas y permisos respetan sus módulos RBAC', async () => {
+  process.env.JWT_SECRET ||= 'test-module-route-permissions';
+  const { permisoPorMetodo } = await import('../src/middleware/auth.js');
+  const revisar = (modulo, method, permisos) => {
+    let siguiente = false;
+    let status;
+    const res = { status(codigo) { status = codigo; return this; }, json() { return this; } };
+    permisoPorMetodo(modulo)({ method, usuario: { permisos } }, res, () => { siguiente = true; });
+    return { siguiente, status };
+  };
+  assert.equal(revisar('empresa', 'GET', ['caja.ver']).status, 403);
+  assert.equal(revisar('empresa', 'POST', ['empresa.ver']).status, 403);
+  assert.equal(revisar('empresa', 'POST', ['empresa.editar']).siguiente, true);
+  assert.equal(revisar('roles', 'GET', ['usuarios.ver']).status, 403);
+  assert.equal(revisar('roles', 'GET', ['roles.ver']).siguiente, true);
 });
 
 test('permite consultar productos desde ventas, pero solo inventario puede modificarlos', () => {

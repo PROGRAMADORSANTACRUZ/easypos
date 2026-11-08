@@ -5,6 +5,10 @@ import { centroPermitido } from '../centrosUsuario.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const exigirEmpresaEditar = (req, res, next) => {
+  if ((req.usuario?.permisos || []).includes('empresa.editar')) return next();
+  return res.status(403).json({ error: 'No tienes permiso para editar tipos de documento' });
+};
 
 const limpiar = (v) => {
   if (v === undefined) return undefined;
@@ -62,6 +66,10 @@ async function validarAsociacion({ companiaCodigo, centroOperacionCodigo }) {
 }
 
 router.get('/', wrap(async (req, res) => {
+  const permisos = req.usuario?.permisos || [];
+  if (!['empresa.ver', 'facturas.ver', 'factura_venta.ver'].some((permiso) => permisos.includes(permiso))) {
+    return res.status(403).json({ error: 'No tienes permiso para consultar tipos de documento' });
+  }
   const companiaCodigo = req.query.companiaCodigo ? String(req.query.companiaCodigo) : null;
   const centroOperacionCodigo = req.query.centroOperacionCodigo ? String(req.query.centroOperacionCodigo) : null;
   if (companiaCodigo || centroOperacionCodigo) {
@@ -88,6 +96,11 @@ router.get('/', wrap(async (req, res) => {
 router.get('/asignados', wrap(async (req, res) => {
   const clase = req.query.clase ? String(req.query.clase) : '';
   if (!clase) return res.status(400).json({ error: 'Indica la clase de documento' });
+  const permisos = req.usuario?.permisos || [];
+  const modulo = clase === 'FACTURA DE VENTA (NO ELECTRONICA)' ? 'factura_venta' : 'facturas';
+  if (!permisos.includes('empresa.ver') && !permisos.includes(`${modulo}.ver`) && !permisos.includes(`${modulo}.crear`)) {
+    return res.status(403).json({ error: 'No tienes permiso para consultar tipos de documento asignados' });
+  }
   const centros = (req.usuario?.centrosOperacion || []).filter((centro) => centro.estado === 'Activo');
   if (!centros.length) return res.json([]);
   const esElectronico = clase === 'FACTURA ELECTRONICA DE VENTA';
@@ -107,12 +120,13 @@ router.get('/asignados', wrap(async (req, res) => {
 }));
 
 router.get('/:id', wrap(async (req, res) => {
+  if (!(req.usuario?.permisos || []).includes('empresa.ver')) return res.status(403).json({ error: 'No tienes permiso para consultar este tipo de documento' });
   const t = await prisma.tipoDocumento.findUnique({ where: { id: String(req.params.id) } });
   if (!t) return res.status(404).json({ error: 'Tipo de documento no encontrado' });
   res.json(t);
 }));
 
-router.post('/', wrap(async (req, res) => {
+router.post('/', exigirEmpresaEditar, wrap(async (req, res) => {
   const data = datosDesdeBody(req.body);
   if (!data.clase) return res.status(400).json({ error: 'La clase es obligatoria' });
   if (!data.codigo) return res.status(400).json({ error: 'El código (C.O) es obligatorio' });
@@ -123,7 +137,7 @@ router.post('/', wrap(async (req, res) => {
   res.status(201).json(t);
 }));
 
-router.put('/:id', wrap(async (req, res) => {
+router.put('/:id', exigirEmpresaEditar, wrap(async (req, res) => {
   try {
     const actual = await prisma.tipoDocumento.findUnique({ where: { id: String(req.params.id) } });
     if (!actual) return res.status(404).json({ error: 'Tipo de documento no encontrado' });
@@ -153,7 +167,7 @@ router.put('/:id', wrap(async (req, res) => {
   }
 }));
 
-router.delete('/:id', wrap(async (req, res) => {
+router.delete('/:id', exigirEmpresaEditar, wrap(async (req, res) => {
   try {
     await prisma.tipoDocumento.delete({ where: { id: String(req.params.id) } });
     await auditar({ req, accion: 'ELIMINAR', entidad: 'tipoDocumento', entidadId: String(req.params.id) });

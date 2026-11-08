@@ -19,10 +19,16 @@ async function entorno(t) {
     roles: [{ rol: { nombre: 'ADMIN', permisos: [{ permiso: { codigo: 'usuarios.ver' } }, { permiso: { codigo: 'usuarios.crear' } }] } }],
     centrosOperacion: [],
   };
+  const lector = {
+    ...admin,
+    id: 'lector-id',
+    usuario: 'lector',
+    roles: [{ rol: { nombre: 'CAJERO', permisos: [{ permiso: { codigo: 'pedidos.ver' } }] } }],
+  };
   let secuencia = 1;
   const db = {
     usuario: {
-      findUnique: async ({ where }) => where.id === admin.id ? admin : null,
+      findUnique: async ({ where }) => where.id === admin.id ? admin : where.id === lector.id ? lector : null,
       findFirst: async ({ where }) => usuarios.find((user) => user.usuario.toUpperCase() === where.usuario.equals.toUpperCase()
         && (!where.id?.not || user.id !== where.id.not)) || null,
       findMany: async () => usuarios,
@@ -67,7 +73,13 @@ async function entorno(t) {
     });
     return { status: response.status, body: await response.json() };
   };
-  return { solicitar, mesas };
+  const solicitarLista = async (usuarioId) => {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/usuarios`, {
+      headers: { Authorization: `Bearer ${firmarToken({ id: usuarioId })}` },
+    });
+    return { status: response.status, body: await response.json() };
+  };
+  return { solicitar, solicitarLista, mesas };
 }
 
 test('ADMIN puede asignar mesas normales a un MESERO', async (t) => {
@@ -81,6 +93,12 @@ test('ADMIN puede asignar mesas normales a un MESERO', async (t) => {
   assert.equal(mesas.get(0).usuarioAsignadoId, null);
 });
 
+test('la lista de usuarios requiere permiso usuarios.ver', async (t) => {
+  const { solicitarLista } = await entorno(t);
+  assert.equal((await solicitarLista('admin-id')).status, 200);
+  assert.equal((await solicitarLista('lector-id')).status, 403);
+});
+
 test('no permite duplicar un usuario con diferencias de mayúsculas', async (t) => {
   const { solicitar, mesas } = await entorno(t);
   const creado = await solicitar([1], 'mesero1');
@@ -88,6 +106,14 @@ test('no permite duplicar un usuario con diferencias de mayúsculas', async (t) 
   assert.equal(creado.status, 201);
   assert.equal(duplicado.status, 409);
   assert.equal(mesas.get(1).usuarioAsignadoId, creado.body.id);
+});
+
+test('GET usuarios exige usuarios.ver incluso con sesión autenticada', async (t) => {
+  const { solicitarLista } = await entorno(t);
+  const administrador = await solicitarLista('admin-id');
+  const lectorPedidos = await solicitarLista('lector-id');
+  assert.equal(administrador.status, 200);
+  assert.equal(lectorPedidos.status, 403);
 });
 
 test('no permite asignar Mesa00 ni crear MESERO sin mesas', async (t) => {

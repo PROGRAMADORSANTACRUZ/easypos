@@ -113,7 +113,12 @@ const soloAdmin = wrap(async (req, res, next) => {
   if (!asignacion) return res.status(403).json({ error: 'Solo el administrador puede gestionar usuarios' });
   next();
 });
-router.get('/', wrap(async (_req, res) => {
+const exigirPermiso = (codigo) => (req, res, next) => {
+  if ((req.usuario?.permisos || []).includes(codigo)) return next();
+  return res.status(403).json({ error: `No tienes permiso para ${codigo}` });
+};
+
+router.get('/', exigirPermiso('usuarios.ver'), wrap(async (_req, res) => {
   const usuarios = await prisma.usuario.findMany({
     orderBy: { nombre: 'asc' },
     include: {

@@ -41,9 +41,9 @@ export default function MediosPago() {
   const { user } = useAuth();
   const notify = useToast();
 
-  const puedeCrear = puede(user, 'empresa.crear') || puede(user, 'empresa.ver');
-  const puedeEditar = puede(user, 'empresa.editar') || puede(user, 'empresa.ver');
-  const puedeEliminar = puede(user, 'empresa.eliminar') || puede(user, 'empresa.ver');
+  const puedeCrear = puede(user, 'empresa.editar');
+  const puedeEditar = puede(user, 'empresa.editar');
+  const puedeEliminar = puede(user, 'empresa.editar');
 
   const [rows, setRows] = useState([]);
   const [form, setForm] = useState(VACIO);

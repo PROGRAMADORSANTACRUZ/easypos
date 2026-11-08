@@ -12,6 +12,11 @@ const include = {
   pedido: { include: { mesera: true, items: { include: { producto: true } } } },
 };
 
+router.use((req, res, next) => {
+  if ((req.usuario?.permisos || []).includes('cocina.ver')) return next();
+  return res.status(403).json({ error: 'No tienes permiso para consultar o gestionar comandas de cocina' });
+});
+
 // Lista las confirmaciones de cocina (por defecto solo las pendientes, ?listo=1 para ver las listas)
 router.get('/', wrap(async (req, res) => {
   const { listo } = req.query;

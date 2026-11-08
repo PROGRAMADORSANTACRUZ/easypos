@@ -548,7 +548,10 @@ test('un fallo del historial revierte plato listo y entrega incluida su auditori
 test('marcar plato listo requiere acceso a cocina', async (t) => {
   const { crear, solicitar } = await entorno(t, { cocina: false });
   await crear();
+  assert.equal((await solicitar('GET', '/preparacion-cocina/?listo=0')).status, 403);
   assert.equal((await solicitar('PUT', '/preparacion-cocina/1/listo', {})).status, 403);
+  assert.equal((await solicitar('PUT', '/preparacion-cocina/1/resultado', { estado: 'REABIERTO' })).status, 403);
+  assert.equal((await solicitar('PUT', '/preparacion-cocina/1/reabrir', {})).status, 403);
 });
 
 test('cocina marca cada plato y completa la comanda solo al confirmar todos', async (t) => {

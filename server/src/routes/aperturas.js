@@ -9,6 +9,29 @@ const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 const conRelaciones = { caja: true, usuario: true };
+const permisosFacturacion = ['facturas.ver', 'facturas.crear', 'factura_venta.ver', 'factura_venta.crear'];
+
+router.use((req, res, next) => {
+  const permisos = req.usuario?.permisos || [];
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    if (req.path === '/activa' && permisos.some((permiso) => permisosFacturacion.includes(permiso))) return next();
+    if (permisos.includes('caja.ver')) return next();
+  } else {
+    const permiso = req.method === 'POST' && req.path === '/'
+      ? 'caja.abrir'
+      : req.method === 'POST' && req.path.endsWith('/movimientos')
+        ? 'caja.crear'
+        : req.method === 'POST' && req.path.endsWith('/cerrar')
+          ? 'caja.cerrar'
+          : req.method === 'PUT'
+            ? 'caja.editar'
+            : req.method === 'DELETE'
+              ? 'caja.eliminar'
+              : null;
+    if (permiso && permisos.includes(permiso)) return next();
+  }
+  return res.status(403).json({ error: 'No tienes permiso para esta acción de caja' });
+});
 
 // Desglosa una factura en aportes por forma de pago -> [{ metodo, monto }].
 // - Crédito: no entra dinero al turno, se marca aparte como CRÉDITO
@@ -90,7 +113,7 @@ router.get('/', wrap(async (req, res) => {
 
 // Apertura de caja activa (ABIERTA). Prefiere la del usuario en sesion.
 router.get('/activa', wrap(async (req, res) => {
-  const uid = req.query.usuarioId || req.headers['x-usuario-id'];
+  const uid = req.usuario.id;
   let ap = null;
   if (uid) {
     ap = await prisma.aperturaCaja.findFirst({
@@ -125,8 +148,8 @@ router.get('/:id/cuadre', wrap(async (req, res) => {
 
 // Abrir caja (crea la apertura en estado ABIERTA)
 router.post('/', wrap(async (req, res) => {
-  const { cajaId, usuarioId, valorInicial } = req.body;
-  const uid = usuarioId || req.headers['x-usuario-id'];
+  const { cajaId, valorInicial } = req.body;
+  const uid = req.usuario.id;
   const ap = await prisma.aperturaCaja.create({
     data: {
       cajaId: cajaId ? String(cajaId) : null,
@@ -161,9 +184,8 @@ router.post('/:id/movimientos', wrap(async (req, res) => {
     }
   }
 
-  const usuarioId = req.headers['x-usuario-id'];
   const movimiento = await prisma.movimientoCaja.create({
-    data: { aperturaId: apertura.id, usuarioId: usuarioId || null, cuentaContableId, tipo, monto, motivo },
+    data: { aperturaId: apertura.id, usuarioId: req.usuario.id, cuentaContableId, tipo, monto, motivo },
     include: {
       usuario: { select: { usuario: true } },
       cuentaContable: { select: { codigo: true, nombre: true } },

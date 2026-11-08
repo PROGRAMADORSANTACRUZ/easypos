@@ -42,15 +42,18 @@ test('Cpto caja identifica el registro y no cambia al editar descripcion, medio 
   };
   const app = express();
   app.use(express.json());
-  app.use((_req, _res, next) => tenantStorage.run(db, next));
+  app.use((req, _res, next) => {
+    req.usuario = { permisos: String(req.header('x-permisos') || 'empresa.ver,empresa.editar').split(',').filter(Boolean) };
+    tenantStorage.run(db, next);
+  });
   app.use('/formas-pago', formasPagoRouter);
   app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: error.message }));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
-  const solicitar = async (method, ruta = '', body) => {
+  const solicitar = async (method, ruta = '', body, permisos = 'empresa.ver,empresa.editar') => {
     const response = await fetch(`http://127.0.0.1:${server.address().port}/formas-pago${ruta}`, {
-      method, headers: { 'Content-Type': 'application/json' }, ...(body && { body: JSON.stringify(body) }),
+      method, headers: { 'Content-Type': 'application/json', 'x-permisos': permisos }, ...(body && { body: JSON.stringify(body) }),
     });
     return { status: response.status, body: await response.json() };
   };
@@ -67,6 +70,41 @@ test('Cpto caja identifica el registro y no cambia al editar descripcion, medio 
   assert.equal((await solicitar('GET', '/efe')).body.id, 'EFE');
   assert.equal((await solicitar('GET', '/DAT')).status, 404);
   assert.equal(registros.size, 1);
+});
+
+test('formas de pago requieren permiso de lectura y edición', async (t) => {
+  const registros = new Map();
+  const db = {
+    formaPago: {
+      findMany: async () => [...registros.values()],
+      create: async ({ data }) => { registros.set(data.id, data); return data; },
+    },
+    auditoria: { create: async () => ({}) },
+  };
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    req.usuario = { permisos: String(req.header('x-permisos') || '').split(',').filter(Boolean) };
+    tenantStorage.run(db, next);
+  });
+  app.use('/formas-pago', formasPagoRouter);
+  app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: error.message }));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const solicitar = async (method, ruta, body, permisos) => {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/formas-pago${ruta}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'x-permisos': permisos },
+      ...(body && { body: JSON.stringify(body) }),
+    });
+    return response.status;
+  };
+  const body = { cptoCaja: 'EFE', claseConcepto: 'RECOGIDA', formaPago: 'EFECTIVO', medioPago: 'EFE', moneda: 'COP' };
+  assert.equal(await solicitar('GET', '', undefined, ''), 403);
+  assert.equal(await solicitar('GET', '', undefined, 'facturas.ver'), 200);
+  assert.equal(await solicitar('POST', '', body, 'empresa.ver'), 403);
+  assert.equal(await solicitar('POST', '', body, 'empresa.editar'), 201);
 });
 
 test('migra a CptoCaja primario, crea los ocho conceptos y conserva los datos anteriores', async () => {
