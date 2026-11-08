@@ -459,7 +459,7 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 
 .mesa-resumen {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -493,6 +493,7 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 .mesa-resumen__item--total { background: rgba(139, 92, 246, .12); border-color: rgba(139, 92, 246, .22); color: #c4b5fd; }
 .mesa-resumen__item--libre { background: var(--green-soft); border-color: var(--green); color: var(--green); }
 .mesa-resumen__item--ocupada { background: var(--red-soft); border-color: var(--red); color: var(--red); }
+.mesa-resumen__item--plato_listo { background: rgba(234, 179, 8, .12); border-color: #eab308; color: #eab308; }
 .mesa-resumen__item--reservada { background: rgba(59, 130, 246, .12); border-color: rgba(59, 130, 246, .28); color: #93c5fd; }
 @media (max-width: 720px) {
   .mesa-resumen { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }

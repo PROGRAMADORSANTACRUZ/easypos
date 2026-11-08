@@ -83,14 +83,18 @@ export default function Mesas() {
     if (!p) return 0;
     return p.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0);
   };
+  const tienePlatoListo = (mesa) => !!mesa.pedidos?.[0]?.preparacion?.listo;
 
   const resumenMesas = [
     { etiqueta: 'Total', estado: 'TOTAL', cantidad: mesas.length },
     { etiqueta: 'Disponibles', estado: 'LIBRE', cantidad: mesas.filter((mesa) => mesa.estado === 'LIBRE').length },
     { etiqueta: 'Ocupadas', estado: 'OCUPADA', cantidad: mesas.filter((mesa) => mesa.estado === 'OCUPADA').length },
+    { etiqueta: 'Plato listo', estado: 'PLATO_LISTO', cantidad: mesas.filter(tienePlatoListo).length },
     { etiqueta: 'Reservadas', estado: 'RESERVADA', cantidad: mesas.filter((mesa) => mesa.estado === 'RESERVADA').length },
   ];
-  const mesasFiltradas = filtroEstado === 'TOTAL' ? mesas : mesas.filter((mesa) => mesa.estado === filtroEstado);
+  const mesasFiltradas = filtroEstado === 'TOTAL' ? mesas
+    : filtroEstado === 'PLATO_LISTO' ? mesas.filter(tienePlatoListo)
+      : mesas.filter((mesa) => mesa.estado === filtroEstado);
 
   return (
     <div>
@@ -215,12 +219,12 @@ export default function Mesas() {
       ) : mesas.length === 0 ? (
         <p className="empty">No hay mesas. Ejecuta el seed para cargar datos de ejemplo.</p>
       ) : mesasFiltradas.length === 0 ? (
-        <p className="empty">No hay mesas {filtroEstado.toLowerCase()}.</p>
+        <p className="empty">{filtroEstado === 'PLATO_LISTO' ? 'No hay mesas con platos listos.' : `No hay mesas ${filtroEstado.toLowerCase()}.`}</p>
       ) : (
         <div className="grid grid-mesas">
           {mesasFiltradas.map((mesa) => {
             const pedido = mesa.pedidos?.[0];
-            const listo = !!pedido?.preparacion?.listo;
+            const listo = tienePlatoListo(mesa);
             return (
               <div
                 key={mesa.id}
