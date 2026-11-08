@@ -1294,7 +1294,6 @@ tbody tr:last-child td { border-bottom: none; }
 .fc-trace-toggle.is-collapsed { grid-template-columns: minmax(0, 1fr) auto; margin-bottom: 0; }
 .fc-trace-toggle.is-expanded { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
 .factura-card.is-collapsed { align-self: start; width: 100%; max-width: 250px; padding: 8px; }
-.facturas-pendientes-grid .factura-card.is-expanded { grid-column: 1 / -1; width: 100%; }
 .fc-k { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
 .fc-trace strong { font-size: 16px; }
 .fc-sec { margin-bottom: 12px; }
