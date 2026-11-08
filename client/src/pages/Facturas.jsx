@@ -1348,7 +1348,7 @@ export default function Facturas({ electronica = true }) {
         {pendientes.length === 0 ? (
           <p className="empty">No hay pedidos abiertos.</p>
         ) : (
-          <div className="cards-grid" style={{ alignItems: 'stretch' }}>
+          <div className="cards-grid facturas-pendientes-grid">
             {pendientes.map((p) => {
               const totalP = totalPedido(p);
               const esDomi = p.tipo === 'DOMICILIO';

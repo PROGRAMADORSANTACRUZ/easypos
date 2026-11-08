@@ -323,6 +323,7 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 /* Utilidades de layout responsivas */
 .grid-aside { display: grid; grid-template-columns: 340px 1fr; gap: var(--sp-5); align-items: start; }
 .cards-grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.cards-grid.facturas-pendientes-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); align-items: start; }
 .form-2col { grid-template-columns: repeat(2, 1fr); }
 .form-3col { grid-template-columns: repeat(3, 1fr); }
 .form-4col { grid-template-columns: repeat(4, 1fr); }
@@ -336,6 +337,7 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
   .form-3col { grid-template-columns: 1fr; }
   .form-4col { grid-template-columns: 1fr; }
   .cards-grid { grid-template-columns: 1fr; }
+  .cards-grid.facturas-pendientes-grid { grid-template-columns: 1fr; }
 }
 
 /* Panel de cuenta fijo con su propia barra de desplazamiento */
@@ -1291,7 +1293,8 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .fc-trace-toggle.is-collapsed { grid-template-columns: minmax(0, 1fr) auto; margin-bottom: 0; }
 .fc-trace-toggle.is-expanded { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
-.factura-card.is-collapsed { align-self: start; padding: 8px; }
+.factura-card.is-collapsed { align-self: start; width: 100%; max-width: 250px; padding: 8px; }
+.facturas-pendientes-grid .factura-card.is-expanded { grid-column: 1 / -1; width: 100%; }
 .fc-k { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
 .fc-trace strong { font-size: 16px; }
 .fc-sec { margin-bottom: 12px; }
