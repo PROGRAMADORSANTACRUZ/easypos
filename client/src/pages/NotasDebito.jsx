@@ -251,7 +251,7 @@ export default function NotasDebito() {
                     <tbody>
                       {facturaSel.detalle.map((d) => (
                         <tr key={d.id}>
-                          <td>{d.producto?.nombre || '—'}</td>
+                          <td>{d.productoNombre || d.producto?.nombre || '—'}</td>
                           <td style={{ textAlign: 'center' }}>{d.cantidad}</td>
                           <td style={{ textAlign: 'right' }}>{money(d.precioUnitario)}</td>
                           <td style={{ textAlign: 'right', fontWeight: 600 }}>{money(d.total || d.precioUnitario * d.cantidad)}</td>
@@ -260,8 +260,8 @@ export default function NotasDebito() {
                     </tbody>
                     <tfoot>
                       <tr>
-                        <th colSpan={3} style={{ textAlign: 'right' }}>Total factura</th>
-                        <th style={{ textAlign: 'right' }}>{money(facturaSel.total)}</th>
+                        <th colSpan={3} style={{ textAlign: 'right' }}>Total a pagar</th>
+                        <th style={{ textAlign: 'right' }}>{money(Number(facturaSel.total || 0) + Number(facturaSel.propina || 0))}</th>
                       </tr>
                     </tfoot>
                   </table>

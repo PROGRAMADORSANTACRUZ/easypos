@@ -12,18 +12,21 @@ const pedido = {
   }],
 };
 
-test('la factura unica de una division conserva codigo, nombre y unidad de sus productos', () => {
+test('descuenta 8% del precio y conserva el bruto como total en ambas modalidades', () => {
   const item = {
     ...pedido.items[0], cantidad: 1, precioUnit: 8000,
     producto: { codigo: '0004', nombre: 'CHUZO DE CHORIZO', iva: 8, unidad: { abreviatura: 'UND' } },
   };
-  const linea = calcularLineaPedido(item, true);
-  assert.equal(linea.productoCodigo, '0004');
-  assert.equal(linea.productoNombre, 'CHUZO DE CHORIZO');
-  assert.equal(linea.unidad, 'UND');
-  assert.equal(linea.subtotal, 8000);
-  assert.equal(linea.impuesto, 640);
-  assert.equal(linea.total, 8640);
+  for (const electronica of [true, false]) {
+    const linea = calcularLineaPedido(item, electronica);
+    assert.equal(linea.productoCodigo, '0004');
+    assert.equal(linea.productoNombre, 'CHUZO DE CHORIZO');
+    assert.equal(linea.unidad, 'UND');
+    assert.equal(linea.precioUnitario, 7360);
+    assert.equal(linea.subtotal, 7360);
+    assert.equal(linea.impuesto, 640);
+    assert.equal(linea.total, 8000);
+  }
 });
 
 test('reparte subtotal, IVA y propina en partes iguales sin perder centavos ni cantidades', () => {
@@ -31,9 +34,9 @@ test('reparte subtotal, IVA y propina en partes iguales sin perder centavos ni c
     modo: 'IGUALES', cantidadPartes: 3, electronica: true, propina: 1,
   });
 
-  assert.equal(partes.reduce((suma, parte) => suma + parte.total + parte.propina, 0), 36.7);
+  assert.equal(Math.round(partes.reduce((suma, parte) => suma + parte.total + parte.propina, 0) * 100) / 100, 31);
   assert.equal(partes.reduce((suma, parte) => suma + parte.lineas[0].cantidad, 0), 3);
-  assert.deepEqual(partes.map((parte) => parte.total), [11.9, 11.9, 11.9]);
+  assert.deepEqual(partes.map((parte) => parte.total), [10, 10, 10]);
   assert.deepEqual(partes.map((parte) => parte.propina), [0.33, 0.33, 0.34]);
 });
 
@@ -47,8 +50,8 @@ test('reparte productos por cantidades y conserva el importe total', () => {
   });
 
   assert.deepEqual(partes.map((parte) => parte.lineas[0].cantidad), [1, 2]);
-  assert.deepEqual(partes.map((parte) => parte.total), [11.9, 23.8]);
-  assert.equal(partes.reduce((suma, parte) => suma + parte.total + parte.propina, 0), 40.7);
+  assert.deepEqual(partes.map((parte) => parte.total), [10, 20]);
+  assert.equal(Math.round(partes.reduce((suma, parte) => suma + parte.total + parte.propina, 0) * 100) / 100, 35);
 });
 
 test('rechaza una asignación de productos que no suma las unidades del pedido', () => {

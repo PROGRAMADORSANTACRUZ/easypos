@@ -7,6 +7,7 @@ import { centroPermitido, filtroParesCentros } from '../centrosUsuario.js';
 import { calcularInsumosRequeridos, descontarInsumos, validarStockSuficiente } from '../inventarioKits.js';
 import { validarPagosActivos } from '../pagosFactura.js';
 import { itemsDeInventarioNormal, validarSinSolicitudesMesa00Pendientes } from '../stockMesa00.js';
+import { crearLineaPropina } from '../facturaLineas.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -133,16 +134,17 @@ function repartirCantidad(total, partes, factorConversion = 1) {
 
 export function calcularLineaPedido(item, electronica) {
   const totalLinea = redondear(item.precioUnit * item.cantidad);
-  const impuesto = impuestoSobrePrecio(totalLinea, item.producto.iva || 0, !electronica);
-  const subtotal = electronica ? totalLinea : redondear(totalLinea - impuesto);
+  const impuesto = impuestoSobrePrecio(totalLinea, item.producto.iva || 0);
+  const subtotal = redondear(totalLinea - impuesto);
   return {
     item,
     productoCodigo: item.producto?.codigo || null,
     productoNombre: item.producto?.nombre || null,
     unidad: item.producto?.unidad?.abreviatura || 'UND',
+    precioUnitario: item.cantidad ? redondear(subtotal / item.cantidad) : 0,
     subtotal,
     impuesto,
-    total: electronica ? redondear(subtotal + impuesto) : totalLinea,
+    total: totalLinea,
   };
 }
 
@@ -177,7 +179,7 @@ export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, 
           productoNombre: linea.item.producto?.nombre || null,
           cantidad: cantidadesPartes[indice],
           unidad: linea.item.producto?.unidad?.abreviatura || 'UND',
-          precioUnitario: linea.item.precioUnit,
+          precioUnitario: linea.precioUnitario,
           subtotal: subtotalParte,
           impuesto: impuestoParte,
           total: totalParte,
@@ -220,7 +222,7 @@ export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, 
           productoNombre: linea.item.producto?.nombre || null,
           cantidad,
           unidad: linea.item.producto?.unidad?.abreviatura || 'UND',
-          precioUnitario: linea.item.precioUnit,
+          precioUnitario: linea.precioUnitario,
           subtotal: subtotalParte,
           impuesto: impuestoParte,
           total: totalParte,
@@ -361,7 +363,7 @@ router.get('/:id', wrap(async (req, res) => {
 router.post('/:id/reenviar-dian', wrap(async (req, res) => {
   const factura = await prisma.factura.findUnique({
     where: { id: String(req.params.id), AND: [filtroCentrosUsuario(req.usuario)] },
-    include: { cliente: true, detalle: { include: { producto: true } } },
+    include: { cliente: true, detalle: { include: { producto: { include: { impuesto: true } } } } },
   });
   if (!factura) return res.status(404).json({ error: 'Factura no encontrada' });
   const facturaFinal = await emitirEnFactus(factura);
@@ -400,7 +402,7 @@ router.post('/dividir', wrap(async (req, res) => {
     pedido.items.map((item) => item.producto),
   );
 
-  const propinaTotal = electronica ? Math.max(0, Number(propina) || 0) : 0;
+  const propinaTotal = Math.max(0, Number(propina) || 0);
   let partes;
   try {
     partes = crearPartesPedido(pedido, { modo, cantidadPartes: partesN, asignaciones, electronica, propina: propinaTotal });
@@ -428,7 +430,7 @@ router.post('/dividir', wrap(async (req, res) => {
 
   const lineasFacturaUnica = pedido.items.map((item) => {
     const linea = calcularLineaPedido(item, electronica);
-    return { pedidoItemId: item.id, productoId: item.productoId, cantidad: item.cantidad, precioUnitario: item.precioUnit, ...linea };
+    return { pedidoItemId: item.id, productoId: item.productoId, cantidad: item.cantidad, ...linea };
   });
   const partesFactura = emision === 'UNA'
     ? [{
@@ -478,6 +480,7 @@ router.post('/dividir', wrap(async (req, res) => {
         formaPago: pago.formaPago,
         monto: Number(pago.monto),
       }));
+      const lineaPropina = crearLineaPropina(parte.propina);
       const factura = await modelo.create({
         data: {
           pedidoId: id,
@@ -499,7 +502,7 @@ router.post('/dividir', wrap(async (req, res) => {
           emailCliente: cliente.emailCliente,
           usuarioId: req.headers['x-usuario-id'] ? String(req.headers['x-usuario-id']) : null,
           subtotal: parte.subtotal,
-          impuestoPct: parte.subtotal > 0 ? redondear(parte.impuesto / parte.subtotal * 100) : 0,
+          impuestoPct: parte.total > 0 ? redondear(parte.impuesto / parte.total * 100) : 0,
           impuesto: parte.impuesto,
           total: parte.total,
           propina: parte.propina,
@@ -508,18 +511,21 @@ router.post('/dividir', wrap(async (req, res) => {
           aperturaId: apertura.id,
           pagos: { create: basePago },
           detalle: {
-            create: parte.lineas.map((linea) => ({
-              productoId: linea.productoId,
-              productoCodigo: linea.productoCodigo,
-              productoNombre: linea.productoNombre,
-              companiaCodigo: numero.companiaCodigo,
-              centroOperacionCodigo: numero.centroOperacionCodigo,
-              cantidad: linea.cantidad,
-              unidad: linea.unidad,
-              precioUnitario: linea.precioUnitario,
-              iva: linea.impuesto,
-              total: electronica ? redondear(linea.subtotal + linea.impuesto) : linea.total,
-            })),
+            create: [
+              ...parte.lineas.map((linea) => ({
+                productoId: linea.productoId,
+                productoCodigo: linea.productoCodigo,
+                productoNombre: linea.productoNombre,
+                companiaCodigo: numero.companiaCodigo,
+                centroOperacionCodigo: numero.centroOperacionCodigo,
+                cantidad: linea.cantidad,
+                unidad: linea.unidad,
+                precioUnitario: linea.precioUnitario,
+                iva: linea.impuesto,
+                total: linea.total,
+              })),
+              ...(lineaPropina ? [lineaPropina] : []),
+            ],
           },
         },
         include: {
@@ -527,7 +533,7 @@ router.post('/dividir', wrap(async (req, res) => {
           cliente: true,
           usuario: true,
           apertura: { include: { caja: true } },
-          detalle: { include: { producto: true } },
+          detalle: { include: { producto: { include: { impuesto: true } } } },
           pagos: true,
         },
       });
@@ -571,10 +577,11 @@ router.post('/', wrap(async (req, res) => {
   if (!apertura) return res.status(409).json({ error: 'Debes abrir la caja antes de facturar. Registra la base con la que inicias.' });
 
   const precioProductos = redondear(pedido.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0));
-  const impuesto = redondear(pedido.items.reduce((s, it) => s + impuestoSobrePrecio(it.precioUnit * it.cantidad, it.producto.iva || 0, electronica === false), 0));
-  const subtotal = electronica === false ? redondear(precioProductos - impuesto) : precioProductos;
-  const total = electronica === false ? precioProductos : redondear(subtotal + impuesto);
-  const ivaPctPromedio = subtotal > 0 ? redondear((impuesto / subtotal) * 100) : 0;
+  const impuesto = redondear(pedido.items.reduce((s, it) => s + impuestoSobrePrecio(it.precioUnit * it.cantidad, it.producto.iva || 0), 0));
+  const subtotal = redondear(precioProductos - impuesto);
+  const total = precioProductos;
+  const ivaPctPromedio = precioProductos > 0 ? redondear((impuesto / precioProductos) * 100) : 0;
+  const propinaTotal = Math.max(0, Number(propina) || 0);
 
   let cli;
   try { cli = await resolverCliente(clienteId, sucursalClienteId); }
@@ -583,7 +590,7 @@ router.post('/', wrap(async (req, res) => {
   const factura = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "Pedido" WHERE "id" = ${id} FOR UPDATE`;
     await validarSinSolicitudesMesa00Pendientes(tx, id);
-    if (!credito) await validarPagosActivos(tx, pagos, { total, propina: electronica === false ? 0 : Math.max(0, Number(propina) || 0) });
+    if (!credito) await validarPagosActivos(tx, pagos, { total, propina: propinaTotal });
     // Cerrar pedido, asignar cliente y liberar mesa (los domicilios no tienen mesa)
     const cerrado = await tx.pedido.updateMany({
       where: { id, estado: 'ABIERTO' },
@@ -599,6 +606,7 @@ router.post('/', wrap(async (req, res) => {
       await tx.mesa.update({ where: { id: pedido.mesaId }, data: { estado: 'LIBRE' } });
     }
     const num = await asignarNumeracion(tx, electronica !== false, companiaCodigo, centroOperacionCodigo);
+    const lineaPropina = crearLineaPropina(propinaTotal);
     // Crear factura
     const modeloFactura = electronica === false ? tx.facturaVenta : tx.factura;
     return modeloFactura.create({
@@ -624,7 +632,7 @@ router.post('/', wrap(async (req, res) => {
         impuestoPct: ivaPctPromedio,
         impuesto,
         total,
-        propina: electronica === false ? 0 : Math.max(0, Number(propina) || 0),
+        propina: propinaTotal,
         metodoPago: metodoPago || 'EFECTIVO',
         ...(!credito && { pagos: { create: pagos.map((pago) => ({ formaPago: pago.formaPago, monto: Number(pago.monto) })) } }),
         credito: !!credito,
@@ -632,9 +640,10 @@ router.post('/', wrap(async (req, res) => {
         vence: credito ? calcularVence(creditoDias) : null,
         aperturaId: apertura.id,
         detalle: {
-          create: pedido.items.map((it) => {
+          create: [
+            ...pedido.items.map((it) => {
             const lineaSub = it.precioUnit * it.cantidad;
-            const lineaIva = impuestoSobrePrecio(lineaSub, it.producto.iva || 0, electronica === false);
+            const lineaIva = impuestoSobrePrecio(lineaSub, it.producto.iva || 0);
             return {
               productoId: it.productoId,
               productoCodigo: it.producto.codigo || null,
@@ -643,11 +652,13 @@ router.post('/', wrap(async (req, res) => {
               centroOperacionCodigo: num.centroOperacionCodigo,
               cantidad: it.cantidad,
               unidad: it.producto.unidad?.abreviatura || 'UND',
-              precioUnitario: it.precioUnit,
+              precioUnitario: it.cantidad ? redondear((lineaSub - lineaIva) / it.cantidad) : 0,
               iva: lineaIva,
-              total: electronica === false ? redondear(lineaSub) : redondear(lineaSub + lineaIva),
+              total: redondear(lineaSub),
             };
-          }),
+            }),
+            ...(lineaPropina ? [lineaPropina] : []),
+          ],
         },
       },
       include: {
@@ -655,7 +666,7 @@ router.post('/', wrap(async (req, res) => {
         cliente: true,
         usuario: true,
         apertura: { include: { caja: true } },
-        detalle: { include: { producto: true } },
+        detalle: { include: { producto: { include: { impuesto: true } } } },
       },
     });
   });
@@ -707,18 +718,19 @@ router.post('/directa', wrap(async (req, res) => {
   const precioProductos = redondear(items.reduce((s, i) => s + buscar(i.productoId).precio * Number(i.cantidad), 0));
   const impuesto = redondear(items.reduce((s, i) => {
     const prod = buscar(i.productoId);
-    return s + impuestoSobrePrecio(prod.precio * Number(i.cantidad), prod.iva || 0, electronica === false);
+    return s + impuestoSobrePrecio(prod.precio * Number(i.cantidad), prod.iva || 0);
   }, 0));
-  const subtotal = electronica === false ? redondear(precioProductos - impuesto) : precioProductos;
-  const total = electronica === false ? precioProductos : redondear(subtotal + impuesto);
-  const ivaPctPromedio = subtotal > 0 ? redondear((impuesto / subtotal) * 100) : 0;
+  const subtotal = redondear(precioProductos - impuesto);
+  const total = precioProductos;
+  const ivaPctPromedio = precioProductos > 0 ? redondear((impuesto / precioProductos) * 100) : 0;
+  const propinaTotal = Math.max(0, Number(propina) || 0);
 
   let cli;
   try { cli = await resolverCliente(clienteId, sucursalClienteId); }
   catch (error) { if (error.status) return res.status(error.status).json({ error: error.message }); throw error; }
 
   const factura = await prisma.$transaction(async (tx) => {
-    if (!credito) await validarPagosActivos(tx, pagos, { total, propina: electronica === false ? 0 : Math.max(0, Number(propina) || 0) });
+    if (!credito) await validarPagosActivos(tx, pagos, { total, propina: propinaTotal });
     const pedido = await tx.pedido.create({
       data: {
         cliente: cli.nombre,
@@ -737,6 +749,7 @@ router.post('/directa', wrap(async (req, res) => {
     await validarStockSuficiente(tx, requeridos);
     await descontarInsumos(tx, requeridos, { documentoReferencia: `Pedido #${pedido.id}` });
     const num = await asignarNumeracion(tx, electronica !== false, companiaCodigo, centroOperacionCodigo);
+    const lineaPropina = crearLineaPropina(propinaTotal);
     const modeloFactura = electronica === false ? tx.facturaVenta : tx.factura;
     return modeloFactura.create({
       data: {
@@ -761,7 +774,7 @@ router.post('/directa', wrap(async (req, res) => {
         impuestoPct: ivaPctPromedio,
         impuesto,
         total,
-        propina: electronica === false ? 0 : Math.max(0, Number(propina) || 0),
+        propina: propinaTotal,
         metodoPago: metodoPago || 'EFECTIVO',
         ...(!credito && { pagos: { create: pagos.map((pago) => ({ formaPago: pago.formaPago, monto: Number(pago.monto) })) } }),
         credito: !!credito,
@@ -769,11 +782,12 @@ router.post('/directa', wrap(async (req, res) => {
         vence: credito ? calcularVence(creditoDias) : null,
         aperturaId: apertura.id,
         detalle: {
-          create: items.map((i) => {
+          create: [
+            ...items.map((i) => {
             const cant = Number(i.cantidad);
             const precio = buscar(i.productoId).precio;
             const lineaSub = precio * cant;
-            const lineaIva = impuestoSobrePrecio(lineaSub, buscar(i.productoId).iva || 0, electronica === false);
+              const lineaIva = impuestoSobrePrecio(lineaSub, buscar(i.productoId).iva || 0);
             return {
               productoId: String(i.productoId),
               productoCodigo: buscar(i.productoId).codigo || null,
@@ -782,11 +796,13 @@ router.post('/directa', wrap(async (req, res) => {
               centroOperacionCodigo: num.centroOperacionCodigo,
               cantidad: cant,
               unidad: buscar(i.productoId).unidad?.abreviatura || 'UND',
-              precioUnitario: precio,
+              precioUnitario: cant ? redondear((lineaSub - lineaIva) / cant) : 0,
               iva: lineaIva,
-              total: electronica === false ? redondear(lineaSub) : redondear(lineaSub + lineaIva),
+              total: redondear(lineaSub),
             };
-          }),
+            }),
+            ...(lineaPropina ? [lineaPropina] : []),
+          ],
         },
       },
       include: {
@@ -794,7 +810,7 @@ router.post('/directa', wrap(async (req, res) => {
         cliente: true,
         usuario: true,
         apertura: { include: { caja: true } },
-        detalle: { include: { producto: true } },
+        detalle: { include: { producto: { include: { impuesto: true } } } },
       },
     });
   });

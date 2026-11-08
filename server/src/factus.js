@@ -112,19 +112,80 @@ function mapearClienteFactus(cliente) {
 }
 
 // Convierte las lineas de FacturaDetalle (con producto incluido) al array "items" de Factus.
-function mapearItemsFactus(detalle) {
-  return detalle.map((d) => ({
-    code_reference: d.producto?.codigo || String(d.productoId),
-    name: d.producto?.nombre || 'Producto',
-    quantity: Number(d.cantidad).toFixed(2),
-    discount_rate: '0.00',
-    price: Number(d.precioUnitario).toFixed(2),
-    unit_measure_code: '94', // Unidad (generico; UnidadMedida local no trae codigo DIAN)
-    standard_code: '1',
-    taxes: [
-      { code: '01', rate: Number(d.producto?.iva || 0).toFixed(2), is_excluded: !(d.producto?.iva > 0) },
-    ],
-  }));
+export function mapearItemsFactus(detalle) {
+  return detalle.map((d) => {
+    const impuesto = d.producto?.impuesto;
+    const tipo = String(impuesto?.tipo || '').toUpperCase();
+    const cantidad = Number(d.cantidad) || 0;
+    const total = Number(d.total);
+    const iva = Number(d.iva) || 0;
+    const tieneSnapshotImportes = Number.isFinite(total) && Number.isFinite(Number(d.iva)) && cantidad > 0;
+    const baseLinea = total - iva;
+    const precioBase = tieneSnapshotImportes ? baseLinea / cantidad : Number(d.precioUnitario) || 0;
+    const porcentaje = tieneSnapshotImportes
+      ? (baseLinea > 0 ? iva / baseLinea * 100 : 0)
+      : Number(impuesto?.porcentaje ?? d.producto?.iva ?? 0);
+    return {
+      code_reference: d.productoCodigo || d.producto?.codigo || String(d.productoId || ''),
+      name: d.productoNombre || d.producto?.nombre || 'Producto',
+      quantity: cantidad.toFixed(2),
+      discount_rate: '0.00',
+      price: precioBase.toFixed(2),
+      unit_measure_code: '94', // Unidad (generico; UnidadMedida local no trae codigo DIAN)
+      standard_code: '1',
+      taxes: [
+        {
+          code: impuesto?.codigoDIAN || (tipo === 'INC' ? '04' : '01'),
+          rate: porcentaje.toFixed(6),
+          is_excluded: !(porcentaje > 0),
+        },
+      ],
+    };
+  });
+}
+
+export function mapearPagosFactus(factura, pagosFactura, formas) {
+  const total = Number(factura.total) || 0;
+  const propina = Math.max(0, Number(factura.propina) || 0);
+  const totalConPropina = total + propina;
+  if (factura.credito) {
+    return [
+      {
+        payment_form: '2',
+        payment_method_code: codigoPagoDian(factura.metodoPago, formas),
+        amount: total.toFixed(2),
+        ...(factura.vence ? { due_date: new Date(factura.vence).toISOString().slice(0, 10) } : {}),
+      },
+      ...(propina > 0 ? [{
+        payment_form: '1',
+        payment_method_code: codigoPagoDian('EFE', formas),
+        amount: propina.toFixed(2),
+      }] : []),
+    ];
+  }
+
+  const pagosRegistrados = pagosFactura.filter((pago) => Number(pago.monto) > 0);
+  if (!pagosRegistrados.length) {
+    return [{
+      payment_form: '1',
+      payment_method_code: codigoPagoDian(factura.metodoPago, formas),
+      amount: totalConPropina.toFixed(2),
+    }];
+  }
+
+  const sumaPagos = pagosRegistrados.reduce((suma, pago) => suma + Number(pago.monto), 0);
+  let asignado = 0;
+  return pagosRegistrados.map((pago, indice) => {
+    const monto = indice === pagosRegistrados.length - 1
+      ? totalConPropina - asignado
+      : Math.round(totalConPropina * Number(pago.monto) / sumaPagos * 100) / 100;
+    asignado += monto;
+    return {
+      payment_form: '1',
+      payment_method_code: codigoPagoDian(pago.formaPago, formas),
+      amount: monto.toFixed(2),
+    };
+  });
 }
 
 // Emite (crea y valida) una factura en Factus a partir de la Factura local ya creada
@@ -133,29 +194,7 @@ export async function crearFacturaFactus(factura) {
   const pagosFactura = await cargarPagosFactura(factura);
   const formas = await formasPagoFactura(factura, pagosFactura);
   const referenceCode = `${factura.prefijo || 'FEV'}${factura.numeroFactura}`;
-  const esCredito = !!factura.credito;
-  const pagosRegistrados = pagosFactura.filter((pago) => Number(pago.monto) > 0);
-  let paymentDetails = [{
-    payment_form: esCredito ? '2' : '1',
-    payment_method_code: codigoPagoDian(factura.metodoPago, formas),
-    amount: Number(factura.total).toFixed(2),
-    ...(esCredito && factura.vence ? { due_date: new Date(factura.vence).toISOString().slice(0, 10) } : {}),
-  }];
-  if (!esCredito && pagosRegistrados.length) {
-    const sumaPagos = pagosRegistrados.reduce((suma, pago) => suma + Number(pago.monto), 0);
-    let asignado = 0;
-    paymentDetails = pagosRegistrados.map((pago, indice) => {
-      const monto = indice === pagosRegistrados.length - 1
-        ? Number(factura.total) - asignado
-        : Math.round(Number(factura.total) * Number(pago.monto) / sumaPagos * 100) / 100;
-      asignado += monto;
-      return {
-        payment_form: '1',
-        payment_method_code: codigoPagoDian(pago.formaPago, formas),
-        amount: monto.toFixed(2),
-      };
-    });
-  }
+  const paymentDetails = mapearPagosFactus(factura, pagosFactura, formas);
   const payload = {
     reference_code: referenceCode,
     numbering_range_id: Number(process.env.FACTUS_NUMBERING_RANGE_FACTURA) || undefined,

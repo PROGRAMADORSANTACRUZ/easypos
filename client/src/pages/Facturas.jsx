@@ -90,10 +90,20 @@ export async function imprimirRecibo(f, efectivo, campoFormato = 'formatoFactura
   const qrImg = qrUrl
     ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(qrUrl)}" width="120" height="120" alt="QR CUFE" />`
     : '';
-  const filas = (f.pedido?.items || [])
-    .map((it) => {
-      const nombre = esc((it.producto?.nombre || '').toUpperCase());
-      return `<tr><td class="c">${it.cantidad}×</td><td class="n">${nombre}</td><td class="p">${money(it.precioUnit * it.cantidad)}</td></tr>`;
+  const filas = (f.detalle?.length
+    ? f.detalle.map((linea) => ({
+        cantidad: linea.cantidad,
+        nombre: linea.productoNombre || linea.producto?.nombre || '',
+        total: linea.total ?? Number(linea.precioUnitario || 0) * Number(linea.cantidad || 0),
+      }))
+    : (f.pedido?.items || []).map((item) => ({
+        cantidad: item.cantidad,
+        nombre: item.producto?.nombre || '',
+        total: item.precioUnit * item.cantidad,
+      })))
+    .map((linea) => {
+      const nombre = esc(String(linea.nombre).toUpperCase());
+      return `<tr><td class="c">${linea.cantidad}×</td><td class="n">${nombre}</td><td class="p">${money(linea.total)}</td></tr>`;
     })
     .join('');
 
@@ -746,12 +756,17 @@ export default function Facturas({ electronica = true }) {
     ];
     const filas = [];
     const faltanCuentas = new Set();
+    let propinasExcluidas = 0;
     const nombresMes = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
     const redondearPeso = (valor) => Math.round(Math.abs(Number(valor) || 0) + Number.EPSILON);
 
     for (const factura of facturasFiltradas) {
       const grupos = new Map();
       for (const linea of factura.detalle || []) {
+        if (!linea.productoId && String(linea.productoNombre || '').trim().toUpperCase() === 'PROPINA') {
+          propinasExcluidas += 1;
+          continue;
+        }
         const impuesto = linea.producto?.impuesto;
         const iva = Number(linea.iva) || 0;
         const base = (Number(linea.total) || 0) - iva;
@@ -852,6 +867,7 @@ export default function Facturas({ electronica = true }) {
     enlace.download = `Interfaz_FacturaVenta_${filtroFecha.desde || 'todas'}_${filtroFecha.hasta || 'todas'}.xlsx`;
     enlace.click();
     URL.revokeObjectURL(url);
+    if (propinasExcluidas) notify(`Se excluyeron ${propinasExcluidas} líneas de propina del Excel hasta configurar su cuenta Siesa.`);
   };
 
   const reenviarDian = async (f) => {
@@ -936,7 +952,7 @@ export default function Facturas({ electronica = true }) {
     }
 
     const pagoPedido = pagosPedidos[pedido.id] || { recibe: '', pagos: [] };
-    const cobrarPropina = electronica && propinaOn[pedido.id] !== false;
+    const cobrarPropina = propinaOn[pedido.id] !== false;
     const prop = !cobrarPropina
       ? 0
       : (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(subtotal));
@@ -998,7 +1014,7 @@ export default function Facturas({ electronica = true }) {
       return notify('Asigna todas las unidades de cada producto antes de continuar.', 'err');
     }
 
-    const cobrarPropina = electronica && propinaOn[pedido.id] !== false;
+    const cobrarPropina = propinaOn[pedido.id] !== false;
     const propina = cobrarPropina
       ? (propinas[pedido.id] !== undefined ? Math.max(0, Number(propinas[pedido.id]) || 0) : sugPropina(totalesPedido(pedido).subtotal))
       : 0;
@@ -1110,7 +1126,10 @@ export default function Facturas({ electronica = true }) {
   const pasoUnidad = (producto) => 1 / (Number(producto.unidad?.factorConversion) > 0 ? Number(producto.unidad.factorConversion) : 1);
   const pasoRapidoUnidad = (producto) => (Number(producto.unidad?.factorConversion) || 1) > 1 ? 0.1 : 1;
 
-  const subtotalDirecta = carrito.reduce((s, c) => s + c.producto.precio * c.cantidad, 0);
+  const totalProductosDirecta = carrito.reduce((s, c) => s + c.producto.precio * c.cantidad, 0);
+  const impuestoDirecta = Math.round(carrito.reduce((s, c) =>
+    s + c.producto.precio * c.cantidad * (Number(c.producto.iva) || 0) / 100, 0) * 100) / 100;
+  const subtotalDirecta = Math.round((totalProductosDirecta - impuestoDirecta) * 100) / 100;
 
   // Categorías presentes en el menú y productos filtrados por categoría + búsqueda
   const categoriasMenu = [...new Set(productos.map((p) => p.categoria?.nombre || 'Sin categoría'))].sort();
@@ -1122,13 +1141,13 @@ export default function Facturas({ electronica = true }) {
   });
 
   // Propina de la venta directa: sugerida al 10% mientras no se digite otra.
-  const propDirecta = !electronica || sinPropinaDirecta ? 0 : propinaDirecta !== '' ? Math.max(0, Number(propinaDirecta) || 0) : sugPropina(subtotalDirecta);
-  const totalPagarDirecta = subtotalDirecta + propDirecta;
+  const propDirecta = sinPropinaDirecta ? 0 : propinaDirecta !== '' ? Math.max(0, Number(propinaDirecta) || 0) : sugPropina(subtotalDirecta);
+  const totalPagarDirecta = totalProductosDirecta + propDirecta;
 
   // Condición del cliente seleccionado en la venta directa (crédito/contado según Clientes)
   const cliDirecta = clienteDe(cliente);
   const creditoDirecta = cliDirecta?.condicionPago === 'CREDITO';
-  const cupoExcedidoDirecta = creditoDirecta && cliDirecta.creditoCupo != null && subtotalDirecta > cliDirecta.creditoCupo;
+  const cupoExcedidoDirecta = creditoDirecta && cliDirecta.creditoCupo != null && totalProductosDirecta > cliDirecta.creditoCupo;
 
   // --- Ventas congeladas (se guardan sin facturar para atender a otro cliente) ---
   const congelarDirecta = async () => {
@@ -1182,8 +1201,8 @@ export default function Facturas({ electronica = true }) {
 
     // Cliente a crédito: se factura a crédito, sin exigir efectivo; valida el cupo máximo.
     if (cli?.condicionPago === 'CREDITO') {
-      if (cli.creditoCupo != null && subtotalDirecta > cli.creditoCupo) {
-        return notify(`El total (${money(subtotalDirecta)}) supera el cupo de crédito de ${cli.nombre} (${money(cli.creditoCupo)})`, 'err');
+      if (cli.creditoCupo != null && totalProductosDirecta > cli.creditoCupo) {
+        return notify(`El total (${money(totalProductosDirecta)}) supera el cupo de crédito de ${cli.nombre} (${money(cli.creditoCupo)})`, 'err');
       }
       const ventana = abrirVentanaVacia();
       setFacturandoDirecta(true);
@@ -1436,18 +1455,14 @@ export default function Facturas({ electronica = true }) {
         const cliCred = clienteDe(clientesSel[p.id] ?? idDefault);
         const credito = cliCred?.condicionPago === 'CREDITO';
         const cupoExcedido = credito && cliCred.creditoCupo != null && totalP > cliCred.creditoCupo;
-        const cobrarPropina = electronica && propinaOn[p.id] !== false;
+        const cobrarPropina = propinaOn[p.id] !== false;
         const propP = !cobrarPropina
           ? 0
           : (propinas[p.id] !== undefined ? Math.max(0, Number(propinas[p.id]) || 0) : sugPropina(subtotal));
         const totalPagarP = totalP + propP;
         const nombreCli = p.clienteRel?.nombre || p.cliente || 'Consumidor Final';
         const nPartes = Math.max(2, Math.min(12, Number(cantidadPartes) || 2));
-        const importesLineas = p.items.map((item) => {
-          const bruto = item.precioUnit * item.cantidad;
-          const impuesto = electronica ? Math.round(bruto * (Number(item.producto?.iva) || 0) / 100 * 100) / 100 : 0;
-          return bruto + impuesto;
-        });
+        const importesLineas = p.items.map((item) => item.precioUnit * item.cantidad);
         const totalBruto = importesLineas.reduce((suma, valor) => suma + valor, 0);
         const asignacionesVisibles = p.items.map((item) => ({
           item,
@@ -1461,8 +1476,7 @@ export default function Facturas({ electronica = true }) {
             : Math.round(totalBruto / nPartes * 100) / 100)
           : Array.from({ length: nPartes }, (_, indice) => Math.round(asignacionesVisibles.reduce((suma, linea) => {
             const bruto = linea.item.precioUnit * linea.cantidades[indice];
-            const iva = electronica ? Math.round(bruto * (Number(linea.item.producto?.iva) || 0) / 100 * 100) / 100 : 0;
-            return suma + bruto + iva;
+            return suma + bruto;
           }, 0) * 100) / 100);
         const basePropinaPartes = totalesAntesPropina.reduce((suma, valor) => suma + valor, 0);
         const propinaPartes = totalesAntesPropina.map((valor, indice) => indice === nPartes - 1
@@ -1685,14 +1699,14 @@ export default function Facturas({ electronica = true }) {
                     </>
                   ) : (
                     <>
-                      {electronica && <label className="pago-mixto-check">
+                      <label className="pago-mixto-check">
                         <input
                           type="checkbox"
                           checked={cobrarPropina}
                           onChange={(e) => setPropinaOn({ ...propinaOn, [p.id]: e.target.checked })}
                         />
                         Cobrar propina (10% sugerido)
-                      </label>}
+                      </label>
                       {cobrarPropina && (
                         <div className="field">
                           <label>Propina</label>
@@ -2024,6 +2038,8 @@ export default function Facturas({ electronica = true }) {
                 <div className="total-line grand" style={{ marginTop: 12 }}>
                   <span>Subtotal</span><span>{money(subtotalDirecta)}</span>
                 </div>
+                {impuestoDirecta > 0 && <div className="total-line"><span>IVA</span><span>{money(impuestoDirecta)}</span></div>}
+                <div className="total-line"><span>Total productos</span><span>{money(totalProductosDirecta)}</span></div>
 
                 {creditoDirecta ? (
                   <div className="field" style={{ marginTop: 12 }}>
@@ -2034,14 +2050,14 @@ export default function Facturas({ electronica = true }) {
                       <div className="mini" style={{ marginTop: 6 }}>Cupo máximo: {money(cliDirecta.creditoCupo)}</div>
                     )}
                     {cupoExcedidoDirecta && (
-                      <div className="mini" style={{ color: 'var(--red)', marginTop: 4 }}>
+                        <div className="mini" style={{ color: 'var(--red)', marginTop: 4 }}>
                         El total supera el cupo de crédito del cliente.
                       </div>
                     )}
                   </div>
                 ) : null}
 
-                {!creditoDirecta && electronica && (
+                {!creditoDirecta && (
                   <>
                     <div className="field" style={{ marginTop: 12 }}>
                       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
@@ -2062,11 +2078,10 @@ export default function Facturas({ electronica = true }) {
                         onChange={(e) => setPropinaDirecta(e.target.value)}
                       />
                     </div>
-                    {propDirecta > 0 && (
-                      <div className="total-line grand">
-                        <span>Total a pagar</span><span>{money(totalPagarDirecta)}</span>
-                      </div>
-                    )}
+                    {propDirecta > 0 && <div className="total-line"><span>Propina</span><span>{money(propDirecta)}</span></div>}
+                    <div className="total-line grand">
+                      <span>Total a pagar</span><span>{money(totalPagarDirecta)}</span>
+                    </div>
                   </>
                 )}
 
@@ -2095,7 +2110,7 @@ export default function Facturas({ electronica = true }) {
                     }
                     onClick={facturarDirecta}
                   >
-                    {creditoDirecta ? <><Icon name="receipt" size={16} /> Facturar a crédito</> : <><Icon name="cash" size={16} /> Facturar e imprimir</>} {money(creditoDirecta ? subtotalDirecta : totalPagarDirecta)}
+                    {creditoDirecta ? <><Icon name="receipt" size={16} /> Facturar a crédito</> : <><Icon name="cash" size={16} /> Facturar e imprimir</>} {money(creditoDirecta ? totalProductosDirecta : totalPagarDirecta)}
                   </button>
                 </div>
               </div>
