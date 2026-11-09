@@ -106,6 +106,8 @@ export async function imprimirRecibo(f, efectivo, campoFormato = 'formatoFactura
       return `<tr><td class="c">${linea.cantidad}×</td><td class="n">${nombre}</td><td class="p">${money(linea.total)}</td></tr>`;
     })
     .join('');
+  const propinaEnDetalle = (f.detalle || []).some((linea) => !linea.productoId
+    && String(linea.productoNombre || '').trim().toUpperCase() === 'PROPINA');
 
   // Forma(s) de pago: solo si es pago mixto se muestra el detalle por linea; la forma de pago simple ya va bajo el TOTAL.
   const pagoHtml = (f.metodoPago || '').includes(' + ')
@@ -194,7 +196,7 @@ export async function imprimirRecibo(f, efectivo, campoFormato = 'formatoFactura
       ? `<div class="tot"><span>Medio de pago:</span><span>${esc(f.metodoPago)}</span></div>`
       : ''}
     ${f.propina
-      ? `<div class="tot"><span>Propina</span><span>${money(f.propina)}</span></div>
+      ? `${propinaEnDetalle ? '' : `<div class="tot"><span>Propina</span><span>${money(f.propina)}</span></div>`}
          <div class="tot grand"><span>TOTAL A PAGAR</span><span>${money(f.total + f.propina)}</span></div>`
       : ''}
     ${((f.notasCredito?.length || f.notasDebito?.length || f.retenciones?.length)
