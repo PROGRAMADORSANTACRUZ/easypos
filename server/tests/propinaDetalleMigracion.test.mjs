@@ -4,6 +4,7 @@ import test from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 
 const migracion = await readFile(new URL('../prisma/migrations/20261108235000_propina_lineas_detalle/migration.sql', import.meta.url), 'utf8');
+const corregirFacturaRechazada = await readFile(new URL('../prisma/migrations/20261109060000_corrige_factura_rechazada_impoconsumo/migration.sql', import.meta.url), 'utf8');
 
 test('migra propina a ambas tablas de detalle una sola vez y conserva cabeceras', async () => {
   const db = new PGlite();
@@ -83,6 +84,51 @@ test('migra propina a ambas tablas de detalle una sola vez y conserva cabeceras'
     assert.deepEqual(cabeceras, [{ numero: 10, Propina: 800 }, { numero: 11, Propina: 0 }]);
     const productos = (await db.query(`SELECT count(*)::int AS cantidad FROM "FacturaDetalle" WHERE "CodigoProducto" = '0004'`)).rows[0];
     assert.equal(productos.cantidad, 1);
+  } finally {
+    await db.close();
+  }
+});
+
+test('corrige solo RM1C10 rechazada y conserva total y propina', async () => {
+  const db = new PGlite();
+  const operacionId = '00000000-0000-4000-8000-000000000010';
+  const detalleProductoId = '00000000-0000-4000-8000-000000000011';
+  const detallePropinaId = '00000000-0000-4000-8000-000000000012';
+  try {
+    await db.exec(`
+      CREATE TABLE "Factura" (
+        "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10), "TipoDocumento" varchar(20),
+        "Prefijo" varchar(20), "numero" integer, "Subtotal" double precision, "impuestoPct" double precision,
+        "IVA" double precision, "Total" double precision, "Propina" double precision,
+        "EstadoDIAN" varchar(50), "CUFE" varchar(200), "NumeroFactus" varchar(50),
+        PRIMARY KEY ("CompaniaCodigo", "CentroOperacionCodigo", "TipoDocumento", "numero")
+      );
+      CREATE TABLE "FacturaOperacion" (
+        "Id" uuid PRIMARY KEY, "CompaniaCodigo" varchar(3), "CentroOperacionCodigo" varchar(10),
+        "TipoDocumento" varchar(20), "numero" integer,
+        UNIQUE ("CompaniaCodigo", "CentroOperacionCodigo", "TipoDocumento", "numero")
+      );
+      CREATE TABLE "FacturaDetalle" (
+        "Id" uuid PRIMARY KEY, "FacturaId" uuid, "CodigoProducto" varchar(50), "NombreProducto" varchar(250),
+        "Cantidad" double precision, "PrecioUnitario" double precision, "IVA" double precision, "Total" double precision
+      );
+      INSERT INTO "Factura" VALUES ('004','420','FEV','RM1C',10,7360,8,640,8000,800,'ERROR',NULL,NULL);
+      INSERT INTO "FacturaOperacion" VALUES ('${operacionId}','004','420','FEV',10);
+      INSERT INTO "FacturaDetalle" VALUES
+        ('${detalleProductoId}','${operacionId}','0004','CHUZO DE CHORIZO',1,7360,640,8000),
+        ('${detallePropinaId}','${operacionId}','0000','Propina',1,800,0,800);
+    `);
+
+    await db.exec(corregirFacturaRechazada);
+    await db.exec(corregirFacturaRechazada);
+
+    const factura = (await db.query(`SELECT "Subtotal", "impuestoPct", "IVA", "Total", "Propina", "EstadoDIAN" FROM "Factura" WHERE "numero"=10`)).rows[0];
+    assert.deepEqual(factura, { Subtotal: 7407.41, impuestoPct: 8, IVA: 592.59, Total: 8000, Propina: 800, EstadoDIAN: 'ERROR' });
+    const detalle = (await db.query(`SELECT "CodigoProducto", "PrecioUnitario", "IVA", "Total" FROM "FacturaDetalle" ORDER BY "CodigoProducto"`)).rows;
+    assert.deepEqual(detalle, [
+      { CodigoProducto: '0000', PrecioUnitario: 800, IVA: 0, Total: 800 },
+      { CodigoProducto: '0004', PrecioUnitario: 7407.41, IVA: 592.59, Total: 8000 },
+    ]);
   } finally {
     await db.close();
   }

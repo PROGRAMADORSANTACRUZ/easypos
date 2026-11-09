@@ -8,7 +8,7 @@ export function calcularTotalesPedido(items = [], electronica = true) {
   const impuesto = redondear(items.reduce((suma, item) => {
     const bruto = (Number(item.precioUnit) || 0) * (Number(item.cantidad) || 0);
     const porcentaje = Number(item.producto?.iva) || 0;
-    return suma + redondear(bruto * porcentaje / 100);
+    return suma + redondear(bruto * porcentaje / (100 + porcentaje));
   }, 0));
   const subtotal = redondear(precioProductos - impuesto);
   const total = precioProductos;

@@ -21,16 +21,16 @@ function factura(datos = {}) {
   };
 }
 
-test('el total cobrado coincide con el IVA que agrega el servidor', () => {
+test('el total cobrado separa el impuesto incluido en el precio', () => {
   const items = [{ precioUnit: 8000, cantidad: 1, producto: { iva: 19 } }];
-  assert.deepEqual(calcularTotalesPedido(items, true), { subtotal: 6480, impuesto: 1520, total: 8000 });
-  assert.deepEqual(calcularTotalesPedido(items, false), { subtotal: 6480, impuesto: 1520, total: 8000 });
+  assert.deepEqual(calcularTotalesPedido(items, true), { subtotal: 6722.69, impuesto: 1277.31, total: 8000 });
+  assert.deepEqual(calcularTotalesPedido(items, false), { subtotal: 6722.69, impuesto: 1277.31, total: 8000 });
 });
 
 test('el precio de $8.000 ya incluye el impoconsumo de $640', () => {
   const items = [{ precioUnit: 8000, cantidad: 1, producto: { iva: 8 } }];
-  assert.deepEqual(calcularTotalesPedido(items, true), { subtotal: 7360, impuesto: 640, total: 8000 });
-  assert.deepEqual(calcularTotalesPedido(items, false), { subtotal: 7360, impuesto: 640, total: 8000 });
+  assert.deepEqual(calcularTotalesPedido(items, true), { subtotal: 7407.41, impuesto: 592.59, total: 8000 });
+  assert.deepEqual(calcularTotalesPedido(items, false), { subtotal: 7407.41, impuesto: 592.59, total: 8000 });
   assert.equal(calcularPropinaSugerida(calcularTotalesPedido(items, true).total), 800);
 });
 

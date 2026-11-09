@@ -12,7 +12,7 @@ const pedido = {
   }],
 };
 
-test('descuenta 8% del precio y conserva el bruto como total en ambas modalidades', () => {
+test('extrae 8% incluido y conserva el bruto como total en ambas modalidades', () => {
   const item = {
     ...pedido.items[0], cantidad: 1, precioUnit: 8000,
     producto: { codigo: '0004', nombre: 'CHUZO DE CHORIZO', iva: 8, unidad: { abreviatura: 'UND' } },
@@ -22,9 +22,9 @@ test('descuenta 8% del precio y conserva el bruto como total en ambas modalidade
     assert.equal(linea.productoCodigo, '0004');
     assert.equal(linea.productoNombre, 'CHUZO DE CHORIZO');
     assert.equal(linea.unidad, 'UND');
-    assert.equal(linea.precioUnitario, 7360);
-    assert.equal(linea.subtotal, 7360);
-    assert.equal(linea.impuesto, 640);
+    assert.equal(linea.precioUnitario, 7407.41);
+    assert.equal(linea.subtotal, 7407.41);
+    assert.equal(linea.impuesto, 592.59);
     assert.equal(linea.total, 8000);
   }
 });

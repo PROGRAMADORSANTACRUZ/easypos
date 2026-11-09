@@ -122,9 +122,9 @@ export function mapearItemsFactus(detalle) {
     const tieneSnapshotImportes = Number.isFinite(total) && Number.isFinite(Number(d.iva)) && cantidad > 0;
     const baseLinea = total - iva;
     const precioBase = tieneSnapshotImportes ? baseLinea / cantidad : Number(d.precioUnitario) || 0;
-    const porcentaje = tieneSnapshotImportes
-      ? (baseLinea > 0 ? iva / baseLinea * 100 : 0)
-      : Number(impuesto?.porcentaje ?? d.producto?.iva ?? 0);
+    const porcentaje = d.producto
+      ? Number(impuesto?.porcentaje ?? d.producto.iva ?? 0)
+      : (baseLinea > 0 ? iva / baseLinea * 100 : 0);
     return {
       code_reference: d.productoCodigo || d.producto?.codigo || String(d.productoId || ''),
       name: d.productoNombre || d.producto?.nombre || 'Producto',
@@ -136,7 +136,7 @@ export function mapearItemsFactus(detalle) {
       taxes: [
         {
           code: impuesto?.codigoDIAN || (tipo === 'INC' ? '04' : '01'),
-          rate: porcentaje.toFixed(6),
+          rate: porcentaje.toFixed(2),
           is_excluded: !(porcentaje > 0),
         },
       ],

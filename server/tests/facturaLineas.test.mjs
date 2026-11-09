@@ -26,7 +26,7 @@ test('Factus usa snapshots, respeta el impuesto del producto y envía propina ex
     },
     {
       productoCodigo: '0004', productoNombre: 'Chuzo', cantidad: 1,
-      precioUnitario: 7360, iva: 640, total: 8000,
+      precioUnitario: 7407.41, iva: 592.59, total: 8000,
       producto: { iva: 8, impuesto: { tipo: 'INC', codigoDIAN: '04', porcentaje: 8 } },
     },
     {
@@ -38,9 +38,9 @@ test('Factus usa snapshots, respeta el impuesto del producto y envía propina ex
 
   assert.equal(items[0].code_reference, '0000');
   assert.equal(items[0].name, 'Propina');
-  assert.deepEqual(items[0].taxes, [{ code: '01', rate: '0.000000', is_excluded: true }]);
-  assert.equal(items[1].price, '7360.00');
-  assert.deepEqual(items[1].taxes, [{ code: '04', rate: '8.695652', is_excluded: false }]);
+  assert.deepEqual(items[0].taxes, [{ code: '01', rate: '0.00', is_excluded: true }]);
+  assert.equal(items[1].price, '7407.41');
+  assert.deepEqual(items[1].taxes, [{ code: '04', rate: '8.00', is_excluded: false }]);
   assert.equal(items[2].price, '21600.00');
 });
 

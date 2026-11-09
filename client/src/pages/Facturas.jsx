@@ -1130,7 +1130,7 @@ export default function Facturas({ electronica = true }) {
 
   const totalProductosDirecta = carrito.reduce((s, c) => s + c.producto.precio * c.cantidad, 0);
   const impuestoDirecta = Math.round(carrito.reduce((s, c) =>
-    s + c.producto.precio * c.cantidad * (Number(c.producto.iva) || 0) / 100, 0) * 100) / 100;
+    s + c.producto.precio * c.cantidad * (Number(c.producto.iva) || 0) / (100 + (Number(c.producto.iva) || 0)), 0) * 100) / 100;
   const subtotalDirecta = Math.round((totalProductosDirecta - impuestoDirecta) * 100) / 100;
 
   // Categorías presentes en el menú y productos filtrados por categoría + búsqueda

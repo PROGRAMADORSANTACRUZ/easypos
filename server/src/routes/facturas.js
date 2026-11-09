@@ -134,7 +134,7 @@ function repartirCantidad(total, partes, factorConversion = 1) {
 
 export function calcularLineaPedido(item, electronica) {
   const totalLinea = redondear(item.precioUnit * item.cantidad);
-  const impuesto = impuestoSobrePrecio(totalLinea, item.producto.iva || 0);
+  const impuesto = impuestoSobrePrecio(totalLinea, item.producto.iva || 0, true);
   const subtotal = redondear(totalLinea - impuesto);
   return {
     item,
@@ -502,7 +502,7 @@ router.post('/dividir', wrap(async (req, res) => {
           emailCliente: cliente.emailCliente,
           usuarioId: req.headers['x-usuario-id'] ? String(req.headers['x-usuario-id']) : null,
           subtotal: parte.subtotal,
-          impuestoPct: parte.total > 0 ? redondear(parte.impuesto / parte.total * 100) : 0,
+          impuestoPct: parte.subtotal > 0 ? redondear(parte.impuesto / parte.subtotal * 100) : 0,
           impuesto: parte.impuesto,
           total: parte.total,
           propina: parte.propina,
@@ -577,10 +577,10 @@ router.post('/', wrap(async (req, res) => {
   if (!apertura) return res.status(409).json({ error: 'Debes abrir la caja antes de facturar. Registra la base con la que inicias.' });
 
   const precioProductos = redondear(pedido.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0));
-  const impuesto = redondear(pedido.items.reduce((s, it) => s + impuestoSobrePrecio(it.precioUnit * it.cantidad, it.producto.iva || 0), 0));
+  const impuesto = redondear(pedido.items.reduce((s, it) => s + impuestoSobrePrecio(it.precioUnit * it.cantidad, it.producto.iva || 0, true), 0));
   const subtotal = redondear(precioProductos - impuesto);
   const total = precioProductos;
-  const ivaPctPromedio = precioProductos > 0 ? redondear((impuesto / precioProductos) * 100) : 0;
+  const ivaPctPromedio = subtotal > 0 ? redondear((impuesto / subtotal) * 100) : 0;
   const propinaTotal = Math.max(0, Number(propina) || 0);
 
   let cli;
@@ -643,7 +643,7 @@ router.post('/', wrap(async (req, res) => {
           create: [
             ...pedido.items.map((it) => {
             const lineaSub = it.precioUnit * it.cantidad;
-            const lineaIva = impuestoSobrePrecio(lineaSub, it.producto.iva || 0);
+            const lineaIva = impuestoSobrePrecio(lineaSub, it.producto.iva || 0, true);
             return {
               productoId: it.productoId,
               productoCodigo: it.producto.codigo || null,
@@ -718,11 +718,11 @@ router.post('/directa', wrap(async (req, res) => {
   const precioProductos = redondear(items.reduce((s, i) => s + buscar(i.productoId).precio * Number(i.cantidad), 0));
   const impuesto = redondear(items.reduce((s, i) => {
     const prod = buscar(i.productoId);
-    return s + impuestoSobrePrecio(prod.precio * Number(i.cantidad), prod.iva || 0);
+    return s + impuestoSobrePrecio(prod.precio * Number(i.cantidad), prod.iva || 0, true);
   }, 0));
   const subtotal = redondear(precioProductos - impuesto);
   const total = precioProductos;
-  const ivaPctPromedio = precioProductos > 0 ? redondear((impuesto / precioProductos) * 100) : 0;
+  const ivaPctPromedio = subtotal > 0 ? redondear((impuesto / subtotal) * 100) : 0;
   const propinaTotal = Math.max(0, Number(propina) || 0);
 
   let cli;
@@ -787,7 +787,7 @@ router.post('/directa', wrap(async (req, res) => {
             const cant = Number(i.cantidad);
             const precio = buscar(i.productoId).precio;
             const lineaSub = precio * cant;
-              const lineaIva = impuestoSobrePrecio(lineaSub, buscar(i.productoId).iva || 0);
+              const lineaIva = impuestoSobrePrecio(lineaSub, buscar(i.productoId).iva || 0, true);
             return {
               productoId: String(i.productoId),
               productoCodigo: buscar(i.productoId).codigo || null,
