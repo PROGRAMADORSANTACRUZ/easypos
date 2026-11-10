@@ -193,6 +193,10 @@ en cada base existente `server/prisma/migrations/20261103120000_inventario_insum
 Esta migración copia el stock actual a Compras y marca pedidos abiertos que ya
 habían descontado inventario. Aplica la migración antes de desplegar la aplicación.
 
+Para que `Total` en la base incluya la propina sin duplicar cobros, seguir el
+[procedimiento en dos fases](docs/migracion-total-propina-20261110.md).
+No aplicar la conversion final mientras siga activa una version antigua.
+
 Antes de desplegar la separacion de permisos de Domicilios y Repartidor / Entregas,
 respalda cada base y aplica `20261110120000_permisos_domicilios_repartidor`.
 Registra los permisos `domicilios.*` y `repartidor.*` y conserva `pedidos.*`

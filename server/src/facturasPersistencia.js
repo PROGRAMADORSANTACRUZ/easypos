@@ -5,7 +5,7 @@ const claves = ['companiaCodigo', 'centroOperacionCodigo', 'tipoDocumentoCodigo'
 const camposCabecera = new Set([
   'createdAt', 'numeroDocumentoCliente', 'nombreCliente', 'sucursalCliente',
   'telefonoCliente', 'direccionCliente', 'barrioCliente', 'ciudadCliente', 'emailCliente',
-  'subtotal', 'impuestoPct', 'impuesto', 'total', 'propina', ...camposMetodoPago, ...camposValorPago,
+  'subtotal', 'impuestoPct', 'impuesto', 'total', 'totalConPropina', 'propina', ...camposMetodoPago, ...camposValorPago,
   'credito', 'creditoDias', 'vence', 'cufe', 'numeroFactus', 'xmlPath', 'pdfPath',
   'estadoDIAN', 'usuarioNombre',
 ]);

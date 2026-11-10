@@ -10,6 +10,43 @@ const modelos = [
 const adaptar = crearAdaptadorFacturas(modelos);
 const clave = { companiaCodigo: '006', centroOperacionCodigo: '606', tipoDocumentoCodigo: 'FEV', prefijo: 'DVP', numeroFactura: 184 };
 
+test('la base fuerza Total = TotalConsumo + Propina sin duplicar la propina al repetir migraciones', async () => {
+  const { PGlite } = await import('@electric-sql/pglite');
+  const { readFile } = await import('node:fs/promises');
+  const db = new PGlite();
+  try {
+    for (const tabla of ['Factura', 'FacturaVenta']) {
+      await db.exec(`CREATE TABLE "${tabla}" (id INTEGER PRIMARY KEY, "Subtotal" DOUBLE PRECISION NOT NULL DEFAULT 0, "IVA" DOUBLE PRECISION NOT NULL DEFAULT 0, "Total" DOUBLE PRECISION NOT NULL DEFAULT 0, "Propina" DOUBLE PRECISION NOT NULL DEFAULT 0, "CUFE" TEXT, valor1 NUMERIC(18,2));
+        INSERT INTO "${tabla}" VALUES (1, 396296.3, 9703.7, 406000, 5000, 'CUFE-ORIGINAL', 411000);`);
+    }
+    const preparar = await readFile(new URL('../prisma/migrations/20261110150000_preparar_total_consumo/migration.sql', import.meta.url), 'utf8');
+    const completar = await readFile(new URL('../prisma/migrations/20261110160000_total_incluye_propina/migration.sql', import.meta.url), 'utf8');
+    for (const sql of [preparar, completar]) {
+      assert.match(sql, /^BEGIN;/);
+      assert.match(sql, /COMMIT;\s*$/);
+      assert.equal((sql.match(/COMMIT;/g) || []).length, 1);
+    }
+    await db.exec(preparar);
+    await db.exec('UPDATE "Factura" SET "Total" = 34000, "Subtotal" = 31481.49, "IVA" = 2518.51, "Propina" = 3400 WHERE id=1');
+    assert.equal((await db.query('SELECT "TotalConsumo" FROM "Factura"')).rows[0].TotalConsumo, 34000);
+    await db.exec('UPDATE "FacturaVenta" SET "TotalConsumo" = 8000, "Subtotal" = 7407.41, "IVA" = 592.59, "Propina" = 800 WHERE id=1');
+    assert.equal((await db.query('SELECT "Total" FROM "FacturaVenta"')).rows[0].Total, 8000);
+    await db.exec(completar);
+    await db.exec(preparar);
+    await db.exec(completar);
+    for (const [tabla, total, consumo, propina] of [['Factura', 37400, 34000, 3400], ['FacturaVenta', 8800, 8000, 800]]) {
+      const { rows } = await db.query(`SELECT "Total", "TotalConsumo", "Propina", "CUFE", valor1::text AS pago FROM "${tabla}" WHERE id=1`);
+      assert.deepEqual(rows[0], { Total: total, TotalConsumo: consumo, Propina: propina, CUFE: 'CUFE-ORIGINAL', pago: '411000.00' });
+      await db.exec(`UPDATE "${tabla}" SET "Total"=1 WHERE id=1`);
+      assert.equal((await db.query(`SELECT "Total" FROM "${tabla}" WHERE id=1`)).rows[0].Total, total);
+      await db.exec(`UPDATE "${tabla}" SET "Propina"=0 WHERE id=1`);
+      assert.equal((await db.query(`SELECT "Total" FROM "${tabla}" WHERE id=1`)).rows[0].Total, consumo);
+      await db.exec(`INSERT INTO "${tabla}" (id, "Subtotal", "IVA", "Propina") VALUES (2, 7407.41, 592.59, 800)`);
+      assert.equal((await db.query(`SELECT "Total" FROM "${tabla}" WHERE id=2`)).rows[0].Total, 8800);
+    }
+  } finally { await db.close(); }
+});
+
 test('proyecta campos de cabecera y mantiene el identificador de la API', async () => {
   let consulta;
   const cliente = adaptar({ factura: { async findUnique(argumentos) {

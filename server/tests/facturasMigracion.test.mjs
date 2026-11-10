@@ -22,6 +22,8 @@ const migracionOrdenTipoDocumento = await readFile(new URL('../prisma/migrations
 const migracionFacturaVentaDetalle = await readFile(new URL('../prisma/migrations/20261105110000_factura_venta_detalle_documento_bodega/migration.sql', import.meta.url), 'utf8');
 const migracionDetallesFechaUsuario = await readFile(new URL('../prisma/migrations/20261105120000_detalles_factura_fecha_usuario/migration.sql', import.meta.url), 'utf8');
 const migracionCompletarDetalles = await readFile(new URL('../prisma/migrations/20261106120000_completar_metadatos_detalles/migration.sql', import.meta.url), 'utf8');
+const migracionTotalConsumo = await readFile(new URL('../prisma/migrations/20261110150000_preparar_total_consumo/migration.sql', import.meta.url), 'utf8');
+const migracionTotalConPropina = await readFile(new URL('../prisma/migrations/20261110160000_total_incluye_propina/migration.sql', import.meta.url), 'utf8');
 
 test('completa metadatos nulos de ambos detalles sin modificar snapshots previos ni importes', async () => {
   const db = new PGlite();
@@ -473,6 +475,8 @@ test('el cliente Prisma nuevo lee y actualiza las dos tablas migradas', async ()
     await db.exec(migracionNombresPago);
     await db.exec(migracionColumnaPrefijo);
     await db.exec(migracionCodigoDocumental);
+    await db.exec(migracionTotalConsumo);
+    await db.exec(migracionTotalConPropina);
     await socket.start();
     cliente = new PrismaClient({ datasources: { db: {
       url: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?connection_limit=1&sslmode=disable`,
@@ -481,6 +485,7 @@ test('el cliente Prisma nuevo lee y actualiza las dos tablas migradas', async ()
     for (const modelo of ['factura', 'facturaVenta']) {
       const factura = await prisma[modelo].findUnique({ where: { id: facturaId } });
       assert.equal(factura.total, 119);
+      assert.equal(factura.totalConPropina, Math.round((factura.total + factura.propina) * 100) / 100);
       assert.equal(factura.usuarioNombre, 'cajero606');
       assert.equal(factura.sucursalCliente, 'Principal');
       assert.equal(factura.tipoDocumentoCodigo, 'FEV');
@@ -488,6 +493,7 @@ test('el cliente Prisma nuevo lee y actualiza las dos tablas migradas', async ()
       const actualizada = await prisma[modelo].update({ where: { id: facturaId }, data: { pdfPath: '/nuevo.pdf' } });
       assert.equal(actualizada.pdfPath, '/nuevo.pdf');
       assert.equal(actualizada.total, 119);
+      assert.equal(actualizada.totalConPropina, factura.totalConPropina);
     }
   } finally {
     if (cliente) await cliente.$disconnect();

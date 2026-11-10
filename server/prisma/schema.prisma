@@ -812,7 +812,8 @@ model FacturaCabecera {
   subtotal Float @map("Subtotal")
   impuestoPct Float
   impuesto Float @map("IVA")
-  total Float @map("Total")
+  total Float @map("TotalConsumo")
+  totalConPropina Float @default(0) @map("Total")
   propina Float @default(0) @map("Propina")
   metodoPago1 String @default("0") @map("metodopago1")
   valor1 Decimal @default(0) @db.Decimal(18, 2)
@@ -855,7 +856,8 @@ model FacturaVentaCabecera {
   subtotal Float @map("Subtotal")
   impuestoPct Float
   impuesto Float @map("IVA")
-  total Float @map("Total")
+  total Float @map("TotalConsumo")
+  totalConPropina Float @default(0) @map("Total")
   propina Float @default(0) @map("Propina")
   metodoPago1 String @default("0") @map("metodopago1")
   valor1 Decimal @default(0) @db.Decimal(18, 2)
