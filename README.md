@@ -197,6 +197,16 @@ Para que `Total` en la base incluya la propina sin duplicar cobros, seguir el
 [procedimiento en dos fases](docs/migracion-total-propina-20261110.md).
 No aplicar la conversion final mientras siga activa una version antigua.
 
+Para fijar las columnas de medios de pago, respaldar cada base y aplicar
+`20261110170000_posiciones_fijas_medios_pago`. EFE/EFECTIVO ocupa
+`metodopago1/valor1`; DAT, DTF o TARJETA ocupa `metodopago2/valor2`; QR ocupa
+`metodopago3/valor3`. Otros medios usan primero la cuarta posicion y luego las
+libres, con orden estable por codigo. Si coinciden varios codigos de una misma
+familia, se suman en su columna y se conserva la lista de codigos separada por
+`/`; los registros individuales de pago no se modifican. La migracion reordena
+las cabeceras existentes y un trigger mantiene la regla en nuevas escrituras,
+sin alterar sumas, totales, propinas, estados fiscales ni el catalogo de medios.
+
 Antes de desplegar la separacion de permisos de Domicilios y Repartidor / Entregas,
 respalda cada base y aplica `20261110120000_permisos_domicilios_repartidor`.
 Registra los permisos `domicilios.*` y `repartidor.*` y conserva `pedidos.*`

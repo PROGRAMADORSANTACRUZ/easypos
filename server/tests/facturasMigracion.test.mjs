@@ -7,7 +7,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { crearAdaptadorFacturas } from '../src/facturasPersistencia.js';
-import { separarMetodosPago, separarValoresPago } from '../src/pagosFactura.js';
+import { separarMetodosPago, separarValoresPago, ubicarPagosFactura } from '../src/pagosFactura.js';
 
 const migracion = await readFile(new URL('../prisma/migrations/20261104120000_facturas_cabeceras_clave_compuesta/migration.sql', import.meta.url), 'utf8');
 const pausa = await readFile(new URL('../scripts/pausar-facturacion.sql', import.meta.url), 'utf8');
@@ -586,14 +586,14 @@ test('Prisma real crea, consulta, actualiza y revierte facturas con el esquema c
       ...datos, numeroFactura: '186', credito: false, propina: 3, metodoPago: 'TARJETA + TRANSFERENCIA',
       pagos: { create: [{ formaPago: 'TARJETA', monto: 100 }, { formaPago: 'TRANSFERENCIA', monto: 22 }] },
     }, include: { pagos: true } });
-    assert.equal(mixta.metodoPago1, 'TARJETA');
-    assert.equal(mixta.valor1, 100);
-    assert.equal(mixta.metodoPago2, 'TRANSFERENCIA');
-    assert.equal(mixta.valor2, 22);
+    assert.equal(mixta.metodoPago1, '0');
+    assert.equal(mixta.valor1, 0);
+    assert.equal(mixta.metodoPago2, 'TARJETA');
+    assert.equal(mixta.valor2, 100);
     assert.equal(mixta.metodoPago3, '0');
     assert.equal(mixta.valor3, 0);
-    assert.equal(mixta.metodoPago4, '0');
-    assert.equal(mixta.valor4, 0);
+    assert.equal(mixta.metodoPago4, 'TRANSFERENCIA');
+    assert.equal(mixta.valor4, 22);
     assert.equal(mixta.metodoPago, 'TARJETA $100 + TRANSFERENCIA $22');
     assert.equal(mixta.pagos.reduce((suma, pago) => suma + pago.monto, 0), 122);
     const pagoActualizado = await prisma.facturaVenta.update({ where: { id: mixta.id }, data: { metodoPago: 'EFECTIVO' } });
@@ -606,8 +606,10 @@ test('Prisma real crea, consulta, actualiza y revierte facturas con el esquema c
     const centavos = await prisma.facturaVenta.create({ data: {
       ...datos, numeroFactura: '187', credito: false, total: 119.75, metodoPago: 'TARJETA',
     } });
-    assert.equal(centavos.valor1, 119.75);
-    assert.equal(typeof centavos.valor1, 'number');
+    assert.equal(centavos.metodoPago2, 'TARJETA');
+    assert.equal(centavos.valor1, 0);
+    assert.equal(centavos.valor2, 119.75);
+    assert.equal(typeof centavos.valor2, 'number');
     const efectivoConPropina = await prisma.factura.create({ data: {
       ...datos, numeroFactura: '188', prefijo: 'RM1C', tipoDocumentoId: tipoElectronico.id,
       credito: false, subtotal: 8000, impuestoPct: 0, impuesto: 0, total: 8000, propina: 800, metodoPago: 'EFECTIVO',
@@ -705,10 +707,9 @@ test('migra los cuatro pares con importes decimales sin recalcular el historial'
       const { rows: [original] } = await db.query(`SELECT * FROM respaldo_valores_pago_20261104."${tabla}"`);
       const esperado = separarValoresPago(Object.fromEntries([1, 2, 3, 4].map((indice) => [`metodoPago${indice}`, original[`metodopago${indice}`]])));
       assert.equal(Object.keys(factura).length, 35);
-      for (let indice = 1; indice <= 4; indice++) {
-        assert.equal(factura[`metodopago${indice}`], esperado[`metodoPago${indice}`]);
-        assert.equal(Number(factura[`valor${indice}`]), esperado[`valor${indice}`]);
-      }
+      assert.deepEqual(ubicarPagosFactura([1, 2, 3, 4].map((indice) => ({
+        metodo: factura[`metodopago${indice}`], monto: Number(factura[`valor${indice}`]),
+      }))), esperado);
       assert.equal(factura.Total, original.Total);
       assert.equal(factura.Propina, original.Propina);
       assert.equal(factura.CUFE, original.CUFE);

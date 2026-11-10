@@ -5,6 +5,51 @@ const formatoImporte = new Intl.NumberFormat('en-US', {
 export const camposMetodoPago = ['metodoPago1', 'metodoPago2', 'metodoPago3', 'metodoPago4'];
 export const camposValorPago = ['valor1', 'valor2', 'valor3', 'valor4'];
 
+function posicionPago(codigo) {
+  const codigos = codigo.split('/');
+  if (codigos.every((parte) => ['EFE', 'EFECTIVO'].includes(parte))) return 0;
+  if (codigos.every((parte) => ['DAT', 'DTF', 'TARJETA'].includes(parte))) return 1;
+  if (codigos.every((parte) => parte === 'QR')) return 2;
+  return null;
+}
+
+export function ubicarPagosFactura(pagos) {
+  const grupos = new Map();
+  for (const pago of pagos) {
+    const metodo = String(pago.metodo || '').trim().toUpperCase();
+    const centavos = Math.round(Number(pago.monto) * 100);
+    if (metodo === '0' && centavos === 0) continue;
+    if (!metodo || metodo === '0' || !Number.isSafeInteger(centavos) || centavos <= 0) {
+      throw Object.assign(new Error('Cada pago requiere un medio y un importe positivo valido.'), { status: 400 });
+    }
+    const posicion = posicionPago(metodo);
+    const clave = posicion === null ? `medio:${metodo}` : `posicion:${posicion}`;
+    const grupo = grupos.get(clave) || { posicion, codigos: new Set(), centavos: 0 };
+    metodo.split('/').forEach((codigo) => grupo.codigos.add(codigo));
+    grupo.centavos += centavos;
+    if (!Number.isSafeInteger(grupo.centavos)) throw Object.assign(new Error('Importe de pago fuera de rango.'), { status: 400 });
+    grupos.set(clave, grupo);
+  }
+  const resultado = Object.fromEntries(camposMetodoPago.flatMap((campo, indice) => [[campo, '0'], [camposValorPago[indice], 0]]));
+  const asignar = (grupo, posicion) => {
+    resultado[camposMetodoPago[posicion]] = [...grupo.codigos].sort().join('/');
+    resultado[camposValorPago[posicion]] = grupo.centavos / 100;
+  };
+  for (const grupo of grupos.values()) if (grupo.posicion !== null) asignar(grupo, grupo.posicion);
+  const otros = [...grupos.values()].filter((grupo) => grupo.posicion === null)
+    .sort((primero, segundo) => {
+      const codigoPrimero = [...primero.codigos].sort().join('/');
+      const codigoSegundo = [...segundo.codigos].sort().join('/');
+      return codigoPrimero < codigoSegundo ? -1 : codigoPrimero > codigoSegundo ? 1 : 0;
+    });
+  for (const grupo of otros) {
+    const posicion = [3, 0, 1, 2].find((indice) => resultado[camposMetodoPago[indice]] === '0');
+    if (posicion === undefined) throw Object.assign(new Error('No hay columnas disponibles para conservar todos los medios de pago.'), { status: 400 });
+    asignar(grupo, posicion);
+  }
+  return resultado;
+}
+
 export function esMedioEfectivo(codigo, formas = []) {
   const metodo = String(codigo || '').trim().toUpperCase();
   return metodo === 'EFE' || /^EFECTIVO(?:\s|$)/.test(metodo)
@@ -58,7 +103,7 @@ export function separarValoresPago(metodos) {
     resultado[campo] = coincidencia[1].trim().toUpperCase();
     resultado[camposValorPago[indice]] = centavos / 100;
   });
-  return resultado;
+  return ubicarPagosFactura(camposMetodoPago.map((campo, indice) => ({ metodo: resultado[campo], monto: resultado[camposValorPago[indice]] })));
 }
 
 export function desglosarFactura(factura) {
