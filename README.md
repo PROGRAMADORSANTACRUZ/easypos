@@ -148,6 +148,12 @@ En `server/.env`:
 3. El pedido queda **abierto y listo para facturar** → pulsa **Facturar**.
 4. Se descuenta el **inventario** de cada insumo y se genera la **factura** (imprimible en Facturas).
 
+Los meseros comparten las mesas: pueden consultar y continuar pedidos creados
+por sus companeros segun los permisos de su rol, sin restricciones por mesero
+asignado. La asignacion de mesas en Usuarios es opcional y no limita el acceso.
+El pedido conserva su creador y el historial registra quien realiza cada cambio.
+Domicilios y Repartidor / Entregas mantienen sus permisos independientes.
+
 ## API principal
 
 | Método | Ruta | Descripción |

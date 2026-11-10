@@ -4,7 +4,7 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { calcularInsumosRequeridos, validarStockSuficiente, descontarInsumos, revertirInsumos } from '../inventarioKits.js';
 import { imprimirComandaPorEstacion } from '../impresionCocina.js';
-import { conEventoPedido, registrarEventoPedido, estadoAntesDeReenvio, validarAccesoMesaMesero, validarMotivoCancelacion } from '../historialPedidos.js';
+import { conEventoPedido, registrarEventoPedido, estadoAntesDeReenvio, validarMotivoCancelacion } from '../historialPedidos.js';
 import { consultarEntregaPedido, registrarResultadoCocinaTransaccion } from '../historialCocina.js';
 import { descontarStockMesa00, devolverStockMesa00, itemsDeInventarioNormal } from '../stockMesa00.js';
 
@@ -151,12 +151,6 @@ router.get('/', wrap(async (req, res) => {
   const { estado } = req.query;
   const where = estado ? { estado } : {};
   if (req.tiposPedidoPermitidos) where.tipo = { in: req.tiposPedidoPermitidos };
-  if (req.usuario?.roles?.includes('MESERO') && !req.usuario.roles.includes('ADMIN')) {
-    const mesasAsignadas = await prisma.mesa.findMany({ where: { esFantasma: false, usuarioAsignadoId: req.usuario.id }, select: { id: true } });
-    const mesaId = { in: mesasAsignadas.map((mesa) => mesa.id) };
-    if (req.tiposPedidoPermitidos?.includes('DOMICILIO')) where.OR = [{ tipo: 'DOMICILIO' }, { mesaId }];
-    else where.mesaId = mesaId;
-  }
   const pedidos = await prisma.pedido.findMany({
     where: Object.keys(where).length ? where : undefined,
     include: pedidoInclude,
@@ -200,7 +194,6 @@ router.get('/:id', wrap(async (req, res) => {
     include: pedidoInclude,
   });
   if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
-  await validarAccesoMesaMesero(prisma, req.usuario, pedido.mesaId);
   res.json(pedido);
 }));
 
@@ -208,7 +201,6 @@ router.get('/:id/entrega', exigirPermiso('pedidos.ver'), wrap(async (req, res) =
   const pedidoId = Number(req.params.id);
   const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, select: { mesaId: true } });
   if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
-  await validarAccesoMesaMesero(prisma, req.usuario, pedido.mesaId);
   res.json(await consultarEntregaPedido(prisma, pedidoId));
 }));
 
@@ -333,7 +325,6 @@ router.post('/', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
       });
       if (!mesa) throw Object.assign(new Error('Mesa no encontrada'), { status: 404 });
       if (mesa.esFantasma) throw Object.assign(new Error('La mesa 00 almacena existencias y no recibe pedidos facturables'), { status: 400 });
-      await validarAccesoMesaMesero(tx, req.usuario, mesa.id);
       if (mesa.estado === 'OCUPADA') throw Object.assign(new Error(`La mesa ${mesa.numero} ya está ocupada`), { status: 409 });
       const pedidoAbierto = await tx.pedido.findFirst({ where: { mesaId: Number(mesaId), estado: 'ABIERTO' }, select: { id: true } });
       if (pedidoAbierto) throw Object.assign(new Error(`La mesa ${mesa.numero} ya tiene un pedido abierto`), { status: 409 });
@@ -750,7 +741,6 @@ router.post('/:id/cambiar-mesa', exigirPermiso('mesas.editar'), wrap(async (req,
     const destino = await tx.mesa.findUnique({ where: { id: nuevaMesaId } });
     if (!destino) throw Object.assign(new Error('Mesa destino no encontrada'), { status: 404 });
     if (destino.esFantasma) throw Object.assign(new Error('La mesa 00 solo recibe traslados aprobados por un administrador'), { status: 400 });
-    await validarAccesoMesaMesero(tx, req.usuario, destino.id);
     if (destino.estado !== 'LIBRE') throw Object.assign(new Error(`La mesa ${destino.numero} no está disponible`), { status: 409 });
     const ocupada = await tx.pedido.findFirst({ where: { mesaId: nuevaMesaId, estado: 'ABIERTO' } });
     if (ocupada) throw Object.assign(new Error(`La mesa ${destino.numero} ya tiene un pedido abierto`), { status: 409 });

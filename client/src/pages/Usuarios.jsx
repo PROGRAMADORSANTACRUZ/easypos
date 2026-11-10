@@ -103,7 +103,6 @@ export default function Usuarios() {
   const guardarUsuario = async (e) => {
     e.preventDefault();
     if (!uForm.centrosOperacionCodigos.length) return notify('Asigna al menos un centro de operaciones', 'err');
-    if (uForm.roles.includes('MESERO') && !uForm.mesaIds.length) return notify('Asigna al menos una mesa a este mesero', 'err');
     if (editId) {
       const original = usuarios.find((usuario) => usuario.id === editId);
       if (original && !usuarioTieneCambios(uForm, original)) return notify('No hay cambios para guardar');
@@ -300,7 +299,7 @@ export default function Usuarios() {
             </div>
             {uForm.roles.includes('MESERO') && (
               <div className="field">
-                <label>Mesas asignadas <span className="mini">(obligatorio para meseros)</span></label>
+                <label>Mesas asignadas <span className="mini">(opcional)</span></label>
                 {mesas.length === 0 ? <p className="empty">No hay mesas normales disponibles.</p> : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
                     {mesas.map((mesa) => {

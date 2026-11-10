@@ -22,21 +22,20 @@ test('el estado actual prioriza cancelado y facturado sobre el plato listo de co
   assert.equal(estadoActualPedido({ estado: 'ABIERTO', preparacion: null }), 'PENDIENTE');
 });
 
-test('cada mesero solo lista y opera las mesas asignadas', async (t) => {
+test('los meseros comparten mesas aunque esten asignadas a otro usuario', async (t) => {
   const { crear, solicitar } = await entorno(t, {
     mesasAsignadas: { 1: 'usuario-mesero-1', 2: 'usuario-mesero-2' },
   });
-  await crear({}, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' });
-  await crear({ mesaId: 2 }, { 'x-test-user': 'usuario-mesero-2', 'x-test-role': 'MESERO' });
+  assert.equal((await crear({ mesaId: 2 }, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).status, 201);
+  assert.equal((await crear({}, { 'x-test-user': 'usuario-mesero-2', 'x-test-role': 'MESERO' })).status, 201);
 
   const primera = await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' });
   const segunda = await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-mesero-2', 'x-test-role': 'MESERO' });
-  assert.deepEqual(primera.body.map((mesa) => mesa.numero), [1]);
-  assert.deepEqual(segunda.body.map((mesa) => mesa.numero), [2]);
-
-  assert.equal((await solicitar('GET', '/pedidos/2', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).status, 403);
-  const pedidoAjeno = await crear({ mesaId: 2 }, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' });
-  assert.equal(pedidoAjeno.status, 403);
+  assert.deepEqual(primera.body.map((mesa) => mesa.numero), [1, 2]);
+  assert.deepEqual(segunda.body.map((mesa) => mesa.numero), [1, 2]);
+  const compartido = await solicitar('GET', '/pedidos/2', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' });
+  assert.equal(compartido.status, 200);
+  assert.equal(compartido.body.usuarioId, 'usuario-mesero-2');
 });
 
 test('el filtro del historial incluye dias completos de Colombia y busca el motivo sin distinguir mayusculas', () => {
@@ -303,8 +302,8 @@ test('no cambia el responsable ni crea movimientos si la mesa ya esta ocupada', 
   assert.equal(responsables.size, 0);
 });
 
-test('cada MESERO ve y opera solo sus mesas asignadas', async (t) => {
-  const { crear, solicitar } = await entorno(t, {
+test('otro MESERO puede editar un pedido compartido sin cambiar su creador y queda registrado como actor', async (t) => {
+  const { crear, solicitar, eventos } = await entorno(t, {
     mesasAsignadas: { 1: 'usuario-mesero-1', 2: 'usuario-mesero-2' },
   });
   assert.equal((await crear({}, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).status, 201);
@@ -312,13 +311,18 @@ test('cada MESERO ve y opera solo sus mesas asignadas', async (t) => {
 
   const primera = await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' });
   const segunda = await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-mesero-2', 'x-test-role': 'MESERO' });
-  assert.deepEqual(primera.body.map((mesa) => mesa.numero), [1]);
-  assert.deepEqual(segunda.body.map((mesa) => mesa.numero), [2]);
-  assert.deepEqual((await solicitar('GET', '/pedidos?estado=ABIERTO', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).body.map((pedido) => pedido.mesaId), [1]);
-  assert.equal((await solicitar('GET', '/pedidos/2', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).status, 403);
-  assert.equal((await crear({ mesaId: 2 }, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).status, 403);
-  assert.deepEqual((await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-sin-mesas', 'x-test-role': 'MESERO' })).body, []);
-  assert.equal((await crear({}, { 'x-test-user': 'usuario-sin-mesas', 'x-test-role': 'MESERO' })).status, 403);
+  assert.deepEqual(primera.body.map((mesa) => mesa.numero), [1, 2]);
+  assert.deepEqual(segunda.body.map((mesa) => mesa.numero), [1, 2]);
+  assert.deepEqual((await solicitar('GET', '/pedidos?estado=ABIERTO', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).body.map((pedido) => pedido.mesaId), [1, 2]);
+  const editor = { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' };
+  assert.equal((await solicitar('GET', '/pedidos/2', undefined, editor)).status, 200);
+  const editado = await solicitar('PUT', '/pedidos/2/items/1', { cantidad: 3 }, editor);
+  assert.equal(editado.status, 200);
+  assert.equal(eventos.at(-1).usuarioId, 'usuario-mesero-1');
+  assert.equal(eventos.at(-1).antes.usuarioId, 'usuario-mesero-2');
+  assert.equal(eventos.at(-1).despues.usuarioId, 'usuario-mesero-2');
+  assert.deepEqual((await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-sin-mesas', 'x-test-role': 'MESERO' })).body.map((mesa) => mesa.numero), [1, 2]);
+  assert.equal((await crear({ mesaId: 3 }, { 'x-test-user': 'usuario-sin-mesas', 'x-test-role': 'MESERO' })).status, 201);
 });
 
 test('registra quien edita y los valores anteriores y posteriores de productos y observaciones', async (t) => {

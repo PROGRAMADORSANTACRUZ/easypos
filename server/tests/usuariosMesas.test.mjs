@@ -116,9 +116,11 @@ test('GET usuarios exige usuarios.ver incluso con sesión autenticada', async (t
   assert.equal(lectorPedidos.status, 403);
 });
 
-test('no permite asignar Mesa00 ni crear MESERO sin mesas', async (t) => {
+test('no permite asignar Mesa00 y permite crear MESERO sin mesas asignadas', async (t) => {
   const { solicitar, mesas } = await entorno(t);
   assert.equal((await solicitar([0])).status, 400);
-  assert.equal((await solicitar([])).status, 400);
+  assert.equal((await solicitar([])).status, 201);
+  assert.equal((await solicitar(undefined)).status, 201);
   assert.equal(mesas.get(0).usuarioAsignadoId, null);
+  assert.equal(mesas.get(1).usuarioAsignadoId, null);
 });

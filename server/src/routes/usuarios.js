@@ -155,16 +155,14 @@ async function validarCentrosOperacion(codigos, { obligatorio = false } = {}) {
   return { centros, error: null };
 }
 
-async function validarMesasAsignadas(mesaIds, roles, { requerido = false } = {}) {
+async function validarMesasAsignadas(mesaIds, roles) {
   if (mesaIds === undefined) {
-    if (requerido && roles?.includes('MESERO')) return { ids: [], error: 'Asigna al menos una mesa a este mesero' };
     return { ids: undefined, error: null };
   }
   if (!Array.isArray(mesaIds)) return { ids: [], error: 'La asignación de mesas no es válida' };
   const ids = [...new Set(mesaIds.map(Number))];
   if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) return { ids: [], error: 'Selecciona mesas válidas' };
   if (ids.length && !roles?.includes('MESERO')) return { ids: [], error: 'Las mesas solo se pueden asignar a usuarios con rol MESERO' };
-  if (requerido && roles?.includes('MESERO') && !ids.length) return { ids: [], error: 'Asigna al menos una mesa a este mesero' };
   if (!ids.length) return { ids, error: null };
   const mesas = await prisma.mesa.findMany({
     where: { id: { in: ids }, esFantasma: false },
@@ -197,7 +195,7 @@ router.post('/', soloAdmin, wrap(async (req, res) => {
   if (errorPass) return res.status(400).json({ error: errorPass });
   const validacionCentros = await validarCentrosOperacion(centrosOperacionCodigos, { obligatorio: true });
   if (validacionCentros.error) return res.status(400).json({ error: validacionCentros.error });
-  const validacionMesas = await validarMesasAsignadas(mesaIds, roles, { requerido: true });
+  const validacionMesas = await validarMesasAsignadas(mesaIds, roles);
   if (validacionMesas.error) return res.status(400).json({ error: validacionMesas.error });
   const existe = await prisma.usuario.findFirst({ where: { usuario: { equals: usuarioNormalizado, mode: 'insensitive' } } });
   if (existe) return res.status(409).json({ error: 'Ese usuario ya existe' });
@@ -237,7 +235,7 @@ router.put('/:id', soloAdmin, wrap(async (req, res) => {
     const asignaciones = await prisma.usuarioRol.findMany({ where: { usuarioId: id }, include: { rol: { select: { nombre: true } } } });
     rolesParaValidar = asignaciones.map((asignacion) => asignacion.rol.nombre);
   }
-  const validacionMesas = await validarMesasAsignadas(mesaIds, rolesParaValidar, { requerido: rolesParaValidar?.includes('MESERO') });
+  const validacionMesas = await validarMesasAsignadas(mesaIds, rolesParaValidar);
   if (validacionMesas.error) return res.status(400).json({ error: validacionMesas.error });
   if (password !== undefined && password !== '') {
     const errorPass = validarPassword(password);

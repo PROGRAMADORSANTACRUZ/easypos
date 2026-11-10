@@ -82,15 +82,6 @@ async function estadoPedido(tx, pedidoId) {
   };
 }
 
-export async function validarAccesoMesaMesero(tx, usuario, mesaId) {
-  if (!usuario?.roles?.includes('MESERO') || usuario.roles.includes('ADMIN')) return;
-  if (!mesaId) throw Object.assign(new Error('Este pedido no pertenece a una mesa asignada'), { status: 403 });
-  const mesa = await tx.mesa.findUnique({ where: { id: mesaId }, select: { usuarioAsignadoId: true } });
-  if (mesa?.usuarioAsignadoId !== usuario.id) {
-    throw Object.assign(new Error('No tienes acceso a pedidos de otras mesas'), { status: 403 });
-  }
-}
-
 export async function registrarEventoPedido(tx, req, pedidoId, accion, antes = null, { motivo, detalle } = {}) {
   const actor = req.usuario;
   if (!actor?.id || !actor.usuario || !actor.nombre) {
@@ -137,7 +128,6 @@ export async function estadoAntesDeReenvio(tx, pedidoId, estadoActual, hastaId) 
 export async function conEventoPedido(tx, req, pedidoId, accion, cambiar, opciones) {
   await tx.$queryRaw`SELECT "id" FROM "Pedido" WHERE "id" = ${pedidoId} FOR UPDATE`;
   const antes = await estadoPedido(tx, pedidoId);
-  await validarAccesoMesaMesero(tx, req.usuario, antes.mesaId);
   if (antes.estado !== 'ABIERTO') {
     throw Object.assign(new Error('Solo se pueden modificar pedidos abiertos'), { status: 409 });
   }

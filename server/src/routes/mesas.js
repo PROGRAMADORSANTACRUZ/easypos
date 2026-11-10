@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
-import { validarAccesoMesaMesero } from '../historialPedidos.js';
 
 const router = Router();
 
@@ -9,11 +8,9 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 
 // Listar mesas
 router.get('/', wrap(async (req, res) => {
-  const meseroLimitado = req.usuario?.roles?.includes('MESERO') && !req.usuario?.roles?.includes('ADMIN');
   const mesas = await prisma.mesa.findMany({
     where: {
       esFantasma: false,
-      ...(meseroLimitado && { usuarioAsignadoId: req.usuario.id }),
     },
     orderBy: { numero: 'asc' },
     include: {
@@ -63,7 +60,6 @@ router.post('/:id/reservar', wrap(async (req, res) => {
 
   const mesa = await prisma.mesa.findUnique({ where: { id } });
   if (!mesa) return res.status(404).json({ error: 'Mesa no encontrada' });
-  await validarAccesoMesaMesero(prisma, req.usuario, id);
   if (mesa.esFantasma) return res.status(400).json({ error: 'La mesa 00 es un inventario interno y no admite reservas' });
   if (mesa.estado !== 'LIBRE') return res.status(409).json({ error: `La mesa ${mesa.numero} no está disponible para reservar` });
   if (!Number.isInteger(personas) || personas < 1 || personas > mesa.capacidad) {
@@ -111,7 +107,6 @@ router.post('/:id/reservar', wrap(async (req, res) => {
 
 router.post('/:id/cancelar-reserva', wrap(async (req, res) => {
   const id = Number(req.params.id);
-  await validarAccesoMesaMesero(prisma, req.usuario, id);
   const actualizada = await prisma.mesa.updateMany({
     where: { id, estado: 'RESERVADA' },
     data: {
@@ -132,7 +127,6 @@ router.post('/:id/cancelar-reserva', wrap(async (req, res) => {
 // Actualizar mesa
 router.put('/:id', wrap(async (req, res) => {
   const { numero, capacidad, estado } = req.body;
-  await validarAccesoMesaMesero(prisma, req.usuario, Number(req.params.id));
   if (estado !== undefined && !['LIBRE', 'OCUPADA'].includes(estado)) {
     return res.status(400).json({ error: 'El estado RESERVADA se gestiona desde el flujo de reservas' });
   }
