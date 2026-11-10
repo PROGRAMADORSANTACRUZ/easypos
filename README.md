@@ -72,6 +72,31 @@ npm run dev                 # app en http://localhost:5173
 
 Abre <http://localhost:5173> y empieza a tomar pedidos.
 
+### Datos temporales para pruebas
+
+Desde `server/`, con `DATABASE_URL` apuntando a la base elegida, simula primero:
+
+```powershell
+node scripts/preparar-productos-prueba.mjs
+```
+
+Para aplicar, guarda primero un respaldo completo de PostgreSQL y utiliza una
+ruta nueva para el respaldo JSON de los valores originales:
+
+```powershell
+node scripts/preparar-productos-prueba.mjs --aplicar --respaldo=C:/POS-Backups/productos-originales.json
+```
+
+Asigna precios variados entre 10000 y 150000 COP a todos los productos y sus
+precios de lista existentes. Completa al menos 100 unidades por producto en
+Compras y abastece los insumos para probar 100 unidades de cada receta, sin
+reducir existencias. Registra las entradas como movimientos `PRUEBAS-*`.
+No modifica costos, impuestos, pedidos ni facturas existentes. Solo actua sobre
+la base indicada, no sobre otros restaurantes. Sin `--aplicar` no cambia datos;
+no se ejecuta al arrancar ni desplegar. La aplicacion es transaccional y exige
+un archivo de respaldo nuevo. Conserva los respaldos fuera del repositorio.
+Las ventas nuevas siguen siendo reales: esto no desactiva la emision fiscal.
+
 ## App de escritorio para Windows
 
 La app de escritorio empaqueta el frontend con Electron y se conecta a la API
