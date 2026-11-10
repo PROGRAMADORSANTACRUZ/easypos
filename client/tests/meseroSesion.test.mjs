@@ -8,8 +8,46 @@ const fin = fuente.indexOf('// Sub-reportes', inicio);
 assert.ok(inicio >= 0 && fin > inicio);
 const rutaInicial = new Function(`${fuente.slice(inicio, fin)}\nreturn rutaInicial;`)();
 
+test('Domicilios y Repartidor usan permisos independientes de los pedidos de mesa', () => {
+  const inicioNav = fuente.indexOf('export const NAV_GRUPOS =');
+  const finNav = fuente.indexOf('\n];', inicioNav) + 3;
+  const grupos = new Function(`${fuente.slice(inicioNav, finNav).replace('export ', '')}\nreturn NAV_GRUPOS;`)();
+  const puede = new Function(`${fuente.slice(inicio, fin)}\nreturn puede;`)();
+  const ventas = grupos.find((grupo) => grupo.id === 'ventas').items;
+  const domicilios = ventas.find((item) => item.ruta === '/pedidos');
+  const repartidor = ventas.find((item) => item.ruta === '/repartidor');
+  assert.equal(domicilios.permiso, 'domicilios.ver');
+  assert.equal(repartidor.permiso, 'repartidor.ver');
+  const mesero = { permisos: ['mesas.ver', 'pedidos.ver', 'pedidos.crear'] };
+  assert.equal(puede(mesero, domicilios.permiso), false);
+  assert.equal(puede(mesero, repartidor.permiso), false);
+  assert.equal(puede(mesero, 'mesas.ver'), true);
+  assert.equal(puede({ permisos: ['domicilios.ver'] }, repartidor.permiso), false);
+  assert.equal(puede({ permisos: ['repartidor.ver'] }, domicilios.permiso), false);
+  assert.equal(rutaInicial({ permisos: ['repartidor.ver'] }), '/repartidor');
+  assert.match(fuente, /puede\(user, 'domicilios\.ver'\).*path="\/pedidos"/);
+  assert.match(fuente, /puede\(user, 'repartidor\.ver'\).*path="\/repartidor"/);
+});
+
 test('MESERO inicia en Mesas aunque tambien pueda consultar pedidos', () => {
   assert.equal(rutaInicial({ roles: ['MESERO'], permisos: ['mesas.ver', 'pedidos.ver', 'pedidos.crear'] }), '/mesas');
+});
+
+test('la seleccion general de Ventas incluye y retira la lectura de pedidos de mesa', async () => {
+  const rolesFuente = await readFile(new URL('../src/pages/Roles.jsx', import.meta.url), 'utf8');
+  const inicioToggle = rolesFuente.indexOf('  const toggleGrupo =');
+  const finToggle = rolesFuente.indexOf('  const editar =', inicioToggle);
+  let form = { permisos: ['roles.ver', 'pedidos.crear'] };
+  const toggleGrupo = new Function('setForm', `${rolesFuente.slice(inicioToggle, finToggle)}\nreturn toggleGrupo;`)(
+    (actualizar) => { form = actualizar(form); },
+  );
+  const grupo = { modulos: [{ modulo: 'mesas', incluirPedidos: true }, { modulo: 'domicilios' }, { modulo: 'repartidor' }] };
+  toggleGrupo(grupo, true);
+  assert.ok(form.permisos.includes('pedidos.ver'));
+  assert.ok(form.permisos.includes('domicilios.ver'));
+  assert.ok(form.permisos.includes('repartidor.ver'));
+  toggleGrupo(grupo, false);
+  assert.deepEqual(form.permisos, ['roles.ver']);
 });
 
 test('el cajero conserva Caja como inicio', () => {

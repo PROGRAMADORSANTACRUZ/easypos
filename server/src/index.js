@@ -66,7 +66,7 @@ import auditoriaRouter from './routes/auditoria.js';
 import restaurantesRouter from './routes/restaurantes.js';
 import { resolverTenant } from './middleware/tenant.js';
 import { mayusculas } from './middleware/mayusculas.js';
-import { requireAuth, permisoPorMetodo, permisoModuloFacturacion, permisoSegunFactura, puedeLeerCatalogoParaPedidos } from './middleware/auth.js';
+import { requireAuth, permisoPorMetodo, permisoAccesoPedidos, permisoModuloFacturacion, permisoSegunFactura, puedeLeerCatalogoParaPedidos } from './middleware/auth.js';
 import { restringirModuloRestaurante } from './modulosRestaurante.js';
 
 const app = express();
@@ -148,7 +148,7 @@ app.use('/api/unidades-medida', requireAuth, permisoPorMetodo('unidades_medida')
 app.use('/api/eventos-dian', requireAuth, permisoPorMetodo('eventos_dian'), eventosDianRouter);
 app.use('/api/logs-integraciones', requireAuth, permisoPorMetodo('logs_integraciones'), logsIntegracionesRouter);
 app.use('/api/factus', requireAuth, permisoPorMetodo('empresa'), factusRouter);
-app.use('/api/pedidos', requireAuth, permisoPorMetodo('pedidos'), pedidosRouter);
+app.use('/api/pedidos', requireAuth, permisoAccesoPedidos, pedidosRouter);
 app.use('/api/mesa00', requireAuth, mesa00Router);
 app.use('/api/ventas-congeladas', requireAuth, ventasCongeladasRouter);
 app.use('/api/facturas', requireAuth, permisoSegunFactura, facturasRouter);

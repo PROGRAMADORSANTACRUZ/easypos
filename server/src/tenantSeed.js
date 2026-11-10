@@ -2,6 +2,8 @@
 // Se reutiliza tanto en el seed original como en el aprovisionamiento de nuevos restaurantes.
 const MODULOS = {
   pedidos: ['ver', 'crear', 'editar', 'eliminar', 'prefactura', 'observaciones'],
+  domicilios: ['ver', 'crear', 'editar', 'eliminar', 'prefactura', 'observaciones'],
+  repartidor: ['ver', 'editar'],
   mesas: ['ver', 'crear', 'editar', 'eliminar'],
   cocina: ['ver'],
   facturas: ['ver', 'crear', 'anular'],

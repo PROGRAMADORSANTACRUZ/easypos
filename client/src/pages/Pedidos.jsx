@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
-import { useToast } from '../App.jsx';
+import { useToast, useAuth } from '../App.jsx';
 import { LoadingState, overlayCierre } from '../components/ui/index.jsx';
 import SeguimientoPedido from '../components/SeguimientoPedido.jsx';
 
@@ -94,6 +94,8 @@ const CLIENTE_VACIO = {
 // y su forma de pago. Genera un pedido a domicilio (sin mesa ni mesera).
 export default function Pedidos() {
   const notify = useToast();
+  const { user } = useAuth() || {};
+  const puedeCrear = user?.__dev === true || (user?.permisos || []).includes('domicilios.crear');
 
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -247,6 +249,7 @@ export default function Pedidos() {
   };
 
   const enviarPedido = async () => {
+    if (!puedeCrear) return notify('No tienes permiso para crear domicilios', 'err');
     if (carrito.length === 0) return notify('Agrega al menos un producto', 'err');
     if (carrito.some(({ cantidad, producto }) => {
       const factor = factorUnidad(producto);
@@ -398,7 +401,7 @@ export default function Pedidos() {
             </div>
             <button
               className="btn btn-primary carrito-cta"
-              disabled={items.length === 0}
+              disabled={!puedeCrear || items.length === 0}
               onClick={abrirDatos}
             >
               <Icon name="forward" size={18} /> Continuar
@@ -531,7 +534,7 @@ export default function Pedidos() {
               <button className="btn" onClick={() => setDatosAbierto(false)}>
                 <Icon name="back" size={16} /> Volver
               </button>
-              <button className="btn btn-primary" style={{ flex: 1 }} disabled={enviando} onClick={enviarPedido}>
+              <button className="btn btn-primary" style={{ flex: 1 }} disabled={!puedeCrear || enviando} onClick={enviarPedido}>
                 {enviando ? 'Enviando...' : <><Icon name="check" size={16} /> Enviar pedido ({money(subtotal)})</>}
               </button>
             </div>

@@ -67,7 +67,7 @@ export default function Roles() {
         }
         const anterior = modulos.get(modulo);
         const label = anterior ? `${anterior.label} / ${item.label}` : item.label;
-        modulos.set(modulo, { modulo, label, incluirPedidos: false });
+        modulos.set(modulo, { modulo, label, incluirPedidos: modulo === 'mesas' && disponibles.has('pedidos') });
       }
       return { id, label, modulos: [...modulos.values()] };
     };
@@ -114,8 +114,8 @@ export default function Roles() {
   };
 
   const toggleGrupo = (grupo, marcar) => {
-    const codigos = grupo.modulos.map(({ modulo }) => `${modulo}.ver`);
-    const modulos = grupo.modulos.map(({ modulo }) => modulo);
+    const modulos = grupo.modulos.flatMap(({ modulo, incluirPedidos }) => incluirPedidos ? [modulo, 'pedidos'] : [modulo]);
+    const codigos = modulos.map((modulo) => `${modulo}.ver`);
     const permisosDirectos = (grupo.permisosDirectos || []).map(({ codigo }) => codigo);
     const lecturasDirectas = [...new Set(permisosDirectos.map((codigo) => `${codigo.split('.')[0]}.ver`))];
     setForm((f) => ({ ...f, permisos: marcar

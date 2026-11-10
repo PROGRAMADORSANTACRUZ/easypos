@@ -143,6 +143,8 @@ async function sembrarRolesYPermisos() {
   // Modulos del sistema y las acciones que soportan
   const MODULOS = {
     pedidos: ['ver', 'crear', 'editar', 'eliminar', 'prefactura', 'observaciones'],
+    domicilios: ['ver', 'crear', 'editar', 'eliminar', 'prefactura', 'observaciones'],
+    repartidor: ['ver', 'editar'],
     mesas: ['ver', 'crear', 'editar', 'eliminar'],
     cocina: ['ver'],
     facturas: ['ver', 'crear', 'anular'],
@@ -207,7 +209,7 @@ async function sembrarRolesYPermisos() {
     CAJERO: {
       descripcion: 'Ventas, caja y consultas',
       permisos: todosLosCodigos.filter((c) =>
-        /^(pedidos|mesas|cocina|factura_venta|cuentas|clientes)\./.test(c) ||
+        /^(pedidos|domicilios|repartidor|mesas|cocina|factura_venta|cuentas|clientes)\./.test(c) ||
         ['productos.ver', 'inventario.ver', 'bodegas.ver', 'movimientos.ver', 'movimientos.crear', 'caja.ver', 'caja.abrir', 'caja.cerrar', 'reportes.ver', 'notas_credito.ver', 'notas_credito.crear', 'notas_debito.ver', 'notas_debito.crear', 'retenciones.ver', 'retenciones.crear', 'compras.ver', 'compras.crear', 'proveedores.ver'].includes(c)
       ),
     },

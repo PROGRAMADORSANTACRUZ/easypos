@@ -72,6 +72,7 @@ const sonarSolicitud = (contexto) => {
 
 const GRUPO_POR_MODULO = {
   mesas: 'ventas', cocina: 'ventas', factura_venta: 'ventas', cortesias: 'ventas', pedidos: 'ventas',
+  domicilios: 'ventas', repartidor: 'ventas',
   cuentas: 'ventas', clientes: 'ventas', caja: 'ventas',
   productos: 'inventario', inventario: 'inventario', bodegas: 'inventario', movimientos: 'inventario', compras: 'inventario', proveedores: 'inventario',
   facturas: 'dian', resoluciones: 'dian', notas_credito: 'dian', notas_debito: 'dian', retenciones: 'dian', eventos_dian: 'dian', logs_integraciones: 'dian',
@@ -95,7 +96,7 @@ const puede = (user, codigo) => {
 
 // Primera ruta permitida, usada como destino tras login y como "/"
 const ORDEN_INICIO = [
-  ['pedidos.ver', '/pedidos'], ['mesas.ver', '/mesas'], ['cocina.ver', '/cocina'], ['facturas.ver', '/facturas'], ['factura_venta.ver', '/cotizaciones'],
+  ['domicilios.ver', '/pedidos'], ['repartidor.ver', '/repartidor'], ['mesas.ver', '/mesas'], ['cocina.ver', '/cocina'], ['facturas.ver', '/facturas'], ['factura_venta.ver', '/cotizaciones'],
   ['cuentas.ver', '/cuentas'], ['productos.ver', '/productos'], ['inventario.ver', '/inventario'],
   ['bodegas.ver', '/bodegas'], ['movimientos.ver', '/movimientos'], ['caja.ver', '/caja'], ['resoluciones.ver', '/resoluciones'], ['notas_credito.ver', '/notas-credito'], ['notas_debito.ver', '/notas-debito'], ['retenciones.ver', '/retenciones'], ['compras.ver', '/compras'], ['proveedores.ver', '/proveedores'], ['clientes.ver', '/clientes'], ['reportes.ver', '/reportes'], ['usuarios.ver', '/usuarios'],
   ['roles.ver', '/roles'], ['auditoria.ver', '/auditoria'],
@@ -138,8 +139,8 @@ export const NAV_GRUPOS = [
       { permiso: 'facturas.ver', ruta: '/facturas', label: 'Facturas', icon: 'facturas' },
       { permiso: 'factura_venta.ver', ruta: '/cotizaciones', label: 'Factura de venta', icon: 'facturas' },
       { permiso: 'cortesias.ver', ruta: '/cortesias', label: 'Cortesías', icon: 'cortesias' },
-      { permiso: 'pedidos.ver', ruta: '/pedidos', label: 'Domicilios', icon: 'pedidos' },
-      { permiso: 'pedidos.ver', ruta: '/repartidor', label: 'Repartidor / Entregas', icon: 'remisiones' },
+      { permiso: 'domicilios.ver', ruta: '/pedidos', label: 'Domicilios', icon: 'pedidos' },
+      { permiso: 'repartidor.ver', ruta: '/repartidor', label: 'Repartidor / Entregas', icon: 'remisiones' },
       { permiso: 'cuentas.ver', ruta: '/cuentas', label: 'Cuentas por cobrar', icon: 'cuentas' },
       { permiso: 'clientes.ver', ruta: '/clientes', label: 'Clientes', icon: 'clientes' },
       { permiso: 'caja.ver', ruta: '/caja', label: 'Caja', icon: 'caja' },
@@ -506,8 +507,8 @@ export default function App() {
           <main className="content">
             <Routes>
               <Route path="/" element={<Navigate to={rutaInicio} replace />} />
-              {puede(user, 'pedidos.ver') && <Route path="/pedidos" element={<Pedidos />} />}
-              {puede(user, 'pedidos.ver') && <Route path="/repartidor" element={<Repartidor />} />}
+              {puede(user, 'domicilios.ver') && <Route path="/pedidos" element={<Pedidos />} />}
+              {puede(user, 'repartidor.ver') && <Route path="/repartidor" element={<Repartidor />} />}
               {puede(user, 'mesas.ver') && <Route path="/mesas" element={<Mesas />} />}
               {puede(user, 'mesas.ver') && <Route path="/mesas/:mesaId/pedido" element={<TomarPedido />} />}
               {puede(user, 'cocina.ver') && <Route path="/cocina" element={<Cocina />} />}

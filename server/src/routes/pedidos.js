@@ -12,8 +12,10 @@ const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const exigirPermiso = (codigo) => (req, res, next) => {
   const permisos = req.usuario?.permisos || [];
-  if (permisos.includes(codigo)) return next();
-  return res.status(403).json({ error: `No tienes permiso para ${codigo}` });
+  const requerido = codigo.startsWith('pedidos.') && req.moduloPedidos
+    ? codigo.replace('pedidos.', `${req.moduloPedidos}.`) : codigo;
+  if (permisos.includes(requerido)) return next();
+  return res.status(403).json({ error: `No tienes permiso para ${requerido}` });
 };
 
 // Estados posibles del seguimiento de entrega a domicilio (en orden)
@@ -148,9 +150,12 @@ async function sincronizarCocina(tx, pedidoId, { soloNuevosItems } = {}) {
 router.get('/', wrap(async (req, res) => {
   const { estado } = req.query;
   const where = estado ? { estado } : {};
+  if (req.tiposPedidoPermitidos) where.tipo = { in: req.tiposPedidoPermitidos };
   if (req.usuario?.roles?.includes('MESERO') && !req.usuario.roles.includes('ADMIN')) {
     const mesasAsignadas = await prisma.mesa.findMany({ where: { esFantasma: false, usuarioAsignadoId: req.usuario.id }, select: { id: true } });
-    where.mesaId = { in: mesasAsignadas.map((mesa) => mesa.id) };
+    const mesaId = { in: mesasAsignadas.map((mesa) => mesa.id) };
+    if (req.tiposPedidoPermitidos?.includes('DOMICILIO')) where.OR = [{ tipo: 'DOMICILIO' }, { mesaId }];
+    else where.mesaId = mesaId;
   }
   const pedidos = await prisma.pedido.findMany({
     where: Object.keys(where).length ? where : undefined,
@@ -393,7 +398,7 @@ router.post('/', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
 //   items: [{ productoId, cantidad }],
 //   metodoPago
 // }
-router.post('/online', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
+router.post('/online', exigirPermiso('domicilios.crear'), wrap(async (req, res) => {
   const { cliente = {}, items = [], metodoPago, latDestino, lngDestino } = req.body;
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -524,7 +529,7 @@ router.get('/:id/seguimiento', wrap(async (req, res) => {
 
 // El repartidor/administrador cambia el estado de la entrega.
 // PUT /pedidos/:id/estado-entrega  body: { estadoEntrega, repartidor? }
-router.put('/:id/estado-entrega', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
+router.put('/:id/estado-entrega', exigirPermiso('repartidor.editar'), wrap(async (req, res) => {
   const id = Number(req.params.id);
   const estadoEntrega = limpiar(req.body?.estadoEntrega);
   if (!estadoEntrega || !ESTADOS_ENTREGA.includes(estadoEntrega)) {
@@ -539,7 +544,7 @@ router.put('/:id/estado-entrega', exigirPermiso('pedidos.editar'), wrap(async (r
 
 // El repartidor reporta su posición GPS mientras entrega.
 // POST /pedidos/:id/ubicacion  body: { lat, lng, repartidor?, estadoEntrega? }
-router.post('/:id/ubicacion', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
+router.post('/:id/ubicacion', exigirPermiso('repartidor.editar'), wrap(async (req, res) => {
   const id = Number(req.params.id);
   const lat = aNumero(req.body?.lat);
   const lng = aNumero(req.body?.lng);

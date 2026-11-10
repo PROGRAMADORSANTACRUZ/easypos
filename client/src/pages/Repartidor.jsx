@@ -24,6 +24,7 @@ const ETIQUETA = {
 export default function Repartidor() {
   const notify = useToast();
   const { user } = useAuth() || {};
+  const puedeEditar = user?.__dev === true || (user?.permisos || []).includes('repartidor.editar');
 
   const [pedidos, setPedidos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -36,7 +37,7 @@ export default function Repartidor() {
 
   const cargar = async () => {
     try {
-      const data = await api.get('/pedidos');
+      const data = await api.get('/pedidos?tipo=DOMICILIO');
       setPedidos(data.filter((p) => p.tipo === 'DOMICILIO'));
     } catch (e) {
       notify(e.message, 'err');
@@ -68,7 +69,7 @@ export default function Repartidor() {
   const totalPedido = (p) => (p.items || []).reduce((s, it) => s + it.precioUnit * it.cantidad, 0);
 
   const cambiarEstado = async (estadoEntrega) => {
-    if (!sel) return;
+    if (!sel || !puedeEditar) return;
     try {
       const act = await api.put(`/pedidos/${sel.id}/estado-entrega`, {
         estadoEntrega,
@@ -82,7 +83,7 @@ export default function Repartidor() {
   };
 
   const enviarUbicacion = async (lat, lng, ponerEnCamino) => {
-    if (!sel) return;
+    if (!sel || !puedeEditar) return;
     try {
       const act = await api.post(`/pedidos/${sel.id}/ubicacion`, {
         lat, lng,
@@ -96,6 +97,7 @@ export default function Repartidor() {
   };
 
   const iniciarCompartir = () => {
+    if (!puedeEditar) return notify('No tienes permiso para gestionar entregas', 'err');
     if (!sel) return notify('Selecciona un pedido primero', 'err');
     if (!navigator.geolocation) return notify('Este dispositivo no tiene GPS', 'err');
     setCompartiendo(true);
@@ -208,6 +210,7 @@ export default function Repartidor() {
                   <button
                     key={e.estado}
                     className={`btn btn-sm ${sel.estadoEntrega === e.estado ? 'btn-ok' : ''}`}
+                    disabled={!puedeEditar}
                     onClick={() => cambiarEstado(e.estado)}
                   >
                     <Icon name={e.icon} size={15} /> {e.label}
@@ -219,7 +222,7 @@ export default function Repartidor() {
                 <>
                   <MapaSeguimiento destino={destino} repartidor={miUbicacion} height={260} />
                   {!compartiendo ? (
-                    <button className="btn btn-primary" style={{ width: '100%', marginTop: 10 }} onClick={iniciarCompartir}>
+                    <button className="btn btn-primary" style={{ width: '100%', marginTop: 10 }} disabled={!puedeEditar} onClick={iniciarCompartir}>
                       <Icon name="gps" size={16} /> Iniciar entrega y compartir ubicación
                     </button>
                   ) : (
@@ -233,7 +236,7 @@ export default function Repartidor() {
                   <Icon name="mapa" size={14} /> Este pedido no tiene ubicación de entrega registrada. Aún puedes
                   compartir tu ubicación para el seguimiento.
                   {!compartiendo ? (
-                    <button className="btn btn-primary" style={{ width: '100%', marginTop: 10 }} onClick={iniciarCompartir}>
+                    <button className="btn btn-primary" style={{ width: '100%', marginTop: 10 }} disabled={!puedeEditar} onClick={iniciarCompartir}>
                       <Icon name="gps" size={16} /> Iniciar entrega y compartir ubicación
                     </button>
                   ) : (

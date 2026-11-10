@@ -187,6 +187,15 @@ en cada base existente `server/prisma/migrations/20261103120000_inventario_insum
 Esta migración copia el stock actual a Compras y marca pedidos abiertos que ya
 habían descontado inventario. Aplica la migración antes de desplegar la aplicación.
 
+Antes de desplegar la separacion de permisos de Domicilios y Repartidor / Entregas,
+respalda cada base y aplica `20261110120000_permisos_domicilios_repartidor`.
+Registra los permisos `domicilios.*` y `repartidor.*` y conserva `pedidos.*`
+para Mesas. ADMIN recibe ambos modulos; otros roles conservan sus acciones
+anteriores, excepto MESERO, que no recibe los nuevos accesos automaticamente.
+En Roles, las dos casillas son independientes de Mesas. Actualiza la sesion
+despues de guardar cambios para renovar el menu; la API consulta los permisos
+vigentes en cada solicitud. La migracion no modifica pedidos ni ventas.
+
 Antes de desplegar la asignación de submódulos de facturación, aplica la migración
 `20260926180000_modulos_facturacion_usuario` a la base activa. En Usuarios, ADMIN
 puede marcar excepciones individuales; en Roles administra módulos, submódulos

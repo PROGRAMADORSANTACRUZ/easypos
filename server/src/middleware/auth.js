@@ -20,7 +20,7 @@ export function permisosEfectivos(permisosRol) {
 }
 
 export function puedeLeerCatalogoParaPedidos(metodo, ruta, permisos) {
-  return ['GET', 'HEAD'].includes(metodo) && ruta === '/' && permisos.includes('pedidos.ver');
+  return ['GET', 'HEAD'].includes(metodo) && ruta === '/' && (permisos.includes('pedidos.ver') || permisos.includes('domicilios.ver'));
 }
 
 const SECRET = process.env.JWT_SECRET;
@@ -145,6 +145,52 @@ export function permisoPorMetodo(modulo) {
     }
     return res.status(403).json({ error: 'No tienes permiso para esta acción' });
   };
+}
+
+export async function permisoAccesoPedidos(req, res, next) {
+  try {
+    const permisos = req.usuario?.permisos || [];
+    const lectura = ['GET', 'HEAD'].includes(req.method);
+    const ruta = req.path.replace(/\/$/, '') || '/';
+    if (lectura && ruta === '/') {
+      const tipos = [];
+      if (permisos.includes('pedidos.ver')) tipos.push('MESA');
+      if (permisos.includes('domicilios.ver') || permisos.includes('repartidor.ver')) tipos.push('DOMICILIO');
+      if (!tipos.length || (req.query.tipo && !tipos.includes(req.query.tipo))) {
+        return res.status(403).json({ error: 'No tienes permiso para consultar estos pedidos' });
+      }
+      req.tiposPedidoPermitidos = req.query.tipo ? [req.query.tipo] : tipos;
+      return next();
+    }
+    let modulo = 'pedidos';
+    if (ruta === '/online' || ruta === '/ultimo-domicilio') {
+      modulo = 'domicilios';
+    } else {
+      const coincidencia = /^\/(\d+)(?:\/|$)/.exec(ruta);
+      if (coincidencia) {
+        const pedido = await prisma.pedido.findUnique({ where: { id: Number(coincidencia[1]) }, select: { tipo: true } });
+        if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
+        const gestionEntrega = /\/(estado-entrega|ubicacion)$/.test(ruta);
+        if (gestionEntrega && pedido.tipo !== 'DOMICILIO') {
+          return res.status(400).json({ error: 'Esta accion requiere un pedido a domicilio' });
+        }
+        if (pedido.tipo === 'DOMICILIO') {
+          modulo = gestionEntrega || (lectura && !permisos.includes('domicilios.ver')) ? 'repartidor' : 'domicilios';
+          if (/\/(entrega|entregar|cambiar-mesa)$/.test(ruta)) {
+            return res.status(400).json({ error: 'Esta accion requiere un pedido de mesa' });
+          }
+        }
+      }
+    }
+    req.moduloPedidos = modulo;
+    if (modulo === 'pedidos') return permisoPorMetodo('pedidos')(req, res, next);
+    const accion = lectura ? 'ver' : ruta === '/online' ? 'crear'
+      : ruta.endsWith('/cancelar') ? 'eliminar' : ruta.endsWith('/observaciones') ? 'observaciones' : 'editar';
+    if (!permisos.includes(`${modulo}.ver`) || !permisos.includes(`${modulo}.${accion}`)) {
+      return res.status(403).json({ error: `No tienes permiso para ${modulo}.${accion}` });
+    }
+    return next();
+  } catch (error) { return next(error); }
 }
 
 export function permisoModuloFacturacion(modulo) {
