@@ -1692,3 +1692,11 @@ tbody tr:last-child td { border-bottom: none; }
 @media (prefers-reduced-motion: reduce) {
   .alerta-recogida-moneda { animation-duration: 2.4s; }
 }
+.recogida-aviso {
+  display: flex; gap: 14px; align-items: center; padding: 14px 16px; margin-bottom: 14px;
+  border-radius: 12px; border: 1px solid var(--warning); background: var(--warning-soft); color: var(--warning);
+}
+.recogida-aviso.obligatoria { border-color: var(--red); background: var(--red-soft); color: var(--red); }
+.recogida-aviso-moneda { width: 56px; height: 56px; }
+.recogida-aviso-titulo { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+.recogida-aviso-contador { margin-top: 6px; font-size: 13px; font-weight: 600; }

@@ -272,7 +272,8 @@ parciales si se identifican en su columna.
 
 **Recogida parcial.** El efectivo en caja sin la base (ventas en efectivo +
 ingresos - egresos - recogidas) se compara con un tope de $1.000.000
-(configurable con `TOPE_RECOGIDA_CAJA`). Al alcanzarlo, despues de cada factura
+(configurable con `TOPE_RECOGIDA_CAJA`). Al alcanzarlo, una moneda parpadeante lo indica y se abre un recuadro al entrar a
+Facturacion, Factura de venta o Caja y despues de cada factura
 aparece un aviso: los dos primeros se pueden cancelar y el tercero obliga a
 registrar la recogida; el servidor rechaza nuevas facturas hasta hacerlo. La
 recogida debe dejar menos del tope en caja, no toca la base y se descuenta del

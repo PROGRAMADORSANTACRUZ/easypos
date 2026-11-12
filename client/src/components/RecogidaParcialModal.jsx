@@ -9,17 +9,22 @@ export function useRecogidaCaja(aperturaId) {
   const [estado, setEstado] = useState(null);
   const [modal, setModal] = useState(null);
 
-  // Al abrir la pantalla se muestra el indicador; si ya es obligatoria, el modal no se puede evitar.
+  // Al abrir la pantalla con la caja en el tope se abre el recuadro y cuenta como aviso;
+  // si ya es obligatorio, se abre sin opcion de cancelar.
   useEffect(() => {
     let vigente = true;
     setEstado(null);
     setModal(null);
     if (!aperturaId) return undefined;
-    api.get(`/aperturas/${aperturaId}/recogida`).then((actual) => {
+    (async () => {
+      let actual = await api.get(`/aperturas/${aperturaId}/recogida`);
+      if (vigente && actual.requiere && !actual.obligatorio) {
+        actual = await api.post(`/aperturas/${aperturaId}/recogida/aviso`, {});
+      }
       if (!vigente) return;
       setEstado(actual);
-      if (actual.obligatorio) setModal(actual);
-    }).catch(() => {});
+      if (actual.requiere) setModal(actual);
+    })().catch(() => {});
     return () => { vigente = false; };
   }, [aperturaId]);
 
@@ -109,34 +114,48 @@ export default function RecogidaParcialModal({ aperturaId, estado, manual = fals
     }
   };
 
-  const titulo = obligatorio ? 'Recogida obligatoria'
-    : manual ? 'Recogida parcial' : `Haz una recogida (aviso ${estado.avisos} de ${estado.maxAvisos})`;
+  const titulo = obligatorio ? 'Recogida obligatoria de efectivo' : 'Recogida de efectivo';
+  // Cancelaciones que quedan despues de cancelar este aviso.
+  const quedanTrasCancelar = Math.max(0, estado.maxAvisos - estado.avisos - 1);
+  const contador = !manual || obligatorio;
 
   return (
     <Modal
       title={titulo}
       subtitle={manual && !obligatorio ? 'Retira efectivo de la caja sin tocar la base.' : undefined}
       onClose={obligatorio ? undefined : onClose}
-      size="sm"
+      size="md"
       footer={(
         <>
-          {!obligatorio && <Button variant="secondary" onClick={onClose}>{manual ? 'Cancelar' : 'Cancelar por ahora'}</Button>}
-          <Button variant="primary" type="submit" form="recogida-form" loading={guardando}>Registrar recogida</Button>
+          {!obligatorio && <Button variant="secondary" onClick={onClose}>Cancelar</Button>}
+          <Button variant="primary" type="submit" form="recogida-form" loading={guardando}>Confirmar recogida</Button>
         </>
       )}
     >
       <form id="recogida-form" onSubmit={guardar}>
-        {(!manual || obligatorio) && (
-          <div role="alert" style={{ padding: '10px 12px', borderRadius: 8, marginBottom: 12, background: obligatorio ? 'var(--red-soft)' : 'var(--warning-soft)', color: obligatorio ? 'var(--red)' : 'var(--warning)' }}>
-            {obligatorio
-              ? <b>Este es el aviso {estado.maxAvisos} de {estado.maxAvisos}. Debes registrar la recogida para seguir facturando.</b>
-              : <>El efectivo en caja llegó al tope de <b>{money(estado.tope)}</b>. Haz una recogida parcial. Al aviso {estado.maxAvisos} será obligatoria.</>}
+        {estado.requiere && (
+          <div role="alert" className={`recogida-aviso${obligatorio ? ' obligatoria' : ''}`}>
+            <span className="alerta-recogida-moneda recogida-aviso-moneda"><Icon name="moneda" size={34} /></span>
+            <div>
+              <div className="recogida-aviso-titulo">
+                {obligatorio ? 'Ya no puedes cancelar: confirma la recogida' : 'La caja superó el tope de efectivo'}
+              </div>
+              <div>
+                Tienes <b>{money(estado.efectivoDisponible)}</b> en efectivo sin contar la base; el tope es <b>{money(estado.tope)}</b>.
+              </div>
+              {contador && (
+                <div className="recogida-aviso-contador">
+                  Aviso {estado.avisos} de {estado.maxAvisos}
+                  {obligatorio ? ' · Debes registrar la recogida para seguir facturando.'
+                    : quedanTrasCancelar === 0 ? ' · Si cancelas, el próximo aviso será obligatorio.'
+                      : ` · Si cancelas, te ${quedanTrasCancelar === 1 ? 'queda 1 cancelación' : `quedan ${quedanTrasCancelar} cancelaciones`}; el aviso ${estado.maxAvisos} será obligatorio.`}
+                </div>
+              )}
+            </div>
           </div>
         )}
-        {manual && !obligatorio && estado.requiere && (
-          <div role="alert" style={{ padding: '10px 12px', borderRadius: 8, marginBottom: 12, background: 'var(--warning-soft)', color: 'var(--warning)' }}>
-            El efectivo en caja llegó al tope de <b>{money(estado.tope)}</b>.
-          </div>
+        {manual && !obligatorio && !estado.requiere && (
+          <p className="mini">La caja todavía no llega al tope de {money(estado.tope)}; puedes hacer una recogida igual.</p>
         )}
         <div className="row between"><span>Base (no se recoge)</span><b>{money(estado.base)}</b></div>
         <div className="row between"><span>Efectivo en caja sin la base</span><b>{money(estado.efectivoDisponible)}</b></div>
