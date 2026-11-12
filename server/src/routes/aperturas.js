@@ -246,30 +246,23 @@ router.post('/:id/recogida/aviso', wrap(async (req, res) => {
   res.json(estadoRecogida(actualizada, { efectivoDisponible: estado.efectivoDisponible }));
 }));
 
+// La recogida se lleva todo el efectivo fuera de la base; el monto lo calcula el servidor.
 router.post('/:id/recogidas', wrap(async (req, res) => {
   const id = String(req.params.id);
   const ap = await prisma.aperturaCaja.findUnique({ where: { id } });
   if (!ap) return res.status(404).json({ error: 'Apertura no encontrada' });
   if (ap.estado !== 'ABIERTA') return res.status(400).json({ error: 'La caja debe estar abierta para registrar la recogida' });
-  const monto = Number(req.body?.monto);
   const motivo = String(req.body?.motivo || '').trim() || 'Recogida parcial';
-  if (!Number.isFinite(monto) || monto <= 0 || Math.abs(monto * 100 - Math.round(monto * 100)) > 0.000001) {
-    return res.status(400).json({ error: 'Ingresa un monto mayor que cero con máximo dos decimales' });
-  }
   if (motivo.length > 250) return res.status(400).json({ error: 'El motivo admite hasta 250 caracteres' });
   const estado = estadoRecogida(ap, await calcularCuadre(ap));
-  if (Math.round(monto * 100) > Math.round(estado.efectivoDisponible * 100)) {
-    return res.status(400).json({ error: `La recogida no puede superar el efectivo en caja sin la base (${estado.efectivoDisponible}).` });
-  }
-  if (estado.requiere && estado.efectivoDisponible - monto >= TOPE_RECOGIDA) {
-    return res.status(400).json({ error: `Después de la recogida deben quedar menos de ${TOPE_RECOGIDA} en efectivo, sin contar la base.` });
-  }
+  const monto = estado.efectivoDisponible;
+  if (!(monto > 0)) return res.status(400).json({ error: 'No hay efectivo fuera de la base para recoger.' });
   const movimiento = await prisma.movimientoCaja.create({
     data: { aperturaId: id, usuarioId: req.usuario.id, cuentaContableId: null, tipo: 'RECOGIDA', monto, motivo },
   });
   await prisma.aperturaCaja.updateMany({ where: { id }, data: { avisosRecogida: 0 } });
   await auditar({ req, accion: 'CREAR', entidad: 'movimiento_caja', entidadId: movimiento.id, detalle: `RECOGIDA ${monto} • ${motivo}` });
-  res.status(201).json({ movimiento, ...estadoRecogida({ ...ap, avisosRecogida: 0 }, { efectivoDisponible: redondear(estado.efectivoDisponible - monto) }) });
+  res.status(201).json({ movimiento, ...estadoRecogida({ ...ap, avisosRecogida: 0 }, { efectivoDisponible: 0 }) });
 }));
 
 // Preview del cuadre (base + efectivo del turno). No modifica nada.

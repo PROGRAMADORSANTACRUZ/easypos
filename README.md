@@ -272,11 +272,12 @@ parciales si se identifican en su columna.
 
 **Recogida parcial.** El efectivo en caja sin la base (ventas en efectivo +
 ingresos - egresos - recogidas) se compara con un tope de $1.000.000
-(configurable con `TOPE_RECOGIDA_CAJA`). Al alcanzarlo, una moneda parpadeante lo indica y se abre un recuadro al entrar a
+(configurable con `TOPE_RECOGIDA_CAJA`); con base de $300.000 se activa al haber $1.300.000 en caja. Al alcanzarlo, una moneda parpadeante lo indica y se abre un recuadro al entrar a
 Facturacion, Factura de venta o Caja y despues de cada factura
 aparece un aviso: los dos primeros se pueden cancelar y el tercero obliga a
-registrar la recogida; el servidor rechaza nuevas facturas hasta hacerlo. La
-recogida debe dejar menos del tope en caja, no toca la base y se descuenta del
+registrar la recogida; el servidor rechaza nuevas facturas hasta hacerlo. La recogida se lleva todo el efectivo fuera de la base, sin importar cuanto sea;
+el sistema calcula el valor y en caja queda solo la base. Los avisos solo indican
+que hay que recoger, sin mostrar valores. La recogida se descuenta del
 efectivo esperado al cerrar. En Caja y en Facturacion hay un boton para hacerla
 en cualquier momento. Antes de desplegar, respalda y aplica
 `server/prisma/migrations/20261112200000_recogida_parcial/migration.sql` en
