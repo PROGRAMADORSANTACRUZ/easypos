@@ -3,13 +3,11 @@ import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
 import { useToast } from '../App.jsx';
 
-// Modal de cierre de caja con cuadre: muestra base, ventas, desglose por forma
-// de pago y el esperado en efectivo; permite registrar el efectivo contado y
-// calcula la diferencia (sobrante/faltante).
 export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
   const notify = useToast();
   const [cuadre, setCuadre] = useState(null);
-  const [contado, setContado] = useState('');
+  const [baseContada, setBaseContada] = useState('');
+  const [contados, setContados] = useState({});
   const [obs, setObs] = useState('');
   const [guardando, setGuardando] = useState(false);
 
@@ -21,13 +19,24 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
     return () => { vivo = false; };
   }, [apertura.id]);
 
-  const diferencia = contado === '' || !cuadre ? null : Number(contado) - cuadre.valorEsperado;
+  const diferencia = (contado, esperado) => contado === '' ? null : Math.round((Number(contado) - esperado) * 100) / 100;
+  const valorValido = (valor) => valor === '' || (Number.isFinite(Number(valor)) && Number(valor) >= 0
+    && Math.abs(Number(valor) * 100 - Math.round(Number(valor) * 100)) < 0.000001);
 
   const confirmar = async () => {
+    if (![baseContada, ...cuadre.medios.map((medio) => contados[medio.id] ?? '')].every(valorValido)) {
+      notify('Los valores contados deben ser no negativos y tener máximo dos decimales', 'err');
+      return;
+    }
     setGuardando(true);
     try {
       await api.post(`/aperturas/${apertura.id}/cerrar`, {
-        valorContado: contado === '' ? null : Number(contado),
+        conteoMedios: {
+          base: baseContada === '' ? null : Number(baseContada),
+          medios: cuadre.medios.map((medio) => ({
+            id: medio.id, contado: contados[medio.id] == null || contados[medio.id] === '' ? null : Number(contados[medio.id]),
+          })),
+        },
         observacion: obs.trim() || null,
       });
       notify('Caja cerrada');
@@ -76,24 +85,34 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
             <div className="row between" style={{ fontSize: 16 }}>
               <span>Esperado en efectivo</span><b>{money(cuadre.valorEsperado)}</b>
             </div>
-            <p className="mini" style={{ marginTop: 4 }}>Base + efectivo recibido ({money(cuadre.totalEfectivo)}).</p>
+            <p className="mini" style={{ marginTop: 4 }}>Base + efectivo recibido ({money(cuadre.totalEfectivo)}) + ingresos - egresos.</p>
 
             <div className="field" style={{ marginTop: 12 }}>
-              <label>Efectivo contado (opcional)</label>
+              <label htmlFor="cierre-base">Base y movimientos contados (opcional)</label>
+              <span className="mini">Esperado: {money(cuadre.valorInicial + cuadre.totalIngresos - cuadre.totalEgresos)}</span>
               <input
-                type="number"
-                step="any"
-                placeholder="Lo que hay físicamente en el cajón"
-                value={contado}
-                onChange={(e) => setContado(e.target.value)}
+                id="cierre-base" type="number" min="0" step="0.01"
+                placeholder="Base más ingresos, menos egresos"
+                value={baseContada}
+                onChange={(e) => setBaseContada(e.target.value)}
                 autoFocus
               />
             </div>
-            {diferencia != null && (
-              <div className="row between" style={{ fontSize: 15, color: diferencia === 0 ? 'var(--green)' : 'var(--red)' }}>
-                <span>{diferencia === 0 ? 'Cuadra' : diferencia > 0 ? 'Sobrante' : 'Faltante'}</span>
-                <b>{money(diferencia)}</b>
-              </div>
+            {baseContada !== '' && <Diferencia valor={diferencia(baseContada, cuadre.valorInicial + cuadre.totalIngresos - cuadre.totalEgresos)} />}
+            {cuadre.medios.map((medio) => {
+              const contado = contados[medio.id] ?? '';
+              return (
+                <div key={medio.id} className="field" style={{ marginTop: 12 }}>
+                  <label htmlFor={`cierre-medio-${medio.id}`}>{medio.nombre} ({medio.id}) contado (opcional){!medio.activo && ' · inactivo'}</label>
+                  <span className="mini">Esperado por ventas: {medio.esperado == null ? 'No disponible: hay pagos sin asignar' : money(medio.esperado)}</span>
+                  <input id={`cierre-medio-${medio.id}`} type="number" min="0" step="0.01" value={contado}
+                    onChange={(e) => setContados((actuales) => ({ ...actuales, [medio.id]: e.target.value }))} />
+                  {contado !== '' && medio.esperado != null && <Diferencia valor={diferencia(contado, medio.esperado)} />}
+                </div>
+              );
+            })}
+            {cuadre.sinAsignar.length > 0 && (
+              <p className="mini">Pagos sin asignar a un medio: {cuadre.sinAsignar.map((p) => `${p.metodo}: ${money(p.monto)}`).join(' · ')}. No se incluyen en el esperado por medio.</p>
             )}
             <div className="field" style={{ marginTop: 10 }}>
               <label>Observación (opcional)</label>
@@ -109,6 +128,15 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function Diferencia({ valor }) {
+  return (
+    <div className="row between" style={{ fontSize: 15, color: valor === 0 ? 'var(--green)' : 'var(--red)' }}>
+      <span>{valor === 0 ? 'Cuadra' : valor > 0 ? 'Sobrante' : 'Faltante'}</span>
+      <b>{money(valor)}</b>
     </div>
   );
 }

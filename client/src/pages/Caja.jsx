@@ -245,6 +245,17 @@ export default function Caja() {
                           <span><b>Egresos:</b> {money(cuadresPagos[ap.id]?.totalEgresos || 0)}</span>
                         </div>
                       )}
+                      {ap.cuadreMedios && (
+                        <div style={{ marginTop: 12 }}>
+                          <b>Conteo al cierre</b>
+                          {[{ nombre: 'Base y movimientos', ...ap.cuadreMedios.base }, ...ap.cuadreMedios.medios].map((medio) => (
+                            <div key={medio.id || 'base'} className="mini">
+                              {medio.nombre}{medio.id ? ` (${medio.id})` : ''}: esperado {medio.esperado == null ? 'No disponible' : money(medio.esperado)} · contado {medio.contado == null ? '—' : money(medio.contado)} · diferencia {medio.diferencia == null ? '—' : money(medio.diferencia)}
+                            </div>
+                          ))}
+                          {!!ap.cuadreMedios.sinAsignar?.length && <div className="mini">Pagos sin asignar: {ap.cuadreMedios.sinAsignar.map((p) => `${p.metodo}: ${money(p.monto)}`).join(' · ')}</div>}
+                        </div>
+                      )}
                       {!!cuadresPagos[ap.id]?.movimientos?.length && (
                         <table style={{ marginTop: 12 }}>
                           <thead><tr><th>Tipo</th><th style={{ textAlign: 'right' }}>Monto</th><th>Cuenta</th><th>Motivo</th><th>Usuario</th><th>Fecha</th></tr></thead>
@@ -333,7 +344,7 @@ export default function Caja() {
         <CierreCajaModal
           apertura={cerrando}
           onClose={() => setCerrando(null)}
-          onCerrada={() => { setCerrando(null); cargar(); }}
+          onCerrada={() => { setCerrando(null); setCuadresPagos({}); cargar(); }}
         />
       )}
     </div>

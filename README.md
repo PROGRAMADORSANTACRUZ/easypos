@@ -231,6 +231,19 @@ en cada base de restaurante ya existente. Haz una copia de seguridad antes de
 aplicar cambios al esquema. Los restaurantes nuevos reciben estos campos y la
 tabla al crear su base de datos.
 
+El cierre de caja permite contar opcionalmente cada medio activo y conserva el
+resultado en el historial. La base y los ingresos/egresos se cuentan por
+separado de las ventas en efectivo; el contado total de efectivo solo se calcula
+cuando esos conteos estan completos. Los medios inactivos usados durante el turno
+tambien aparecen. Si un pago historico no permite identificar su medio, se muestra
+sin asignar y no se calcula una diferencia para los medios afectados.
+
+Para usar este cuadre en una base existente, respalda primero y aplica
+`server/prisma/migrations/20261112120000_cuadre_medios_pago/migration.sql` a cada
+base de restaurante correspondiente, antes de iniciar la version actualizada.
+Regenera el cliente Prisma. La migracion agrega un campo opcional y conserva los
+cierres anteriores; no debe aplicarse a otras bases sin revisar su destino.
+
 Antes de desplegar la división de cuenta, aplica en la base de cada restaurante
 existente y con respaldo previo las migraciones
 `server/prisma/migrations/20261008190000_facturas_divididas_pedido/migration.sql`

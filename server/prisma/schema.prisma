@@ -359,6 +359,7 @@ model AperturaCaja {
   valorContado      Float?  @map("ValorContado")
   diferencia        Float?  @map("Diferencia")
   observacionCierre String? @map("ObservacionCierre")
+  cuadreMedios      Json?   @map("CuadreMedios")
   facturas      Factura[]
   facturasVenta FacturaVenta[]
   movimientos   MovimientoCaja[]

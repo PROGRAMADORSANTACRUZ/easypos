@@ -53,7 +53,7 @@ async function calcularCuadre(apertura) {
   const [facturas, ventas, formas] = await Promise.all([
     prisma.factura.findMany({ where, select }),
     prisma.facturaVenta.findMany({ where, select }),
-    prisma.formaPago.findMany({ select: { id: true, formaPagoDian: true } }),
+    prisma.formaPago.findMany({ select: { id: true, formaPago: true, formaPagoDian: true, activo: true } }),
   ]);
   const movimientos = await prisma.movimientoCaja.findMany({
     where: { aperturaId: apertura.id },
@@ -82,6 +82,31 @@ async function calcularCuadre(apertura) {
     .map(([metodo, monto]) => ({ metodo, monto: Math.round(monto * 100) / 100 }))
     .sort((a, b) => b.monto - a.monto);
 
+  const medios = formas.filter((forma) => forma.activo || acum[forma.id] != null)
+    .map((forma) => ({
+      id: forma.id, nombre: forma.formaPago, activo: forma.activo,
+      esEfectivo: esMedioEfectivo(forma.id, formas), esperado: 0,
+    }));
+  const sinAsignar = [];
+  for (const pago of desglosePagos) {
+    let medio = medios.find((opcion) => opcion.id === pago.metodo);
+    if (!medio && esMedioEfectivo(pago.metodo, formas)) {
+      const efectivos = medios.filter((opcion) => opcion.esEfectivo);
+      if (efectivos.length === 1) medio = efectivos[0];
+    }
+    if (medio) medio.esperado = Math.round((medio.esperado + pago.monto) * 100) / 100;
+    else sinAsignar.push({ ...pago, esEfectivo: esMedioEfectivo(pago.metodo, formas) });
+  }
+  for (const pago of sinAsignar) {
+    if (/^CR[EÉ]DITO$/.test(pago.metodo)) continue;
+    const codigos = pago.metodo.split('/');
+    const candidatos = medios.filter((medio) => codigos.includes(medio.id));
+    for (const medio of candidatos.length ? candidatos : medios.filter((opcion) => opcion.esEfectivo === pago.esEfectivo)) {
+      medio.esperado = null;
+    }
+  }
+  medios.sort((a, b) => a.nombre.localeCompare(b.nombre));
+
   return {
     numFacturas: todas.length,
     totalVentas: Math.round(totalVentas * 100) / 100,
@@ -91,6 +116,8 @@ async function calcularCuadre(apertura) {
     totalEgresos: Math.round(totalEgresos * 100) / 100,
     valorEsperado: Math.round(valorEsperado * 100) / 100,
     desglosePagos,
+    medios,
+    sinAsignar,
     movimientos,
   };
 }
@@ -203,8 +230,35 @@ router.post('/:id/cerrar', wrap(async (req, res) => {
     if (actual.estado === 'CERRADA') return res.status(400).json({ error: 'La caja ya está cerrada' });
 
     const cuadre = await calcularCuadre(actual);
+    let cuadreMedios;
     const contadoRaw = req.body?.valorContado;
-    const valorContado = contadoRaw === undefined || contadoRaw === null || contadoRaw === '' ? null : Number(contadoRaw);
+    let valorContado = contadoRaw === undefined || contadoRaw === null || contadoRaw === '' ? null : Number(contadoRaw);
+    if (valorContado != null && (!Number.isFinite(valorContado) || valorContado < 0)) {
+      return res.status(400).json({ error: 'El efectivo contado debe ser un valor válido no negativo' });
+    }
+    if (req.body?.conteoMedios !== undefined) {
+      const { base, medios: conteos } = req.body.conteoMedios || {};
+      if (!Array.isArray(conteos) || conteos.length !== cuadre.medios.length
+        || new Set(conteos.map((item) => item?.id)).size !== conteos.length
+        || conteos.some((item) => !item || !cuadre.medios.some((medio) => medio.id === item.id))) {
+        return res.status(400).json({ error: 'Los medios de pago cambiaron. Vuelve a abrir el cuadre.' });
+      }
+      const importeValido = (valor) => valor === null || (typeof valor === 'number' && Number.isFinite(valor)
+        && valor >= 0 && Number.isSafeInteger(Math.round(valor * 100)) && Math.abs(valor * 100 - Math.round(valor * 100)) < 0.000001);
+      if (!importeValido(base) || conteos.some((item) => !importeValido(item.contado))) {
+        return res.status(400).json({ error: 'Los valores contados deben ser no negativos y tener máximo dos decimales' });
+      }
+      const baseEsperada = Math.round((actual.valorInicial + cuadre.totalIngresos - cuadre.totalEgresos) * 100) / 100;
+      const medios = cuadre.medios.map((medio) => {
+        const contado = conteos.find((item) => item.id === medio.id).contado;
+        return { ...medio, contado, diferencia: contado === null || medio.esperado === null ? null : Math.round((contado - medio.esperado) * 100) / 100 };
+      });
+      cuadreMedios = { base: { esperado: baseEsperada, contado: base, diferencia: base === null ? null : Math.round((base - baseEsperada) * 100) / 100 }, medios, sinAsignar: cuadre.sinAsignar };
+      const efectivos = medios.filter((medio) => medio.esEfectivo);
+      const efectivoSinAsignar = cuadre.sinAsignar.some((pago) => pago.esEfectivo);
+      valorContado = base === null || efectivos.some((medio) => medio.contado === null) || efectivoSinAsignar
+        ? null : Math.round((base + efectivos.reduce((suma, medio) => suma + medio.contado, 0)) * 100) / 100;
+    }
     const diferencia = valorContado == null ? null : Math.round((valorContado - cuadre.valorEsperado) * 100) / 100;
 
     const ap = await prisma.aperturaCaja.update({
@@ -218,6 +272,7 @@ router.post('/:id/cerrar', wrap(async (req, res) => {
         valorContado,
         diferencia,
         observacionCierre: req.body?.observacion ? String(req.body.observacion) : null,
+        ...(cuadreMedios !== undefined && { cuadreMedios }),
       },
       include: conRelaciones,
     });
