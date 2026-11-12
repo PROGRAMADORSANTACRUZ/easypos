@@ -1012,7 +1012,7 @@ export default function Reportes() {
                   <div className="field" style={{ margin: 0 }}>
                     <label htmlFor="movimiento-tipo">Tipo</label>
                     <select id="movimiento-tipo" value={tipoMovimiento} onChange={(e) => setTipoMovimiento(e.target.value)}>
-                      <option value="">Todos</option><option value="INGRESO">Ingreso</option><option value="EGRESO">Egreso</option>
+                      <option value="">Todos</option><option value="INGRESO">Ingreso</option><option value="EGRESO">Egreso</option><option value="RECOGIDA">Recogida</option>
                     </select>
                   </div>
                 </>

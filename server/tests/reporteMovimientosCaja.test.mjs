@@ -69,7 +69,10 @@ test('presenta y exporta cada valor en su columna sin inventar clasificaciones',
   assert.equal(fila.Tipo, 'INGRESO');
   assert.match(fila['Valor registrado'], /100,25/);
   assert.equal(fila['Referencia movimiento'], 'm1');
-  for (const columna of ['C.O.', 'Nro documento', 'Estado', 'Adiciones', 'Recogidas', 'Otros ingresos', 'Otros egresos', 'Efectivo', 'Cheque', 'Tarjeta crédito', 'Tarjeta débito', 'Otros', 'Tercero', 'Razón social tercero']) {
+  for (const columna of ['C.O.', 'Nro documento', 'Estado', 'Adiciones', 'Otros ingresos', 'Otros egresos', 'Efectivo', 'Cheque', 'Tarjeta crédito', 'Tarjeta débito', 'Otros', 'Tercero', 'Razón social tercero']) {
     assert.equal(fila[columna], 'No disponible');
   }
+  assert.doesNotMatch(fila.Recogidas, /[1-9]/);
+  const recogida = filaMovimiento({ id: 'm2', fecha: '2026-11-11T06:00:00Z', tipo: 'RECOGIDA', monto: 400000, motivo: 'Recogida parcial', cajero: 'Cajera', caja: 'Principal' });
+  assert.match(recogida[columnasMovimientos.indexOf('Recogidas')], /400\.000/);
 });

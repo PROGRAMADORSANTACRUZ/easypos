@@ -11,8 +11,19 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 const conRelaciones = { caja: true, usuario: true };
 const permisosFacturacion = ['facturas.ver', 'facturas.crear', 'factura_venta.ver', 'factura_venta.crear'];
 
+export const TOPE_RECOGIDA = Number(process.env.TOPE_RECOGIDA_CAJA) > 0 ? Number(process.env.TOPE_RECOGIDA_CAJA) : 1000000;
+export const MAX_AVISOS_RECOGIDA = 3;
+export const MENSAJE_RECOGIDA_OBLIGATORIA = 'Debes registrar la recogida parcial de efectivo antes de seguir facturando.';
+const redondear = (valor) => Math.round(valor * 100) / 100;
+
 router.use((req, res, next) => {
   const permisos = req.usuario?.permisos || [];
+  // La cajera que factura debe poder consultar y registrar la recogida obligatoria.
+  if (/^\/[^/]+\/(recogida|recogida\/aviso|recogidas)$/.test(req.path)
+    && (permisos.includes('caja.crear') || permisos.some((permiso) => permisosFacturacion.includes(permiso))
+      || ((req.method === 'GET' || req.method === 'HEAD') && permisos.includes('caja.ver')))) {
+    return next();
+  }
   if (req.method === 'GET' || req.method === 'HEAD') {
     if (req.path === '/activa' && permisos.some((permiso) => permisosFacturacion.includes(permiso))) return next();
     if (permisos.includes('caja.ver')) return next();
@@ -77,7 +88,9 @@ async function calcularCuadre(apertura) {
   const totalEfectivo = todas.reduce((s, f) => s + efectivoDeFactura(f, formas), 0);
   const totalIngresos = movimientos.filter((m) => m.tipo === 'INGRESO').reduce((s, m) => s + m.monto, 0);
   const totalEgresos = movimientos.filter((m) => m.tipo === 'EGRESO').reduce((s, m) => s + m.monto, 0);
-  const valorEsperado = (apertura.valorInicial || 0) + totalEfectivo + totalIngresos - totalEgresos;
+  const totalRecogidas = movimientos.filter((m) => m.tipo === 'RECOGIDA').reduce((s, m) => s + m.monto, 0);
+  const efectivoDisponible = totalEfectivo + totalIngresos - totalEgresos - totalRecogidas;
+  const valorEsperado = (apertura.valorInicial || 0) + efectivoDisponible;
 
   // Desglose por forma de pago para el cuadre.
   const acum = {};
@@ -113,6 +126,12 @@ async function calcularCuadre(apertura) {
       medio.esperado = null;
     }
   }
+  // Las recogidas retiran efectivo de ventas; con varios medios de efectivo no se sabe de cuál.
+  if (totalRecogidas > 0) {
+    const efectivos = medios.filter((medio) => medio.esEfectivo);
+    if (efectivos.length === 1 && efectivos[0].esperado !== null) efectivos[0].esperado = redondear(efectivos[0].esperado - totalRecogidas);
+    else efectivos.forEach((medio) => { medio.esperado = null; });
+  }
   medios.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
   return {
@@ -122,12 +141,40 @@ async function calcularCuadre(apertura) {
     totalEfectivo: Math.round(totalEfectivo * 100) / 100,
     totalIngresos: Math.round(totalIngresos * 100) / 100,
     totalEgresos: Math.round(totalEgresos * 100) / 100,
+    totalRecogidas: redondear(totalRecogidas),
+    efectivoDisponible: redondear(efectivoDisponible),
     valorEsperado: Math.round(valorEsperado * 100) / 100,
     desglosePagos,
     medios,
     sinAsignar,
     movimientos,
   };
+}
+
+function estadoRecogida(apertura, cuadre) {
+  const avisos = Math.min(MAX_AVISOS_RECOGIDA, apertura.avisosRecogida || 0);
+  const requiere = cuadre.efectivoDisponible >= TOPE_RECOGIDA;
+  return {
+    tope: TOPE_RECOGIDA,
+    base: apertura.valorInicial || 0,
+    efectivoDisponible: cuadre.efectivoDisponible,
+    requiere,
+    avisos: requiere ? avisos : 0,
+    maxAvisos: MAX_AVISOS_RECOGIDA,
+    obligatorio: requiere && avisos >= MAX_AVISOS_RECOGIDA,
+  };
+}
+
+// Indica si la apertura ya agoto los avisos y debe registrar la recogida antes de facturar.
+export async function recogidaObligatoriaPendiente(apertura) {
+  if ((apertura?.avisosRecogida || 0) < MAX_AVISOS_RECOGIDA) return false;
+  try {
+    return estadoRecogida(apertura, await calcularCuadre(apertura)).obligatorio;
+  } catch (error) {
+    // Un dato historico inconsistente no debe detener las ventas; el cierre lo reportara.
+    console.error('No se pudo calcular la recogida obligatoria', apertura.id, error.message);
+    return false;
+  }
 }
 
 // Listar aperturas (filtros opcionales ?cajaId= &usuarioId= &estado=)
@@ -171,6 +218,58 @@ router.get('/:id', wrap(async (req, res) => {
   const ap = await prisma.aperturaCaja.findUnique({ where: { id: String(req.params.id) }, include: conRelaciones });
   if (!ap) return res.status(404).json({ error: 'Apertura no encontrada' });
   res.json(ap);
+}));
+
+// Estado de la recogida parcial: efectivo en caja sin la base frente al tope.
+router.get('/:id/recogida', wrap(async (req, res) => {
+  const ap = await prisma.aperturaCaja.findUnique({ where: { id: String(req.params.id) } });
+  if (!ap) return res.status(404).json({ error: 'Apertura no encontrada' });
+  res.json(estadoRecogida(ap, await calcularCuadre(ap)));
+}));
+
+// Registra que se mostro un aviso de recogida (maximo 3; el tercero es obligatorio).
+router.post('/:id/recogida/aviso', wrap(async (req, res) => {
+  const id = String(req.params.id);
+  const ap = await prisma.aperturaCaja.findUnique({ where: { id } });
+  if (!ap) return res.status(404).json({ error: 'Apertura no encontrada' });
+  if (ap.estado !== 'ABIERTA') return res.status(400).json({ error: 'La caja no está abierta' });
+  const estado = estadoRecogida(ap, await calcularCuadre(ap));
+  if (!estado.requiere) {
+    if (ap.avisosRecogida) await prisma.aperturaCaja.updateMany({ where: { id }, data: { avisosRecogida: 0 } });
+    return res.json(estado);
+  }
+  await prisma.aperturaCaja.updateMany({
+    where: { id, avisosRecogida: { lt: MAX_AVISOS_RECOGIDA } },
+    data: { avisosRecogida: { increment: 1 } },
+  });
+  const actualizada = await prisma.aperturaCaja.findUnique({ where: { id } });
+  res.json(estadoRecogida(actualizada, { efectivoDisponible: estado.efectivoDisponible }));
+}));
+
+router.post('/:id/recogidas', wrap(async (req, res) => {
+  const id = String(req.params.id);
+  const ap = await prisma.aperturaCaja.findUnique({ where: { id } });
+  if (!ap) return res.status(404).json({ error: 'Apertura no encontrada' });
+  if (ap.estado !== 'ABIERTA') return res.status(400).json({ error: 'La caja debe estar abierta para registrar la recogida' });
+  const monto = Number(req.body?.monto);
+  const motivo = String(req.body?.motivo || '').trim() || 'Recogida parcial';
+  if (!Number.isFinite(monto) || monto <= 0 || Math.abs(monto * 100 - Math.round(monto * 100)) > 0.000001) {
+    return res.status(400).json({ error: 'Ingresa un monto mayor que cero con máximo dos decimales' });
+  }
+  if (motivo.length > 250) return res.status(400).json({ error: 'El motivo admite hasta 250 caracteres' });
+  const estado = estadoRecogida(ap, await calcularCuadre(ap));
+  if (Math.round(monto * 100) > Math.round(estado.efectivoDisponible * 100)) {
+    return res.status(400).json({ error: `La recogida no puede superar el efectivo en caja sin la base (${estado.efectivoDisponible}).` });
+  }
+  if (estado.requiere && estado.efectivoDisponible - monto >= TOPE_RECOGIDA) {
+    return res.status(400).json({ error: `Después de la recogida deben quedar menos de ${TOPE_RECOGIDA} en efectivo, sin contar la base.` });
+  }
+  const movimiento = await prisma.movimientoCaja.create({
+    data: { aperturaId: id, usuarioId: req.usuario.id, cuentaContableId: null, tipo: 'RECOGIDA', monto, motivo },
+  });
+  await prisma.aperturaCaja.updateMany({ where: { id }, data: { avisosRecogida: 0 } });
+  await auditar({ req, accion: 'CREAR', entidad: 'movimiento_caja', entidadId: movimiento.id, detalle: `RECOGIDA ${monto} • ${motivo}` });
+  res.status(201).json({ movimiento, ...estadoRecogida({ ...ap, avisosRecogida: 0 }, { efectivoDisponible: redondear(estado.efectivoDisponible - monto) }) });
 }));
 
 // Preview del cuadre (base + efectivo del turno). No modifica nada.

@@ -1671,3 +1671,24 @@ tbody tr:last-child td { border-bottom: none; }
 .badge.estado-RECIBIDO { background: var(--panel-2); color: var(--muted); }
 .badge.estado-ENTREGADO { background: var(--green-soft); color: var(--green); }
 .badge.estado-CANCELADO { background: var(--red-soft); color: var(--red); }
+
+/* ---------- Aviso de recogida parcial de efectivo ---------- */
+.alerta-recogida {
+  display: inline-flex; align-items: center; gap: 10px; text-align: left;
+  padding: 6px 12px; border-radius: 10px; cursor: pointer; font: inherit; line-height: 1.2;
+  border: 1px solid var(--warning); background: var(--warning-soft); color: var(--warning);
+}
+.alerta-recogida.obligatoria { border-color: var(--red); background: var(--red-soft); color: var(--red); }
+.alerta-recogida-detalle { display: block; font-size: 12px; opacity: .9; }
+.alerta-recogida-moneda {
+  display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  border-radius: 50%; background: #F5B301; color: #5C3D00; flex: none;
+  animation: moneda-parpadeo 1s ease-in-out infinite;
+}
+@keyframes moneda-parpadeo {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 179, 1, .7); }
+  50% { opacity: .35; transform: scale(.88); box-shadow: 0 0 0 8px rgba(245, 179, 1, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .alerta-recogida-moneda { animation-duration: 2.4s; }
+}

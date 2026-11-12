@@ -40,7 +40,7 @@ export function Modal({ title, subtitle, onClose, children, footer, size = 'md' 
             <h3 style={{ margin: 0 }}>{title}</h3>
             {subtitle && <p className="mini" style={{ margin: '2px 0 0' }}>{subtitle}</p>}
           </div>
-          <button type="button" className="modal-x" onClick={onClose} aria-label="Cerrar"><Icon name="close" size={20} /></button>
+          {onClose && <button type="button" className="modal-x" onClick={onClose} aria-label="Cerrar"><Icon name="close" size={20} /></button>}
         </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}

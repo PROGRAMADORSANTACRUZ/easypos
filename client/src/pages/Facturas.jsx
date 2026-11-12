@@ -7,6 +7,7 @@ import { Logo, overlayCierre } from '../components/ui/index.jsx';
 import { LOGO_RECIBO } from '../logoRecibo.js';
 import { useAuth, useToast } from '../App.jsx';
 import CierreCajaModal from '../components/CierreCajaModal.jsx';
+import { RecogidaCaja, IndicadorRecogida, useRecogidaCaja } from '../components/RecogidaParcialModal.jsx';
 import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir, registrarEmpresa } from '../print.js';
 import { tipoDocumentoListo } from '../tipoDocumentoListo.js';
 import { diaColombia } from '../fechaComercial.js';
@@ -711,6 +712,12 @@ export default function Facturas({ electronica = true }) {
 
   useEffect(() => { if (centroOperacionCodigo) cargar(); }, [centroOperacionCodigo]);
 
+  const aperturaId = apertura?.id;
+  const recogida = useRecogidaCaja(aperturaId);
+  const avisarRecogida = recogida.avisar;
+  const revisarRecogida = recogida.revisar;
+  const abrirRecogida = () => recogida.abrirManual().catch((e) => notify(e.message, 'err'));
+
   const [reenviando, setReenviando] = useState(null); // id de factura en proceso de reenvio a DIAN
 
   // La fecha del historial y el filtro usan siempre el dia comercial de Colombia.
@@ -944,9 +951,11 @@ export default function Facturas({ electronica = true }) {
         setCobrando(null);
         await imprimirGenerada(factura, null, ventana);
         await cargar();
+        await avisarRecogida();
       } catch (e) {
         ventana?.close();
         notify(e.message, 'err');
+        revisarRecogida();
       } finally {
         setProcesando(null);
       }
@@ -980,9 +989,11 @@ export default function Facturas({ electronica = true }) {
       setCobrando(null);
       await imprimirGenerada(factura, recFinal != null ? { recibido: recFinal } : null, ventana);
       await cargar();
+      await avisarRecogida();
     } catch (e) {
       ventana?.close();
       notify(e.message, 'err');
+      revisarRecogida();
     } finally {
       setProcesando(null);
     }
@@ -1047,9 +1058,11 @@ export default function Facturas({ electronica = true }) {
         await imprimirGenerada(factura, null, ventanas[indice]);
       }
       await cargar();
+      await avisarRecogida();
     } catch (error) {
       ventanas.forEach((ventana) => ventana?.close());
       notify(error.message, 'err');
+      revisarRecogida();
     } finally {
       setProcesando(null);
     }
@@ -1224,9 +1237,11 @@ export default function Facturas({ electronica = true }) {
         setDirectaAbierta(false);
         await imprimirGenerada(factura, null, ventana);
         await cargar();
+        await avisarRecogida();
       } catch (e) {
         ventana?.close();
         notify(e.message, 'err');
+        revisarRecogida();
       } finally {
         setFacturandoDirecta(false);
       }
@@ -1254,9 +1269,11 @@ export default function Facturas({ electronica = true }) {
       setDirectaAbierta(false);
       await imprimirGenerada(factura, recDirecta != null ? { recibido: recDirecta } : null, ventana);
       await cargar();
+      await avisarRecogida();
     } catch (e) {
       ventana?.close();
       notify(e.message, 'err');
+      revisarRecogida();
     } finally {
       setFacturandoDirecta(false);
     }
@@ -1294,8 +1311,10 @@ export default function Facturas({ electronica = true }) {
               <Icon name="cash" size={16} /> <b>Caja abierta</b>{apertura.caja?.nombre ? ` · ${apertura.caja.nombre}` : ''} — base <b>{money(apertura.valorInicial)}</b>
               <span className="mini" style={{ marginLeft: 8 }}>desde {fecha(apertura.fechaApertura)}</span>
             </div>
-            <div className="row" style={{ gap: 8 }}>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <IndicadorRecogida estado={recogida.estado} onClick={abrirRecogida} />
               <button className="btn btn-sm" onClick={() => navigate('/caja')}>Ir a Caja</button>
+              <button className="btn btn-sm" onClick={abrirRecogida}>Recogida parcial</button>
               {puede('caja.cerrar') && (
                 <button className="btn btn-sm btn-primary" onClick={() => setCerrandoCaja(true)}>Cerrar caja</button>
               )}
@@ -1319,6 +1338,7 @@ export default function Facturas({ electronica = true }) {
       )}
 
       {/* Modal de cierre de caja con cuadre */}
+      <RecogidaCaja aperturaId={aperturaId} control={recogida} />
       {cerrandoCaja && apertura && (
         <CierreCajaModal
           apertura={apertura}

@@ -267,7 +267,19 @@ fecha, cajero, caja, monto, motivo y referencia interna. Permite filtrar por
 fecha, cajero, caja y tipo y exportar a Excel o PDF. El centro de operacion,
 numero de documento, estado, tercero, medios de pago y clasificaciones como
 adiciones y recogidas no se registran en el movimiento y aparecen como no
-disponibles; no se infieren a partir del tipo de ingreso o egreso.
+disponibles; no se infieren a partir del tipo de ingreso o egreso. Las recogidas
+parciales si se identifican en su columna.
+
+**Recogida parcial.** El efectivo en caja sin la base (ventas en efectivo +
+ingresos - egresos - recogidas) se compara con un tope de $1.000.000
+(configurable con `TOPE_RECOGIDA_CAJA`). Al alcanzarlo, despues de cada factura
+aparece un aviso: los dos primeros se pueden cancelar y el tercero obliga a
+registrar la recogida; el servidor rechaza nuevas facturas hasta hacerlo. La
+recogida debe dejar menos del tope en caja, no toca la base y se descuenta del
+efectivo esperado al cerrar. En Caja y en Facturacion hay un boton para hacerla
+en cualquier momento. Antes de desplegar, respalda y aplica
+`server/prisma/migrations/20261112200000_recogida_parcial/migration.sql` en
+cada base de restaurante.
 
 Para usar este cuadre en una base existente, respalda primero y aplica
 `server/prisma/migrations/20261112120000_cuadre_medios_pago/migration.sql` a cada

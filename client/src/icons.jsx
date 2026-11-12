@@ -80,6 +80,7 @@ const MAP = {
   eyeOff: EyeOff,
   freeze: Snowflake,
   cash: Banknote,
+  moneda: Coins,
   card: CreditCard,
   cart: ShoppingCart,
   receipt: ReceiptText,

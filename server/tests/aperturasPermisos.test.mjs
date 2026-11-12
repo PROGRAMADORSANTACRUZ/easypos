@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:1/test';
-const { default: aperturasRouter } = await import('../src/routes/aperturas.js');
+const { default: aperturasRouter, recogidaObligatoriaPendiente } = await import('../src/routes/aperturas.js');
 const { tenantStorage } = await import('../src/prisma.js');
 
 async function entorno(t) {
@@ -27,6 +27,15 @@ async function entorno(t) {
         const apertura = aperturas.find((item) => item.id === where.id);
         Object.assign(apertura, data);
         return apertura;
+      },
+      updateMany: async ({ where, data }) => {
+        const filas = aperturas.filter((item) => item.id === where.id
+          && (where.avisosRecogida?.lt === undefined || (item.avisosRecogida || 0) < where.avisosRecogida.lt));
+        for (const fila of filas) {
+          fila.avisosRecogida = data.avisosRecogida?.increment !== undefined
+            ? (fila.avisosRecogida || 0) + data.avisosRecogida.increment : data.avisosRecogida;
+        }
+        return { count: filas.length };
       },
     },
     movimientoCaja: {
@@ -69,7 +78,7 @@ async function entorno(t) {
     });
     return { status: response.status, body: response.status === 204 ? null : await response.json() };
   };
-  return { solicitar, aperturas, movimientos, formas, facturas, ventas, consultasFacturas };
+  return { solicitar, aperturas, movimientos, formas, facturas, ventas, consultasFacturas, db };
 }
 
 test('aperturas y movimientos requieren permiso y usan al usuario autenticado', async (t) => {
@@ -237,4 +246,46 @@ test('no permite leer o cerrar caja sin permisos correspondientes', async (t) =>
   const { solicitar } = await entorno(t);
   assert.equal((await solicitar('GET', '/', undefined, 'pedidos.ver')).status, 403);
   assert.equal((await solicitar('POST', '/turno-1/cerrar', { valorContado: 0 }, 'caja.ver')).status, 403);
+});
+
+test('avisa tres veces al llegar al tope sin la base y exige la recogida en el tercero', async (t) => {
+  const { solicitar, aperturas, movimientos, formas, facturas, db } = await entorno(t);
+  formas.push({ id: 'EFE', formaPago: 'Efectivo', formaPagoDian: '10-Efectivo', activo: true }, { id: 'QR', formaPago: 'QR', activo: true });
+  await solicitar('POST', '/', { valorInicial: 300000 }, 'caja.abrir');
+  facturas.push({ metodoPago: 'EFE', cabecera: { total: 999999, propina: 0, credito: false } });
+  facturas.push({ metodoPago: 'QR', cabecera: { total: 500000, propina: 0, credito: false } });
+  const debajo = await solicitar('POST', '/turno-1/recogida/aviso', {}, 'facturas.crear');
+  assert.equal(debajo.status, 200);
+  assert.equal(debajo.body.requiere, false);
+  assert.equal(aperturas[0].avisosRecogida || 0, 0);
+
+  facturas.push({ metodoPago: 'EFE', cabecera: { total: 1, propina: 0, credito: false } });
+  const estado = await solicitar('GET', '/turno-1/recogida', undefined, 'facturas.crear');
+  assert.deepEqual(
+    [estado.body.efectivoDisponible, estado.body.base, estado.body.tope, estado.body.requiere, estado.body.obligatorio],
+    [1000000, 300000, 1000000, true, false],
+  );
+  const avisos = [];
+  for (let i = 0; i < 4; i += 1) avisos.push((await solicitar('POST', '/turno-1/recogida/aviso', {}, 'facturas.crear')).body);
+  assert.deepEqual(avisos.map((aviso) => [aviso.avisos, aviso.obligatorio]), [[1, false], [2, false], [3, true], [3, true]]);
+  assert.equal(await tenantStorage.run(db, () => recogidaObligatoriaPendiente(aperturas[0])), true);
+
+  assert.equal((await solicitar('POST', '/turno-1/recogidas', { monto: 400000 }, 'pedidos.ver')).status, 403);
+  assert.equal((await solicitar('POST', '/turno-1/recogidas', { monto: 0 }, 'facturas.crear')).status, 400);
+  assert.equal((await solicitar('POST', '/turno-1/recogidas', { monto: 1000001 }, 'facturas.crear')).status, 400);
+  const recogida = await solicitar('POST', '/turno-1/recogidas', { monto: 400000 }, 'facturas.crear');
+  assert.equal(recogida.status, 201);
+  assert.deepEqual([recogida.body.efectivoDisponible, recogida.body.requiere, recogida.body.avisos], [600000, false, 0]);
+  assert.deepEqual(
+    [movimientos.at(-1).tipo, movimientos.at(-1).monto, movimientos.at(-1).cuentaContableId, movimientos.at(-1).motivo],
+    ['RECOGIDA', 400000, null, 'Recogida parcial'],
+  );
+  assert.equal(aperturas[0].avisosRecogida, 0);
+  assert.equal(await tenantStorage.run(db, () => recogidaObligatoriaPendiente(aperturas[0])), false);
+
+  const cuadre = await solicitar('GET', '/turno-1/cuadre', undefined, 'caja.ver');
+  assert.equal(cuadre.body.totalRecogidas, 400000);
+  assert.equal(cuadre.body.valorEsperado, 900000);
+  assert.equal(cuadre.body.medios.find((medio) => medio.id === 'EFE').esperado, 600000);
+  assert.equal(cuadre.body.medios.find((medio) => medio.id === 'QR').esperado, 500000);
 });

@@ -88,7 +88,7 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
             <div className="row between" style={{ fontSize: 16 }}>
               <span>Esperado en efectivo</span><b>{money(cuadre.valorEsperado)}</b>
             </div>
-            <p className="mini" style={{ marginTop: 4 }}>Base + efectivo recibido ({money(cuadre.totalEfectivo)}) + ingresos - egresos.</p>
+            <p className="mini" style={{ marginTop: 4 }}>Base + efectivo recibido ({money(cuadre.totalEfectivo)}) + ingresos - egresos{cuadre.totalRecogidas > 0 ? ` - recogidas (${money(cuadre.totalRecogidas)})` : ''}.</p>
 
             <div className="field" style={{ marginTop: 12 }}>
               <label htmlFor="cierre-base">Base y movimientos contados (opcional)</label>
@@ -102,6 +102,7 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
               />
             </div>
             {baseContada !== '' && <Diferencia valor={diferencia(baseContada, cuadre.valorInicial + cuadre.totalIngresos - cuadre.totalEgresos)} />}
+            {cuadre.totalRecogidas > 0 && <p className="mini" style={{ marginTop: 8 }}>El esperado del efectivo ya descuenta las recogidas parciales ({money(cuadre.totalRecogidas)}).</p>}
             {cuadre.medios.map((medio) => {
               const contado = contados[medio.id] ?? '';
               return (

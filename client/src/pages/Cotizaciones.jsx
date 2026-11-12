@@ -7,6 +7,7 @@ import { LoadingState, PageHeader, Modal, Button, EmptyState, overlayCierre } fr
 import { imprimirRecibo, configurarRecibo, pagoOk, labelPago } from './Facturas.jsx';
 import { abrirVentanaVacia } from '../print.js';
 import { tipoDocumentoListo } from '../tipoDocumentoListo.js';
+import { RecogidaCaja, IndicadorRecogida, useRecogidaCaja } from '../components/RecogidaParcialModal.jsx';
 
 const puede = (user, codigo) => (user?.permisos || []).includes(codigo);
 
@@ -127,6 +128,10 @@ export default function Cotizaciones() {
 
   useEffect(() => { cargar(); }, []);
 
+  const aperturaId = apertura?.id;
+  const recogida = useRecogidaCaja(aperturaId);
+  const abrirRecogida = () => recogida.abrirManual().catch((e) => notify(e.message, 'err'));
+
   // Cliente por defecto: "Consumidor Final" (si existe en el directorio).
   const idDefault = useMemo(() => {
     const def = clientes.find((c) => c.nombre.trim().toLowerCase() === 'consumidor final');
@@ -203,6 +208,7 @@ export default function Cotizaciones() {
       const rec = !mixto && metodoPago === 'EFECTIVO' ? recibido : null;
       limpiar();
       await cargar();
+      await recogida.avisar();
       try {
         await imprimirRecibo(factura, rec !== null ? { recibido: rec } : null, 'formatoFacturaVenta', ventana);
         if (!ventana) notify('Factura creada. Permite ventanas emergentes o imprímela desde el historial.', 'err');
@@ -213,6 +219,7 @@ export default function Cotizaciones() {
     } catch (e) {
       ventana?.close();
       notify(e.message, 'err');
+      recogida.revisar();
     } finally {
       setProcesando(false);
     }
@@ -235,6 +242,20 @@ export default function Cotizaciones() {
           <b>Caja cerrada.</b> Abre la caja en el módulo Caja para poder cobrar.
         </div>
       )}
+
+      {apertura && (
+        <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid var(--green)' }}>
+          <div className="row between" style={{ flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            <div><Icon name="cash" size={16} /> <b>Caja abierta</b> — base <b>{money(apertura.valorInicial)}</b></div>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <IndicadorRecogida estado={recogida.estado} onClick={abrirRecogida} />
+              <button className="btn btn-sm" onClick={abrirRecogida}>Recogida parcial</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <RecogidaCaja aperturaId={aperturaId} control={recogida} />
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Historial</h3>

@@ -8,6 +8,7 @@ import { calcularInsumosRequeridos, descontarInsumos, validarStockSuficiente } f
 import { validarPagosActivos } from '../pagosFactura.js';
 import { itemsDeInventarioNormal, validarSinSolicitudesMesa00Pendientes } from '../stockMesa00.js';
 import { crearLineaPropina } from '../facturaLineas.js';
+import { recogidaObligatoriaPendiente, MENSAJE_RECOGIDA_OBLIGATORIA } from './aperturas.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -397,6 +398,7 @@ router.post('/dividir', wrap(async (req, res) => {
   if (!pedido.items.length) return res.status(400).json({ error: 'El pedido no tiene productos' });
   const apertura = await aperturaActiva(req.headers['x-usuario-id']);
   if (!apertura) return res.status(409).json({ error: 'Debes abrir la caja antes de facturar' });
+  if (await recogidaObligatoriaPendiente(apertura)) return res.status(409).json({ error: MENSAJE_RECOGIDA_OBLIGATORIA, recogidaObligatoria: true });
   const requeridos = calcularInsumosRequeridos(
     itemsDeInventarioNormal(pedido.items),
     pedido.items.map((item) => item.producto),
@@ -575,6 +577,7 @@ router.post('/', wrap(async (req, res) => {
   // Debe existir una caja abierta (con base) para poder facturar y dar vueltos
   const apertura = await aperturaActiva(req.headers['x-usuario-id']);
   if (!apertura) return res.status(409).json({ error: 'Debes abrir la caja antes de facturar. Registra la base con la que inicias.' });
+  if (await recogidaObligatoriaPendiente(apertura)) return res.status(409).json({ error: MENSAJE_RECOGIDA_OBLIGATORIA, recogidaObligatoria: true });
 
   const precioProductos = redondear(pedido.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0));
   const impuesto = redondear(pedido.items.reduce((s, it) => s + impuestoSobrePrecio(it.precioUnit * it.cantidad, it.producto.iva || 0, true), 0));
@@ -689,6 +692,7 @@ router.post('/directa', wrap(async (req, res) => {
   // Debe existir una caja abierta (con base) para poder facturar y dar vueltos
   const apertura = await aperturaActiva(req.headers['x-usuario-id']);
   if (!apertura) return res.status(409).json({ error: 'Debes abrir la caja antes de facturar. Registra la base con la que inicias.' });
+  if (await recogidaObligatoriaPendiente(apertura)) return res.status(409).json({ error: MENSAJE_RECOGIDA_OBLIGATORIA, recogidaObligatoria: true });
 
   const ids = items.map((i) => String(i.productoId));
   const productos = await prisma.producto.findMany({

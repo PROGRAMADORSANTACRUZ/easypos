@@ -4,6 +4,7 @@ import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
 import { useToast, useAuth } from '../App.jsx';
 import CierreCajaModal from '../components/CierreCajaModal.jsx';
+import { RecogidaCaja, IndicadorRecogida, useRecogidaCaja } from '../components/RecogidaParcialModal.jsx';
 import { PageHeader, Modal, Button, EmptyState, LoadingState } from '../components/ui/index.jsx';
 
 const puede = (user, codigo) => (user?.permisos || []).includes(codigo);
@@ -106,6 +107,7 @@ export default function Caja() {
         return nuevos;
       });
       await cargar();
+      recogida.revisar();
       if (aperturaPagosAbierta === turnoAbierto.id) {
         const cuadre = await api.get(`/aperturas/${turnoAbierto.id}/cuadre`);
         setCuadresPagos((actuales) => ({ ...actuales, [turnoAbierto.id]: cuadre }));
@@ -118,6 +120,26 @@ export default function Caja() {
   };
   const fmt = (f) => (f ? new Date(f).toLocaleString() : '—');
   const turnoAbierto = aperturas.find((a) => a.estado === 'ABIERTA') || null;
+
+  const recogida = useRecogidaCaja(turnoAbierto?.id);
+  const abrirRecogida = () => recogida.abrirManual().catch((err) => notify(err.message, 'err'));
+  const recogidaRegistrada = async () => {
+    const id = turnoAbierto.id;
+    setCuadresPagos((actuales) => {
+      const nuevos = { ...actuales };
+      delete nuevos[id];
+      return nuevos;
+    });
+    await cargar();
+    if (aperturaPagosAbierta === id) {
+      try {
+        const cuadre = await api.get(`/aperturas/${id}/cuadre`);
+        setCuadresPagos((actuales) => ({ ...actuales, [id]: cuadre }));
+      } catch (err) {
+        notify(err.message, 'err');
+      }
+    }
+  };
 
   const alternarDesglose = async (ap) => {
     if (aperturaPagosAbierta === ap.id) {
@@ -166,9 +188,11 @@ export default function Caja() {
               <Icon name="cash" size={16} /> <b>Caja abierta</b> — base <b>{money(turnoAbierto.valorInicial)}</b>
               <span className="mini" style={{ marginLeft: 8 }}>desde {fmt(turnoAbierto.fechaApertura)}</span>
             </div>
-            <div className="row" style={{ gap: 8 }}>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <IndicadorRecogida estado={recogida.estado} onClick={abrirRecogida} />
               <Button variant="success" size="sm" icon="add" onClick={() => { setCuentaContableId(''); setTipoMovimiento('INGRESO'); }}>Ingreso</Button>
               <Button variant="danger" size="sm" icon="minus" onClick={() => { setCuentaContableId(''); setTipoMovimiento('EGRESO'); }}>Egreso</Button>
+              <Button variant="secondary" size="sm" icon="cash" onClick={abrirRecogida}>Recogida parcial</Button>
               {(puede(user, 'facturas.ver') || puede(user, 'factura_venta.ver')) && <Button variant="primary" size="sm" onClick={() => navigate(puede(user, 'facturas.ver') ? '/facturas' : '/cotizaciones')}>Ir a facturar <Icon name="forward" size={14} /></Button>}
               {puedeCerrar && <Button variant="secondary" size="sm" icon="lock" onClick={() => cerrar(turnoAbierto)}>Cerrar caja</Button>}
             </div>
@@ -243,6 +267,7 @@ export default function Caja() {
                           ))}
                           <span><b>Ingresos:</b> {money(cuadresPagos[ap.id]?.totalIngresos || 0)}</span>
                           <span><b>Egresos:</b> {money(cuadresPagos[ap.id]?.totalEgresos || 0)}</span>
+                          <span><b>Recogidas:</b> {money(cuadresPagos[ap.id]?.totalRecogidas || 0)}</span>
                         </div>
                       )}
                       {ap.cuadreMedios && (
@@ -339,6 +364,8 @@ export default function Caja() {
           </form>
         </Modal>
       )}
+
+      <RecogidaCaja aperturaId={turnoAbierto?.id} control={recogida} onRegistrada={recogidaRegistrada} />
 
       {cerrando && (
         <CierreCajaModal
