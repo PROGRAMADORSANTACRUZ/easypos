@@ -5,8 +5,7 @@ import { api, money } from '../api.js';
 import { diaColombia } from '../fechaComercial.js';
 import { useToast } from '../App.jsx';
 import { LoadingState } from '../components/ui/index.jsx';
-
-const fechaHoraColombia = (fecha) => new Date(fecha).toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+import { fechaHoraColombia, notaMovimientos, columnasMovimientos, filaMovimiento } from '../reporteMovimientosCaja.js';
 
 const ACCIONES_HISTORIAL = {
   CREAR: 'Pedido creado', AGREGAR_PRODUCTO: 'Producto agregado', CAMBIAR_CANTIDAD: 'Cantidad modificada',
@@ -56,6 +55,9 @@ const REPORTES = [
   { id: 'mesa', nombre: 'Ventas por mesa' },
   { id: 'formapago', nombre: 'Ventas por forma de pago' },
   { id: 'facturas', nombre: 'Detalle de facturas' },
+  { id: 'resumen-facturas-notas', nombre: 'Resumen de facturas y notas POS acumuladas' },
+  { id: 'revision-diaria-pdv', nombre: 'Revisión diaria PDV' },
+  { id: 'movimientos-caja', nombre: 'Movimientos de caja' },
   { id: 'gastos', nombre: 'Gastos de insumos (por producto)' },
   { id: 'insumos', nombre: 'Consumo de insumos' },
   { id: 'compras-insumo', nombre: 'Compras por insumo' },
@@ -107,6 +109,48 @@ function TablaProductos({ bloques }) {
   ));
 }
 
+const importeResumen = (valor) => valor == null ? 'No disponible' : money(valor);
+const notasResumen = [
+  'El valor bruto de las facturas corresponde al subtotal registrado; los descuentos no están registrados.',
+  'Las notas se registran por su fecha y se atribuyen al cajero y caja de la factura asociada. Su total no desglosa impuesto ni propina.',
+  'Se incluyen las notas registradas en todos los estados, incluso pendientes o rechazadas. Actualmente solo pueden vincularse a facturas electrónicas.',
+];
+const notasRevision = [
+  'El valor neto es el pago aplicado a la factura, incluida la propina. No se guarda el efectivo entregado ni el cambio.',
+  'Los medios históricos agrupados o sin desglose se muestran tal como están disponibles, sin repartir importes.',
+  'Las facturas a crédito no incluyen la deuda no cobrada; solo se muestra la propina registrada.',
+];
+
+function agruparResumen(filas) {
+  const grupos = new Map();
+  for (const fila of filas) {
+    const grupo = grupos.get(fila.cajeroId) || {
+      cajero: fila.cajero, filas: [], bruto: 0, descuentos: null, impuestos: 0, neto: 0, propina: 0,
+    };
+    grupo.filas.push(fila);
+    for (const campo of ['bruto', 'impuestos', 'neto', 'propina']) {
+      grupo[campo] = grupo[campo] == null || fila[campo] == null
+        ? null : Math.round((grupo[campo] + fila[campo]) * 100) / 100;
+    }
+    grupos.set(fila.cajeroId, grupo);
+  }
+  return [...grupos.entries()].map(([id, grupo]) => ({ id, ...grupo }));
+}
+
+function agruparRevision(filas) {
+  const cajeros = new Map();
+  for (const fila of filas) {
+    const cajero = cajeros.get(fila.cajeroId) || { id: fila.cajeroId, nombre: fila.cajero, neto: 0, medios: new Map() };
+    const medio = cajero.medios.get(fila.medioId) || { id: fila.medioId, nombre: fila.medio, neto: 0, filas: [] };
+    medio.filas.push(fila);
+    medio.neto = Math.round((medio.neto + fila.neto) * 100) / 100;
+    cajero.neto = Math.round((cajero.neto + fila.neto) * 100) / 100;
+    cajero.medios.set(fila.medioId, medio);
+    cajeros.set(fila.cajeroId, cajero);
+  }
+  return [...cajeros.values()].map((cajero) => ({ ...cajero, medios: [...cajero.medios.values()] }));
+}
+
 export default function Reportes() {
   const [rep, setRep] = useState(null);
   const [pedidosMesa, setPedidosMesa] = useState([]);
@@ -122,7 +166,92 @@ export default function Reportes() {
   const [errorHistorial, setErrorHistorial] = useState('');
   const [filtrosHistorial, setFiltrosHistorial] = useState({ desde: hoy, hasta: hoy, motivo: '' });
   const consultaHistorial = useRef(0);
+  const [resumen, setResumen] = useState([]);
+  const [cargandoResumen, setCargandoResumen] = useState(false);
+  const [errorResumen, setErrorResumen] = useState('');
+  const [filtrosResumen, setFiltrosResumen] = useState({ desde: hoy, hasta: hoy });
+  const consultaResumen = useRef(0);
+  const [revision, setRevision] = useState([]);
+  const [cargandoRevision, setCargandoRevision] = useState(false);
+  const [errorRevision, setErrorRevision] = useState('');
+  const [filtrosRevision, setFiltrosRevision] = useState({ desde: hoy, hasta: hoy });
+  const [centroRevision, setCentroRevision] = useState('');
+  const [cajaRevision, setCajaRevision] = useState('');
+  const consultaRevision = useRef(0);
+  const [movimientosCaja, setMovimientosCaja] = useState([]);
+  const [cargandoMovimientos, setCargandoMovimientos] = useState(false);
+  const [errorMovimientos, setErrorMovimientos] = useState('');
+  const [filtrosMovimientos, setFiltrosMovimientos] = useState({ desde: hoy, hasta: hoy });
+  const [cajeroMovimiento, setCajeroMovimiento] = useState('');
+  const [tipoMovimiento, setTipoMovimiento] = useState('');
+  const [cajaMovimiento, setCajaMovimiento] = useState('');
+  const consultaMovimientos = useRef(0);
   const notify = useToast();
+
+  const cargarMovimientos = async (inicio = desde, fin = hasta) => {
+    const consulta = ++consultaMovimientos.current;
+    const params = new URLSearchParams();
+    if (inicio) params.set('desde', inicio);
+    if (fin) params.set('hasta', fin);
+    setCargandoMovimientos(true);
+    setErrorMovimientos('');
+    setMovimientosCaja([]);
+    setCajeroMovimiento('');
+    setTipoMovimiento('');
+    setCajaMovimiento('');
+    try {
+      const datos = await api.get(`/reportes/movimientos-caja?${params}`);
+      if (consulta !== consultaMovimientos.current) return;
+      setMovimientosCaja(datos);
+      setFiltrosMovimientos({ desde: inicio, hasta: fin });
+    } catch (e) {
+      if (consulta === consultaMovimientos.current) setErrorMovimientos(e.message);
+    } finally {
+      if (consulta === consultaMovimientos.current) setCargandoMovimientos(false);
+    }
+  };
+
+  const cargarRevision = async (inicio = desde, fin = hasta) => {
+    const consulta = ++consultaRevision.current;
+    const params = new URLSearchParams();
+    if (inicio) params.set('desde', inicio);
+    if (fin) params.set('hasta', fin);
+    setCargandoRevision(true);
+    setErrorRevision('');
+    setRevision([]);
+    setCentroRevision('');
+    setCajaRevision('');
+    try {
+      const datos = await api.get(`/reportes/revision-diaria-pdv?${params}`);
+      if (consulta !== consultaRevision.current) return;
+      setRevision(datos);
+      setFiltrosRevision({ desde: inicio, hasta: fin });
+    } catch (e) {
+      if (consulta === consultaRevision.current) setErrorRevision(e.message);
+    } finally {
+      if (consulta === consultaRevision.current) setCargandoRevision(false);
+    }
+  };
+
+  const cargarResumen = async (inicio = desde, fin = hasta) => {
+    const consulta = ++consultaResumen.current;
+    const params = new URLSearchParams();
+    if (inicio) params.set('desde', inicio);
+    if (fin) params.set('hasta', fin);
+    setCargandoResumen(true);
+    setErrorResumen('');
+    setResumen([]);
+    try {
+      const datos = await api.get(`/reportes/resumen-facturas-notas?${params}`);
+      if (consulta !== consultaResumen.current) return;
+      setResumen(datos);
+      setFiltrosResumen({ desde: inicio, hasta: fin });
+    } catch (e) {
+      if (consulta === consultaResumen.current) setErrorResumen(e.message);
+    } finally {
+      if (consulta === consultaResumen.current) setCargandoResumen(false);
+    }
+  };
 
   const cargarHistorial = async (inicio = desde, fin = hasta, razon = motivo) => {
     const consulta = ++consultaHistorial.current;
@@ -147,6 +276,9 @@ export default function Reportes() {
 
   const cargar = () => {
     if (sel === 'historial-pedidos') return cargarHistorial();
+    if (sel === 'resumen-facturas-notas') return cargarResumen();
+    if (sel === 'revision-diaria-pdv') return cargarRevision();
+    if (sel === 'movimientos-caja') return cargarMovimientos();
     const params = new URLSearchParams();
     if (desde) params.set('desde', desde);
     if (hasta) params.set('hasta', hasta);
@@ -161,22 +293,36 @@ export default function Reportes() {
     setHasta(hoy);
     setMotivo('');
     if (sel === 'historial-pedidos') return cargarHistorial(hoy, hoy, '');
+    if (sel === 'resumen-facturas-notas') return cargarResumen(hoy, hoy);
+    if (sel === 'revision-diaria-pdv') return cargarRevision(hoy, hoy);
+    if (sel === 'movimientos-caja') return cargarMovimientos(hoy, hoy);
     api.get(`/reportes?desde=${hoy}&hasta=${hoy}`).then(setRep).catch((e) => notify(e.message, 'err'));
     api.get(`/reportes/pedidos-mesa?desde=${hoy}&hasta=${hoy}`).then(setPedidosMesa).catch(() => setPedidosMesa([]));
     api.get(`/reportes/cocina?desde=${hoy}&hasta=${hoy}`).then(setCocina).catch(() => setCocina([]));
   };
 
   useEffect(() => {
-    if (sel === 'historial-pedidos' || !rep) cargar();
+    if (['historial-pedidos', 'resumen-facturas-notas', 'revision-diaria-pdv', 'movimientos-caja'].includes(sel) || !rep) cargar();
   }, [sel]);
 
   const maxDia = useMemo(() => Math.max(1, ...(rep?.ventasPorDia || []).map((v) => v.total)), [rep]);
   const maxSemana = useMemo(() => Math.max(1, ...(rep?.ventasPorSemana || []).map((v) => v.total)), [rep]);
   const maxMes = useMemo(() => Math.max(1, ...(rep?.ventasPorMes || []).map((v) => v.total)), [rep]);
 
-  if (!rep && sel !== 'historial-pedidos') return <LoadingState label="Cargando reportes…" />;
+  if (!rep && !['historial-pedidos', 'resumen-facturas-notas', 'revision-diaria-pdv', 'movimientos-caja'].includes(sel)) return <LoadingState label="Cargando reportes…" />;
   const t = rep?.totales;
   const actual = REPORTES.find((r) => r.id === sel);
+  const centrosRevision = [...new Map(revision.map((fila) => [JSON.stringify([fila.compania, fila.centro]), `${fila.compania} / ${fila.centro}`])).entries()];
+  const cajasRevision = [...new Map(revision.map((fila) => [JSON.stringify(fila.cajaId), fila.caja])).entries()];
+  const revisionFiltrada = revision.filter((fila) =>
+    (!centroRevision || JSON.stringify([fila.compania, fila.centro]) === centroRevision)
+    && (!cajaRevision || JSON.stringify(fila.cajaId) === cajaRevision));
+  const cajerosMovimientos = [...new Map(movimientosCaja.map((fila) => [JSON.stringify(fila.cajeroId), fila.cajero])).entries()];
+  const cajasMovimientos = [...new Map(movimientosCaja.map((fila) => [JSON.stringify(fila.cajaId), fila.caja])).entries()];
+  const movimientosFiltrados = movimientosCaja.filter((fila) =>
+    (!cajeroMovimiento || JSON.stringify(fila.cajeroId) === cajeroMovimiento)
+    && (!cajaMovimiento || JSON.stringify(fila.cajaId) === cajaMovimiento)
+    && (!tipoMovimiento || fila.tipo === tipoMovimiento));
 
   // Construye { columnas, filas } del reporte actual para exportar
   const datosReporte = () => {
@@ -245,6 +391,37 @@ export default function Reportes() {
             d.formaPago,
             money(d.total),
           ]),
+        };
+      case 'resumen-facturas-notas':
+        return {
+          columnas: ['Cajero', 'Fecha', 'T.P.V. / caja', 'Tipo documento', 'Valor bruto', 'Descuentos', 'Impuestos', 'Valor neto', 'Propina'],
+          filas: resumen.length ? [...agruparResumen(resumen).flatMap((grupo) => [
+            [grupo.cajero, 'Total cajero', '', '', ...['bruto', 'descuentos', 'impuestos', 'neto', 'propina'].map((campo) => importeResumen(grupo[campo]))],
+            ...grupo.filas.map((fila) => [
+              grupo.cajero, fila.fecha, fila.caja, fila.tipo,
+              ...['bruto', 'descuentos', 'impuestos', 'neto', 'propina'].map((campo) => importeResumen(fila[campo])),
+            ]),
+          ]), ...notasResumen.map((nota) => [nota, '', '', '', '', '', '', '', ''])] : [],
+        };
+      case 'revision-diaria-pdv':
+        return {
+          columnas: ['Cajero', 'Medio de pago', 'Fecha', 'Moneda', 'Valor ingreso', 'Valor egreso', 'Valor neto', 'Centro', 'T.P.V. / caja', 'Nro documento'],
+          filas: revisionFiltrada.length ? [...agruparRevision(revisionFiltrada).flatMap((cajero) => [
+            [cajero.nombre, 'Total cajero', '', '', 'No disponible', 'No disponible', money(cajero.neto), '', '', ''],
+            ...cajero.medios.flatMap((medio) => [
+              [cajero.nombre, `${medio.nombre} (${medio.id})`, 'Total medio', '', 'No disponible', 'No disponible', money(medio.neto), '', '', ''],
+              ...medio.filas.map((fila) => [
+                cajero.nombre, `${fila.medio} (${fila.medioId})`, fila.fecha, fila.moneda,
+                importeResumen(fila.ingreso), importeResumen(fila.egreso), money(fila.neto),
+                `${fila.compania} / ${fila.centro}`, fila.caja, fila.documento,
+              ]),
+            ]),
+          ]), ...notasRevision.map((nota) => [nota, '', '', '', '', '', '', '', '', ''])] : [],
+        };
+      case 'movimientos-caja':
+        return {
+          columnas: columnasMovimientos,
+          filas: movimientosFiltrados.map(filaMovimiento),
         };
       case 'gastos':
         return {
@@ -321,10 +498,15 @@ export default function Reportes() {
     }
   };
 
-  const rangoDesde = sel === 'historial-pedidos' ? filtrosHistorial.desde : desde;
-  const rangoHasta = sel === 'historial-pedidos' ? filtrosHistorial.hasta : hasta;
+  const rangoDesde = sel === 'historial-pedidos' ? filtrosHistorial.desde : sel === 'resumen-facturas-notas' ? filtrosResumen.desde : sel === 'revision-diaria-pdv' ? filtrosRevision.desde : sel === 'movimientos-caja' ? filtrosMovimientos.desde : desde;
+  const rangoHasta = sel === 'historial-pedidos' ? filtrosHistorial.hasta : sel === 'resumen-facturas-notas' ? filtrosResumen.hasta : sel === 'revision-diaria-pdv' ? filtrosRevision.hasta : sel === 'movimientos-caja' ? filtrosMovimientos.hasta : hasta;
   const rangoTexto = (rangoDesde || rangoHasta ? `${rangoDesde || '...'} a ${rangoHasta || '...'}` : 'Todo el histórico')
-    + (sel === 'historial-pedidos' && filtrosHistorial.motivo ? ` · Motivo: ${filtrosHistorial.motivo}` : '');
+    + (sel === 'historial-pedidos' && filtrosHistorial.motivo ? ` · Motivo: ${filtrosHistorial.motivo}` : '')
+    + (sel === 'revision-diaria-pdv' && centroRevision ? ` · Centro: ${centrosRevision.find(([id]) => id === centroRevision)?.[1]}` : '')
+    + (sel === 'revision-diaria-pdv' && cajaRevision ? ` · Caja: ${cajasRevision.find(([id]) => id === cajaRevision)?.[1]}` : '')
+    + (sel === 'movimientos-caja' && cajeroMovimiento ? ` · Cajero: ${cajerosMovimientos.find(([id]) => id === cajeroMovimiento)?.[1]}` : '')
+    + (sel === 'movimientos-caja' && cajaMovimiento ? ` · Caja: ${cajasMovimientos.find(([id]) => id === cajaMovimiento)?.[1]}` : '')
+    + (sel === 'movimientos-caja' && tipoMovimiento ? ` · Tipo: ${tipoMovimiento}` : '');
 
   const exportarExcel = async () => {
     const { columnas, filas } = datosReporte();
@@ -399,6 +581,15 @@ export default function Reportes() {
       });
     });
 
+    if (sel === 'movimientos-caja') {
+      const numFila = filaEncabezado + filas.length + 2;
+      ws.mergeCells(`A${numFila}:${lastCol}${numFila}`);
+      const celda = ws.getCell(`A${numFila}`);
+      celda.value = notaMovimientos;
+      celda.alignment = { wrapText: true, vertical: 'middle' };
+      ws.getRow(numFila).height = 30;
+    }
+
     // Ancho automático por columna
     columnas.forEach((col, i) => {
       let max = String(col).length;
@@ -427,16 +618,16 @@ export default function Reportes() {
       .join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${actual?.nombre || 'Reporte'}</title>
     <style>
-      @page { size: A4; margin: 16mm; }
+      @page { size: ${sel === 'movimientos-caja' ? 'A3 landscape' : 'A4'}; margin: 16mm; }
       body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; }
       .head { border-bottom: 3px solid #E13626; padding-bottom: 8px; margin-bottom: 16px; }
       .marca { font-size: 22px; font-weight: 900; color: #E13626; letter-spacing: 1px; }
       .marca-logo { height: 30px; display: block; margin-bottom: 4px; }
       h1 { font-size: 18px; margin: 4px 0 2px; }
       .sub { color: #555; font-size: 12px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-      th { background: #E13626; color: #fff; text-align: left; padding: 8px 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
-      td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: ${sel === 'movimientos-caja' ? '7px' : '13px'}; overflow-wrap: anywhere; }
+      th { background: #E13626; color: #fff; text-align: left; padding: ${sel === 'movimientos-caja' ? '3px' : '8px 10px'}; font-size: ${sel === 'movimientos-caja' ? '7px' : '12px'}; text-transform: uppercase; letter-spacing: .4px; }
+      td { padding: ${sel === 'movimientos-caja' ? '3px' : '7px 10px'}; border-bottom: 1px solid #e5e7eb; }
       tr:nth-child(even) td { background: #f8fafc; }
       .r { text-align: right; }
       .pie { margin-top: 18px; color: #888; font-size: 11px; text-align: center; }
@@ -447,6 +638,7 @@ export default function Reportes() {
         <div class="sub">Rango: ${rangoTexto.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]))} · Generado: ${fechaHoraColombia(new Date())}</div>
       </div>
       <table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>
+      ${sel === 'movimientos-caja' ? `<p class="sub">${notaMovimientos}</p>` : ''}
       <div class="pie">Asados Santacruz · Reporte de ventas</div>
     </body></html>`;
     const win = window.open('', '_blank', 'width=900,height=700');
@@ -540,6 +732,86 @@ export default function Reportes() {
               ))}
             </tbody>
           </table>
+        );
+      case 'resumen-facturas-notas':
+        return cargandoResumen ? <LoadingState label="Cargando resumen…" /> : errorResumen ? <p role="alert">{errorResumen}</p> : (
+          <>
+            <div style={{ overflowX: 'auto' }}>
+              {resumen.length === 0 ? <p className="empty">Sin facturas ni notas en el periodo.</p> : (
+                <table>
+                  <thead><tr><th>Cajero / fecha</th><th>T.P.V. / caja</th><th>Tipo documento</th><th>Valor bruto</th><th>Descuentos</th><th>Impuestos</th><th>Valor neto</th><th>Propina</th></tr></thead>
+                  {agruparResumen(resumen).map((grupo) => (
+                    <tbody key={grupo.id}>
+                      <tr style={{ fontWeight: 700 }}>
+                        <td>{grupo.cajero}</td><td /><td>Total cajero</td>
+                        {['bruto', 'descuentos', 'impuestos', 'neto', 'propina'].map((campo) => <td key={campo} style={{ textAlign: 'right' }}>{importeResumen(grupo[campo])}</td>)}
+                      </tr>
+                      {grupo.filas.map((fila) => (
+                        <tr key={JSON.stringify([fila.fecha, fila.cajaId, fila.tipo])}>
+                          <td>{fila.fecha}</td><td>{fila.caja}</td><td>{fila.tipo}</td>
+                          {['bruto', 'descuentos', 'impuestos', 'neto', 'propina'].map((campo) => <td key={campo} style={{ textAlign: 'right' }}>{importeResumen(fila[campo])}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  ))}
+                </table>
+              )}
+            </div>
+            {notasResumen.map((nota) => <p key={nota} className="mini">{nota}</p>)}
+          </>
+        );
+      case 'revision-diaria-pdv':
+        return cargandoRevision ? <LoadingState label="Cargando revisión diaria…" /> : errorRevision ? <p role="alert">{errorRevision}</p> : (
+          <>
+            <div style={{ overflowX: 'auto' }}>
+              {revisionFiltrada.length === 0 ? <p className="empty">Sin pagos para los filtros seleccionados.</p> : (
+                <table>
+                  <thead><tr><th>Cajero / medio de pago</th><th>Fecha</th><th>Moneda</th><th>Valor ingreso</th><th>Valor egreso</th><th>Valor neto</th><th>Centro</th><th>T.P.V. / caja</th><th>Nro documento</th></tr></thead>
+                  {agruparRevision(revisionFiltrada).map((cajero) => (
+                    <tbody key={cajero.id}>
+                      <tr style={{ fontWeight: 700 }}>
+                        <td>{cajero.nombre}</td><td /><td /><td>No disponible</td><td>No disponible</td><td style={{ textAlign: 'right' }}>{money(cajero.neto)}</td><td /><td /><td />
+                      </tr>
+                      {cajero.medios.flatMap((medio) => [
+                        <tr key={`medio-${medio.id}`} style={{ fontWeight: 700 }}>
+                          <td>{medio.nombre} ({medio.id})</td><td /><td /><td>No disponible</td><td>No disponible</td><td style={{ textAlign: 'right' }}>{money(medio.neto)}</td><td /><td /><td />
+                        </tr>,
+                        ...medio.filas.map((fila) => (
+                          <tr key={fila.id}>
+                            <td>{fila.medio}</td><td>{fila.fecha}</td><td>{fila.moneda}</td>
+                            <td>{importeResumen(fila.ingreso)}</td><td>{importeResumen(fila.egreso)}</td>
+                            <td style={{ textAlign: 'right' }}>{money(fila.neto)}</td>
+                            <td>{fila.compania} / {fila.centro}</td><td>{fila.caja}</td><td>{fila.documento}</td>
+                          </tr>
+                        )),
+                      ])}
+                    </tbody>
+                  ))}
+                </table>
+              )}
+            </div>
+            {notasRevision.map((nota) => <p key={nota} className="mini">{nota}</p>)}
+          </>
+        );
+      case 'movimientos-caja':
+        return cargandoMovimientos ? <LoadingState label="Cargando movimientos…" /> : errorMovimientos ? <p role="alert">{errorMovimientos}</p> : (
+          <>
+            <div style={{ overflowX: 'auto' }}>
+              {movimientosFiltrados.length === 0 ? <p className="empty">Sin movimientos para los filtros seleccionados.</p> : (
+                <table>
+                  <thead><tr>{columnasMovimientos.map((columna) => <th key={columna}>{columna}</th>)}</tr></thead>
+                  <tbody>
+                    {movimientosFiltrados.map((movimiento) => (
+                      <tr key={movimiento.id}>{filaMovimiento(movimiento).map((valor, indice) => (
+                        <td key={columnasMovimientos[indice]}>{valor}</td>
+                      ))}</tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <p className="mini">{notaMovimientos}</p>
+          </>
         );
       case 'gastos': {
         const g = rep.gastos || {};
@@ -703,6 +975,48 @@ export default function Reportes() {
                 <label htmlFor="reporte-hasta">Hasta</label>
                 <input id="reporte-hasta" type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} />
               </div>
+              {sel === 'revision-diaria-pdv' && (
+                <>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor="revision-centro">Centro de operación</label>
+                    <select id="revision-centro" value={centroRevision} onChange={(e) => setCentroRevision(e.target.value)}>
+                      <option value="">Todos</option>
+                      {centrosRevision.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor="revision-caja">T.P.V. / caja</label>
+                    <select id="revision-caja" value={cajaRevision} onChange={(e) => setCajaRevision(e.target.value)}>
+                      <option value="">Todas</option>
+                      {cajasRevision.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
+              {sel === 'movimientos-caja' && (
+                <>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor="movimiento-cajero">Cajero</label>
+                    <select id="movimiento-cajero" value={cajeroMovimiento} onChange={(e) => setCajeroMovimiento(e.target.value)}>
+                      <option value="">Todos</option>
+                      {cajerosMovimientos.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor="movimiento-caja">Caja</label>
+                    <select id="movimiento-caja" value={cajaMovimiento} onChange={(e) => setCajaMovimiento(e.target.value)}>
+                      <option value="">Todas</option>
+                      {cajasMovimientos.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor="movimiento-tipo">Tipo</label>
+                    <select id="movimiento-tipo" value={tipoMovimiento} onChange={(e) => setTipoMovimiento(e.target.value)}>
+                      <option value="">Todos</option><option value="INGRESO">Ingreso</option><option value="EGRESO">Egreso</option>
+                    </select>
+                  </div>
+                </>
+              )}
               {sel === 'historial-pedidos' && (
                 <div className="field" style={{ margin: 0, flex: '1 1 180px', minWidth: 0 }}>
                   <label htmlFor="historial-motivo">Motivo</label>

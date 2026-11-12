@@ -33,15 +33,20 @@ router.use((req, res, next) => {
   return res.status(403).json({ error: 'No tienes permiso para esta acción de caja' });
 });
 
-// Desglosa una factura en aportes por forma de pago -> [{ metodo, monto }].
-// - Crédito: no entra dinero al turno, se marca aparte como CRÉDITO
-// - Pago mixto "EFECTIVO $x + TARJETA $y": una entrada por cada parte
-// - Pago simple: el total al método indicado
-// La propina se recibe de contado: se suma al efectivo (o al método único si es
-// tarjeta/transferencia sin efectivo).
-// Efectivo que aporta una factura al cajon (para el cuadre).
+function pagosParaCuadre(factura) {
+  if (!factura.credito && factura.pagos?.length) {
+    const total = factura.pagos.reduce((suma, pago) => suma + pago.monto, 0);
+    if (factura.pagos.some((pago) => !pago.formaPago?.trim() || !Number.isFinite(pago.monto) || pago.monto <= 0)
+      || Math.round(total * 100) !== Math.round(((factura.total || 0) + (factura.propina || 0)) * 100)) {
+      throw Object.assign(new Error(`Los pagos registrados de la factura ${factura.id} no coinciden con su total. Revisa la factura antes de cerrar caja.`), { status: 409 });
+    }
+    return factura.pagos.map((pago) => ({ metodo: pago.formaPago, monto: pago.monto }));
+  }
+  return desglosarFactura(factura);
+}
+
 export function efectivoDeFactura(f, formas = []) {
-  return desglosarFactura(f)
+  return pagosParaCuadre(f)
     .filter((p) => esMedioEfectivo(p.metodo, formas))
     .reduce((s, p) => s + p.monto, 0);
 }
@@ -49,7 +54,10 @@ export function efectivoDeFactura(f, formas = []) {
 // Calcula el cuadre de una apertura a partir de sus facturas.
 async function calcularCuadre(apertura) {
   const where = { aperturaId: apertura.id };
-  const select = { total: true, propina: true, metodoPago: true, credito: true };
+  const select = {
+    id: true, total: true, propina: true, metodoPago: true, credito: true,
+    pagos: { where: { formaPago: { not: null } }, select: { formaPago: true, monto: true } },
+  };
   const [facturas, ventas, formas] = await Promise.all([
     prisma.factura.findMany({ where, select }),
     prisma.facturaVenta.findMany({ where, select }),
@@ -74,7 +82,7 @@ async function calcularCuadre(apertura) {
   // Desglose por forma de pago para el cuadre.
   const acum = {};
   for (const f of todas) {
-    for (const p of desglosarFactura(f)) {
+    for (const p of pagosParaCuadre(f)) {
       acum[p.metodo] = (acum[p.metodo] || 0) + p.monto;
     }
   }

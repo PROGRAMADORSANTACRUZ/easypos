@@ -13,6 +13,7 @@ async function entorno(t) {
   const formas = [];
   const facturas = [];
   const ventas = [];
+  const consultasFacturas = [];
   const db = {
     aperturaCaja: {
       create: async ({ data }) => {
@@ -34,8 +35,14 @@ async function entorno(t) {
     },
     cuentaContable: { findUnique: async () => ({ id: 'cuenta-1', activo: true, tipo: 'GASTO' }) },
     formaPago: { findMany: async () => formas },
-    factura: { findMany: async () => facturas },
-    facturaVenta: { findMany: async () => ventas },
+    factura: { findMany: async (consulta) => {
+      consultasFacturas.push(consulta);
+      return facturas.filter((factura) => (factura.aperturaId || 'turno-1') === consulta.where.aperturaId);
+    } },
+    facturaVenta: { findMany: async (consulta) => {
+      consultasFacturas.push(consulta);
+      return ventas.filter((factura) => (factura.aperturaId || 'turno-1') === consulta.where.aperturaId);
+    } },
     auditoria: { create: async () => ({ id: 1, createdAt: new Date() }) },
   };
   const app = express();
@@ -62,7 +69,7 @@ async function entorno(t) {
     });
     return { status: response.status, body: response.status === 204 ? null : await response.json() };
   };
-  return { solicitar, aperturas, movimientos, formas, facturas, ventas };
+  return { solicitar, aperturas, movimientos, formas, facturas, ventas, consultasFacturas };
 }
 
 test('aperturas y movimientos requieren permiso y usan al usuario autenticado', async (t) => {
@@ -115,6 +122,60 @@ test('cuadra medios activos y guarda conteos opcionales con base y movimientos s
   assert.equal(aperturas[0].cuadreMedios.base.esperado, 120);
   assert.equal(aperturas[0].cuadreMedios.medios.find((medio) => medio.id === 'QR').diferencia, -1);
   assert.equal(aperturas[0].cuadreMedios.medios.find((medio) => medio.id === 'PSE').diferencia, null);
+});
+
+test('desglosa los pagos registrados de ambas clases de factura solo para la apertura', async (t) => {
+  const { solicitar, formas, facturas, ventas, consultasFacturas } = await entorno(t);
+  formas.push(
+    { id: 'EFE', formaPago: 'Efectivo', formaPagoDian: '10-Efectivo', activo: true },
+    { id: 'DAT', formaPago: 'Datafono 1', activo: true },
+    { id: 'DTF', formaPago: 'Datafono 2', activo: false },
+    { id: 'QR', formaPago: 'QR', activo: true },
+  );
+  await solicitar('POST', '/', { valorInicial: 100 }, 'caja.abrir');
+  facturas.push({
+    id: 'factura-1', metodoPago: 'DAT/DTF', cabecera: { total: 100, propina: 10, credito: false },
+    pagos: [{ formaPago: 'DAT', monto: 40 }, { formaPago: 'DTF', monto: 70 }],
+  }, {
+    id: 'otra-apertura', aperturaId: 'turno-2', metodoPago: 'EFE',
+    cabecera: { total: 500, propina: 0, credito: false },
+  });
+  ventas.push({
+    id: 'venta-1', metodoPago: 'EFE + QR', cabecera: { total: 50, propina: 5, credito: false },
+    pagos: [{ formaPago: 'EFE', monto: 20 }, { formaPago: 'QR', monto: 35 }],
+  }, {
+    id: 'historica', metodoPago: 'QR', cabecera: { total: 10, propina: 0, credito: false }, pagos: [],
+  });
+  const previo = await solicitar('GET', '/turno-1/cuadre', undefined, 'caja.ver');
+  assert.equal(previo.status, 200);
+  assert.equal(previo.body.numFacturas, 3);
+  for (const consulta of consultasFacturas) {
+    assert.deepEqual(consulta.select.pagos, {
+      where: { formaPago: { not: null } }, select: { formaPago: true, monto: true },
+    });
+  }
+  assert.equal(previo.body.totalVentas, 160);
+  assert.equal(previo.body.valorEsperado, 120);
+  assert.deepEqual(Object.fromEntries(previo.body.desglosePagos.map((pago) => [pago.metodo, pago.monto])), {
+    DTF: 70, QR: 45, DAT: 40, EFE: 20,
+  });
+  assert.deepEqual(Object.fromEntries(previo.body.medios.map((medio) => [medio.id, medio.esperado])), {
+    DAT: 40, DTF: 70, EFE: 20, QR: 45,
+  });
+  assert.deepEqual(previo.body.sinAsignar, []);
+});
+
+test('rechaza el cuadre si los pagos registrados no coinciden con la factura', async (t) => {
+  const { solicitar, facturas } = await entorno(t);
+  await solicitar('POST', '/', { valorInicial: 100 }, 'caja.abrir');
+  facturas.push({
+    id: 'factura-incompleta', metodoPago: 'EFE', cabecera: { total: 100, propina: 0, credito: false },
+    pagos: [{ formaPago: 'EFE', monto: 60 }],
+  });
+  const previo = await solicitar('GET', '/turno-1/cuadre', undefined, 'caja.ver');
+  assert.equal(previo.status, 409);
+  assert.match(previo.body.error, /factura-incompleta.*no coinciden/);
+  assert.equal((await solicitar('POST', '/turno-1/cerrar', {}, 'caja.cerrar')).status, 409);
 });
 
 test('no inventa reparto para pagos agrupados ni total de efectivo con conteo incompleto', async (t) => {

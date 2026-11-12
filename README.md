@@ -237,6 +237,37 @@ separado de las ventas en efectivo; el contado total de efectivo solo se calcula
 cuando esos conteos estan completos. Los medios inactivos usados durante el turno
 tambien aparecen. Si un pago historico no permite identificar su medio, se muestra
 sin asignar y no se calcula una diferencia para los medios afectados.
+El desglose incluye las facturas asociadas a la apertura, incluso si la caja es
+compartida o el turno abarca mas de un dia. Usa los importes de pagos registrados
+en cada factura y, para facturas anteriores sin esos registros, su metodo historico.
+Si los pagos registrados no coinciden con el total y la propina, se solicita revisar
+la factura antes de cerrar para evitar un cuadre incorrecto.
+
+El reporte **Resumen de facturas y notas POS acumuladas** agrupa facturas POS y
+electronicas y notas credito/debito por cajero, fecha, caja y tipo de documento.
+Filtra cada documento por su fecha en Colombia; las notas usan el cajero y la caja
+de su factura vinculada, o muestran que no estan disponibles. Incluye las notas de
+todos los estados. El bruto de las facturas es el subtotal registrado, el neto no
+incluye su propina y la propina aparece por separado. Los descuentos no se registran
+y aparecen como no disponibles. Las notas solo guardan un total: se suma para debito
+y se resta para credito, sin inventar su desglose de bruto, impuestos o propina.
+Actualmente las notas solo pueden vincularse a facturas electronicas.
+Por ello, un total por cajero que incluye notas muestra esos desgloses como no
+disponibles; el total de la nota podria incluir propina.
+
+El reporte **Revision diaria PDV** agrupa pagos de facturas POS y electronicas
+por cajero y medio, con detalle por documento y filtros de fecha, centro y caja.
+El neto es el importe aplicado, incluida la propina. El efectivo entregado por el
+cliente y el cambio no se guardan, por lo que ingreso y egreso se muestran como
+no disponibles. Los pagos historicos sin desglose se identifican sin repartirlos,
+y las facturas a credito no incluyen el saldo pendiente como pago recibido.
+
+El reporte **Movimientos de caja** muestra cada ingreso o egreso registrado, su
+fecha, cajero, caja, monto, motivo y referencia interna. Permite filtrar por
+fecha, cajero, caja y tipo y exportar a Excel o PDF. El centro de operacion,
+numero de documento, estado, tercero, medios de pago y clasificaciones como
+adiciones y recogidas no se registran en el movimiento y aparecen como no
+disponibles; no se infieren a partir del tipo de ingreso o egreso.
 
 Para usar este cuadre en una base existente, respalda primero y aplica
 `server/prisma/migrations/20261112120000_cuadre_medios_pago/migration.sql` a cada

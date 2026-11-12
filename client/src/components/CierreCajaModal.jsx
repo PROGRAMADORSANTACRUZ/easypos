@@ -69,17 +69,20 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
               <div className="row between"><span>Propinas</span><b>{money(cuadre.totalPropinas)}</b></div>
             )}
 
-            {cuadre.desglosePagos?.length > 0 && (
-              <div style={{ margin: '10px 0', padding: '8px 10px', background: 'var(--panel-2)', borderRadius: 8 }}>
-                <div className="mini" style={{ marginBottom: 4 }}>Formas de pago</div>
-                {cuadre.desglosePagos.map((p) => (
-                  <div key={p.metodo} className="row between" style={{ fontSize: 14 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name={/^efectivo/i.test(p.metodo) ? 'cash' : /^cr[eé]dito/i.test(p.metodo) ? 'receipt' : 'card'} size={15} />{p.metodo}</span>
-                    <b>{money(p.monto)}</b>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div style={{ margin: '10px 0', padding: '8px 10px', background: 'var(--panel-2)', borderRadius: 8 }}>
+              <div className="mini" style={{ marginBottom: 4 }}>Formas de pago utilizadas en el turno</div>
+              {cuadre.desglosePagos.length > 0 ? (
+                cuadre.desglosePagos.map((p) => {
+                  const medio = cuadre.medios.find((item) => item.id === p.metodo);
+                  return (
+                    <div key={p.metodo} className="row between" style={{ fontSize: 14 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name={medio?.esEfectivo || /^efectivo/i.test(p.metodo) ? 'cash' : /^cr[eé]dito/i.test(p.metodo) ? 'receipt' : 'card'} size={15} />{medio ? `${medio.nombre} (${medio.id})` : p.metodo}</span>
+                      <b>{money(p.monto)}</b>
+                    </div>
+                  );
+                })
+              ) : <div className="mini">No hay pagos registrados en esta apertura.</div>}
+            </div>
 
             <hr style={{ borderTop: '1px dashed var(--border)', margin: '10px 0' }} />
             <div className="row between" style={{ fontSize: 16 }}>

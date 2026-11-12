@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { diaColombia, inicioDiaColombia, finDiaColombia } from '../fechaColombia.js';
 import { filtroHistorialPedidos, estadoActualPedido, estadoAntesDeReenvio } from '../historialPedidos.js';
+import { camposMetodoPago, camposValorPago, desglosarFactura } from '../pagosFactura.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -9,6 +10,14 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 const pad = (n) => String(n).padStart(2, '0');
 const diaKey = diaColombia;
 const mesKey = (d) => diaKey(d).slice(0, 7);
+function rangoReporte(desde, hasta) {
+  const valida = (valor) => typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)
+    && !Number.isNaN(inicioDiaColombia(valor).getTime()) && diaColombia(inicioDiaColombia(valor)) === valor;
+  if ((desde && !valida(desde)) || (hasta && !valida(hasta)) || (desde && hasta && desde > hasta)) {
+    throw Object.assign(new Error('Selecciona un rango de fechas válido.'), { status: 400 });
+  }
+  return { ...(desde && { gte: inicioDiaColombia(desde) }), ...(hasta && { lt: finDiaColombia(hasta) }) };
+}
 // Semana ISO (ej: 2026-S32)
 const semanaKey = (d) => {
   const [anio, mes, dia] = diaKey(d).split('-').map(Number);
@@ -55,6 +64,127 @@ function productosPorPeriodo(facturas, claveFn) {
     }))
     .sort((a, b) => (a.clave < b.clave ? 1 : -1));
 }
+
+router.get('/resumen-facturas-notas', wrap(async (req, res) => {
+  const { desde, hasta } = req.query;
+  const rango = rangoReporte(desde, hasta);
+  const seleccionFactura = {
+    createdAt: true, subtotal: true, impuesto: true, total: true, propina: true, usuarioNombre: true,
+    usuarioId: true, usuario: { select: { nombre: true } },
+    apertura: { select: { caja: { select: { id: true, nombre: true } } } },
+    tipoDocumento: { select: { clase: true } },
+  };
+  const [facturas, ventas, creditos, debitos] = await Promise.all([
+    prisma.factura.findMany({ where: { createdAt: rango }, select: seleccionFactura }),
+    prisma.facturaVenta.findMany({ where: { createdAt: rango }, select: seleccionFactura }),
+    prisma.notaCredito.findMany({ where: { fecha: rango }, select: { fecha: true, total: true, factura: { select: seleccionFactura } } }),
+    prisma.notaDebito.findMany({ where: { fecha: rango }, select: { fecha: true, total: true, factura: { select: seleccionFactura } } }),
+  ]);
+  const grupos = new Map();
+  const agregar = (factura, fecha, tipo, valores) => {
+    const cajero = factura?.usuario?.nombre || factura?.usuarioNombre || 'Sin cajero';
+    const cajeroId = factura?.usuarioId || factura?.usuarioNombre || '';
+    const caja = factura?.apertura?.caja;
+    const fechaDia = diaColombia(fecha);
+    const clave = JSON.stringify([cajeroId, caja?.id || '', fechaDia, tipo]);
+    const fila = grupos.get(clave) || { cajeroId, cajero, cajaId: caja?.id || '', caja: caja?.nombre || 'Sin caja', fecha: fechaDia, tipo, bruto: 0, descuentos: null, impuestos: 0, neto: 0, propina: 0 };
+    for (const campo of ['bruto', 'impuestos', 'neto', 'propina']) {
+      fila[campo] = fila[campo] === null || valores[campo] === null
+        ? null : Math.round((fila[campo] + valores[campo]) * 100) / 100;
+    }
+    grupos.set(clave, fila);
+  };
+  for (const factura of [...facturas, ...ventas]) {
+    agregar(factura, factura.createdAt, factura.tipoDocumento?.clase || 'Factura sin tipo', {
+      bruto: factura.subtotal, impuestos: factura.impuesto, neto: factura.total, propina: factura.propina,
+    });
+  }
+  for (const [notas, tipo, signo] of [[creditos, 'Nota crédito', -1], [debitos, 'Nota débito', 1]]) {
+    for (const nota of notas) {
+      if (nota.total != null && (!Number.isFinite(nota.total) || nota.total < 0)) {
+        throw Object.assign(new Error(`Hay una ${tipo.toLowerCase()} con un total inválido. Revisa las notas antes de generar el reporte.`), { status: 409 });
+      }
+      agregar(nota.factura, nota.fecha, tipo, {
+        bruto: null, impuestos: null, neto: nota.total == null ? null : signo * nota.total, propina: null,
+      });
+    }
+  }
+  res.json([...grupos.values()].sort((a, b) => a.cajero.localeCompare(b.cajero)
+    || a.cajeroId.localeCompare(b.cajeroId) || a.fecha.localeCompare(b.fecha)
+    || a.caja.localeCompare(b.caja) || a.tipo.localeCompare(b.tipo)));
+}));
+
+router.get('/revision-diaria-pdv', wrap(async (req, res) => {
+  const rango = rangoReporte(req.query.desde, req.query.hasta);
+  const select = {
+    id: true, createdAt: true, companiaCodigo: true, centroOperacionCodigo: true, prefijo: true, numeroFactura: true,
+    total: true, propina: true, credito: true, metodoPago: true, usuarioNombre: true, usuarioId: true,
+    ...Object.fromEntries([...camposMetodoPago, ...camposValorPago].map((campo) => [campo, true])),
+    usuario: { select: { nombre: true } },
+    apertura: { select: { caja: { select: { id: true, nombre: true } } } },
+    pagos: { where: { formaPago: { not: null } }, select: { formaPago: true, monto: true } },
+  };
+  const [electronicas, ventas, formas] = await Promise.all([
+    prisma.factura.findMany({ where: { createdAt: rango }, select }),
+    prisma.facturaVenta.findMany({ where: { createdAt: rango }, select }),
+    prisma.formaPago.findMany({ select: { id: true, formaPago: true } }),
+  ]);
+  const filas = [];
+  for (const factura of [...electronicas, ...ventas]) {
+    const esperado = factura.credito ? factura.propina : factura.total + factura.propina;
+    if (!Number.isFinite(esperado) || esperado < 0) {
+      throw Object.assign(new Error(`La factura ${factura.id} tiene un total inválido.`), { status: 409 });
+    }
+    let pagos = !factura.credito ? factura.pagos.map((pago) => ({ metodo: pago.formaPago, monto: pago.monto })) : [];
+    if (pagos.some((pago) => !pago.metodo?.trim() || !Number.isFinite(pago.monto) || pago.monto <= 0)) {
+      throw Object.assign(new Error(`La factura ${factura.id} tiene un pago registrado inválido.`), { status: 409 });
+    }
+    if (!pagos.length && esperado > 0) {
+      const registrados = camposMetodoPago.flatMap((campo, indice) => {
+        const metodo = factura[campo];
+        const monto = factura[camposValorPago[indice]];
+        return metodo && metodo !== '0' && Number(monto) > 0 ? [{ metodo, monto: Number(monto) }] : [];
+      });
+      const historicos = factura.credito ? [] : desglosarFactura(factura);
+      const coincide = (partes) => partes.length > 0 && partes.every((parte) => parte.metodo && Number.isFinite(parte.monto) && parte.monto > 0)
+        && Math.round(partes.reduce((suma, parte) => suma + parte.monto, 0) * 100) === Math.round(esperado * 100);
+      pagos = coincide(registrados) ? registrados : coincide(historicos) ? historicos : [{ metodo: 'SIN DESGLOSE', monto: esperado }];
+    }
+    const acumulados = new Map();
+    for (const pago of pagos) acumulados.set(pago.metodo, Math.round(((acumulados.get(pago.metodo) || 0) + pago.monto) * 100) / 100);
+    for (const [metodo, monto] of acumulados) {
+      const forma = formas.find((item) => item.id === metodo);
+      filas.push({
+        id: `${factura.id}:${metodo}`, cajeroId: factura.usuarioId || factura.usuarioNombre || '',
+        cajero: factura.usuario?.nombre || factura.usuarioNombre || 'Sin cajero',
+        fecha: diaColombia(factura.createdAt), compania: factura.companiaCodigo, centro: factura.centroOperacionCodigo,
+        cajaId: factura.apertura?.caja?.id || '', caja: factura.apertura?.caja?.nombre || 'Sin caja',
+        documento: `${factura.prefijo || ''}${factura.numeroFactura}`, medioId: metodo,
+        medio: forma?.formaPago || metodo, moneda: 'COP', ingreso: null, egreso: null, neto: monto,
+      });
+    }
+  }
+  res.json(filas.sort((a, b) => a.cajero.localeCompare(b.cajero) || a.cajeroId.localeCompare(b.cajeroId)
+    || a.medioId.localeCompare(b.medioId) || a.fecha.localeCompare(b.fecha) || a.documento.localeCompare(b.documento)));
+}));
+
+router.get('/movimientos-caja', wrap(async (req, res) => {
+  const rango = rangoReporte(req.query.desde, req.query.hasta);
+  const movimientos = await prisma.movimientoCaja.findMany({
+    where: { fecha: rango },
+    select: {
+      id: true, fecha: true, tipo: true, monto: true, motivo: true, usuarioId: true,
+      usuario: { select: { usuario: true, nombre: true } },
+      apertura: { select: { caja: { select: { id: true, nombre: true } } } },
+    },
+    orderBy: { fecha: 'desc' },
+  });
+  res.json(movimientos.map((movimiento) => ({
+    id: movimiento.id, fecha: movimiento.fecha, tipo: movimiento.tipo, monto: movimiento.monto, motivo: movimiento.motivo,
+    cajeroId: movimiento.usuarioId || '', cajero: movimiento.usuario?.nombre || movimiento.usuario?.usuario || 'Sin cajero',
+    cajaId: movimiento.apertura?.caja?.id || '', caja: movimiento.apertura?.caja?.nombre || 'Sin caja',
+  })));
+}));
 
 // Reporte completo de ventas (filtro opcional ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD)
 router.get('/', wrap(async (req, res) => {
