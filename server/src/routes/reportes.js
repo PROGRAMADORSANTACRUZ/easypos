@@ -3,6 +3,7 @@ import { prisma } from '../prisma.js';
 import { diaColombia, inicioDiaColombia, finDiaColombia } from '../fechaColombia.js';
 import { filtroHistorialPedidos, estadoActualPedido, estadoAntesDeReenvio } from '../historialPedidos.js';
 import { camposMetodoPago, camposValorPago, desglosarFactura } from '../pagosFactura.js';
+import { efectivoDeFactura } from './aperturas.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -184,6 +185,121 @@ router.get('/movimientos-caja', wrap(async (req, res) => {
     cajeroId: movimiento.usuarioId || '', cajero: movimiento.usuario?.nombre || movimiento.usuario?.usuario || 'Sin cajero',
     cajaId: movimiento.apertura?.caja?.id || '', caja: movimiento.apertura?.caja?.nombre || 'Sin caja',
   })));
+}));
+
+// Historial de recogidas: parciales (movimientos RECOGIDA) y finales (cierres de caja) con su saldo.
+router.get('/recogidas-caja', wrap(async (req, res) => {
+  const rango = rangoReporte(req.query.desde, req.query.hasta);
+  const enRango = (fecha) => (!rango.gte || fecha >= rango.gte) && (!rango.lt || fecha < rango.lt);
+  const centavos = (valor) => Math.round(Number(valor || 0) * 100);
+  const pesos = (valor) => valor / 100;
+
+  // El consecutivo se deriva del orden cronologico de todas las recogidas y cierres.
+  const [todasRecogidas, todosCierres] = await Promise.all([
+    prisma.movimientoCaja.findMany({ where: { tipo: 'RECOGIDA' }, select: { id: true, fecha: true, aperturaId: true } }),
+    prisma.aperturaCaja.findMany({ where: { estado: 'CERRADA', fechaCierre: { not: null } }, select: { id: true, fechaCierre: true } }),
+  ]);
+  const eventos = [
+    ...todasRecogidas.map((m) => ({ tipo: 'PARCIAL', id: m.id, fecha: new Date(m.fecha), aperturaId: m.aperturaId })),
+    ...todosCierres.map((a) => ({ tipo: 'FINAL', id: a.id, fecha: new Date(a.fechaCierre), aperturaId: a.id })),
+  ].sort((a, b) => a.fecha - b.fecha || (a.tipo === b.tipo ? a.id.localeCompare(b.id) : a.tipo === 'PARCIAL' ? -1 : 1))
+    .map((evento, indice) => ({ ...evento, consecutivo: `RC-${String(indice + 1).padStart(6, '0')}` }))
+    .filter((evento) => enRango(evento.fecha));
+  const aperturaIds = [...new Set(eventos.map((evento) => evento.aperturaId))];
+  if (!aperturaIds.length) return res.json([]);
+
+  const seleccionFactura = {
+    id: true, createdAt: true, total: true, propina: true, metodoPago: true, credito: true,
+    pagos: { where: { formaPago: { not: null } }, select: { formaPago: true, monto: true } },
+  };
+  const [aperturas, movimientos, facturas, ventas, formas, auditorias] = await Promise.all([
+    prisma.aperturaCaja.findMany({
+      where: { id: { in: aperturaIds } },
+      include: { caja: { select: { id: true, nombre: true } }, usuario: { select: { nombre: true, usuario: true } } },
+    }),
+    prisma.movimientoCaja.findMany({
+      where: { aperturaId: { in: aperturaIds } },
+      include: { usuario: { select: { nombre: true, usuario: true } } },
+    }),
+    prisma.factura.findMany({ where: { aperturaId: { in: aperturaIds } }, select: { ...seleccionFactura, aperturaId: true } }),
+    prisma.facturaVenta.findMany({ where: { aperturaId: { in: aperturaIds } }, select: { ...seleccionFactura, aperturaId: true } }),
+    prisma.formaPago.findMany({ select: { id: true, formaPago: true, formaPagoDian: true, activo: true } }),
+    prisma.auditoria.findMany({
+      where: { accion: 'CERRAR', entidad: 'apertura_caja', entidadId: { in: aperturaIds } },
+      include: { usuario: { select: { nombre: true, usuario: true } } },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
+
+  // Linea de tiempo de efectivo por apertura (en centavos): ventas, ingresos, egresos y recogidas.
+  const lineas = new Map();
+  for (const apertura of aperturas) lineas.set(apertura.id, { valida: true, cambios: [] });
+  for (const factura of [...facturas, ...ventas]) {
+    const linea = lineas.get(factura.aperturaId);
+    if (!linea) continue;
+    try {
+      linea.cambios.push({ fecha: new Date(factura.createdAt), monto: centavos(efectivoDeFactura(factura, formas)), orden: 0 });
+    } catch {
+      linea.valida = false;
+    }
+  }
+  for (const movimiento of movimientos) {
+    const linea = lineas.get(movimiento.aperturaId);
+    const signo = movimiento.tipo === 'INGRESO' ? 1 : ['EGRESO', 'RECOGIDA'].includes(movimiento.tipo) ? -1 : 0;
+    if (linea && signo) linea.cambios.push({ fecha: new Date(movimiento.fecha), monto: signo * centavos(movimiento.monto), orden: 1, id: movimiento.id });
+  }
+  for (const linea of lineas.values()) linea.cambios.sort((a, b) => a.fecha - b.fecha || a.orden - b.orden || String(a.id || '').localeCompare(String(b.id || '')));
+
+  const porApertura = new Map(aperturas.map((apertura) => [apertura.id, apertura]));
+  const porMovimiento = new Map(movimientos.map((movimiento) => [movimiento.id, movimiento]));
+  const recogidasPorApertura = new Map();
+  for (const movimiento of [...movimientos].filter((m) => m.tipo === 'RECOGIDA').sort((a, b) => new Date(a.fecha) - new Date(b.fecha) || a.id.localeCompare(b.id))) {
+    const lista = recogidasPorApertura.get(movimiento.aperturaId) || [];
+    lista.push(movimiento.id);
+    recogidasPorApertura.set(movimiento.aperturaId, lista);
+  }
+  const nombre = (usuario) => usuario?.nombre || usuario?.usuario || null;
+
+  const filas = eventos.map((evento) => {
+    const apertura = porApertura.get(evento.aperturaId);
+    const base = apertura?.valorInicial || 0;
+    const comun = {
+      id: `${evento.tipo}:${evento.id}`, consecutivo: evento.consecutivo, tipo: evento.tipo, fecha: evento.fecha,
+      aperturaId: evento.aperturaId, fechaApertura: apertura?.fechaApertura || null,
+      cajaId: apertura?.caja?.id || '', caja: apertura?.caja?.nombre || 'Sin caja', base,
+    };
+    if (evento.tipo === 'PARCIAL') {
+      const movimiento = porMovimiento.get(evento.id);
+      const linea = lineas.get(evento.aperturaId);
+      let antes = null;
+      if (linea?.valida) {
+        // Saldo con base justo antes de esta recogida (las de igual hora y menor orden ya restadas).
+        const indice = linea.cambios.findIndex((cambio) => cambio.id === evento.id);
+        antes = centavos(base) + linea.cambios.slice(0, indice).reduce((suma, cambio) => suma + cambio.monto, 0);
+      }
+      const monto = centavos(movimiento?.monto);
+      return {
+        ...comun, cajeroId: movimiento?.usuarioId || '', cajero: nombre(movimiento?.usuario) || 'Sin cajero',
+        numeroEnTurno: (recogidasPorApertura.get(evento.aperturaId) || []).indexOf(evento.id) + 1,
+        efectivoAntes: antes === null ? null : pesos(antes), monto: pesos(monto),
+        saldoDespues: antes === null ? null : pesos(antes - monto),
+        observacion: movimiento?.motivo || '', esperado: null, contado: null, diferencia: null, sinConteo: false,
+      };
+    }
+    const cierre = auditorias.find((registro) => registro.entidadId === evento.aperturaId);
+    const esperado = apertura?.valorEsperado ?? null;
+    const contado = apertura?.valorContado ?? null;
+    const monto = contado ?? esperado;
+    return {
+      ...comun, cajeroId: cierre?.usuarioId || apertura?.usuarioId || '',
+      cajero: nombre(cierre?.usuario) || nombre(apertura?.usuario) || 'Sin cajero',
+      numeroEnTurno: null, efectivoAntes: esperado, monto,
+      saldoDespues: monto === null ? null : 0,
+      observacion: apertura?.observacionCierre || '', esperado, contado, diferencia: apertura?.diferencia ?? null,
+      sinConteo: contado === null,
+    };
+  });
+  res.json(filas);
 }));
 
 // Reporte completo de ventas (filtro opcional ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD)

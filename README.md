@@ -282,6 +282,15 @@ en cualquier momento. Antes de desplegar, respalda y aplica
 `server/prisma/migrations/20261112200000_recogida_parcial/migration.sql` en
 cada base de restaurante.
 
+El reporte **Recogidas de caja (parciales y cierre)** lista cada recogida parcial
+y cada cierre de caja (recogida final) con consecutivo RC-000001, fecha, hora,
+cajero que la hizo, caja y turno. Muestra el efectivo antes, lo recogido y el
+saldo que queda, con base incluida, calculado al momento de cada recogida. En el
+cierre se recoge el efectivo contado (o el esperado si no se conto) y la caja
+queda en $0; el responsable del cierre se toma de la auditoria. El consecutivo
+sigue el orden cronologico de todas las recogidas y cierres. Si una factura del
+turno tiene pagos inconsistentes, el saldo de ese turno aparece como no disponible.
+
 Para usar este cuadre en una base existente, respalda primero y aplica
 `server/prisma/migrations/20261112120000_cuadre_medios_pago/migration.sql` a cada
 base de restaurante correspondiente, antes de iniciar la version actualizada.

@@ -6,6 +6,7 @@ import { diaColombia } from '../fechaComercial.js';
 import { useToast } from '../App.jsx';
 import { LoadingState } from '../components/ui/index.jsx';
 import { fechaHoraColombia, notaMovimientos, columnasMovimientos, filaMovimiento } from '../reporteMovimientosCaja.js';
+import { notaRecogidas, columnasRecogidas, filaRecogida, totalesRecogidas } from '../reporteRecogidasCaja.js';
 
 const ACCIONES_HISTORIAL = {
   CREAR: 'Pedido creado', AGREGAR_PRODUCTO: 'Producto agregado', CAMBIAR_CANTIDAD: 'Cantidad modificada',
@@ -58,6 +59,7 @@ const REPORTES = [
   { id: 'resumen-facturas-notas', nombre: 'Resumen de facturas y notas POS acumuladas' },
   { id: 'revision-diaria-pdv', nombre: 'Revisión diaria PDV' },
   { id: 'movimientos-caja', nombre: 'Movimientos de caja' },
+  { id: 'recogidas-caja', nombre: 'Recogidas de caja (parciales y cierre)' },
   { id: 'gastos', nombre: 'Gastos de insumos (por producto)' },
   { id: 'insumos', nombre: 'Consumo de insumos' },
   { id: 'compras-insumo', nombre: 'Compras por insumo' },
@@ -65,6 +67,8 @@ const REPORTES = [
   { id: 'historial-pedidos', nombre: 'Historial de pedidos' },
   { id: 'cocina', nombre: 'Preparación de cocina' },
 ];
+// Reportes que consultan su propio endpoint en lugar del reporte general de ventas.
+const REPORTES_PROPIOS = ['historial-pedidos', 'resumen-facturas-notas', 'revision-diaria-pdv', 'movimientos-caja', 'recogidas-caja'];
 
 // Tabla simple de ventas por periodo
 function TablaPeriodo({ datos, maxTotal }) {
@@ -186,7 +190,38 @@ export default function Reportes() {
   const [tipoMovimiento, setTipoMovimiento] = useState('');
   const [cajaMovimiento, setCajaMovimiento] = useState('');
   const consultaMovimientos = useRef(0);
+  const [recogidas, setRecogidas] = useState([]);
+  const [cargandoRecogidas, setCargandoRecogidas] = useState(false);
+  const [errorRecogidas, setErrorRecogidas] = useState('');
+  const [filtrosRecogidas, setFiltrosRecogidas] = useState({ desde: hoy, hasta: hoy });
+  const [cajeroRecogida, setCajeroRecogida] = useState('');
+  const [cajaRecogida, setCajaRecogida] = useState('');
+  const [tipoRecogida, setTipoRecogida] = useState('');
+  const consultaRecogidas = useRef(0);
   const notify = useToast();
+
+  const cargarRecogidas = async (inicio = desde, fin = hasta) => {
+    const consulta = ++consultaRecogidas.current;
+    const params = new URLSearchParams();
+    if (inicio) params.set('desde', inicio);
+    if (fin) params.set('hasta', fin);
+    setCargandoRecogidas(true);
+    setErrorRecogidas('');
+    setRecogidas([]);
+    setCajeroRecogida('');
+    setCajaRecogida('');
+    setTipoRecogida('');
+    try {
+      const datos = await api.get(`/reportes/recogidas-caja?${params}`);
+      if (consulta !== consultaRecogidas.current) return;
+      setRecogidas(datos);
+      setFiltrosRecogidas({ desde: inicio, hasta: fin });
+    } catch (e) {
+      if (consulta === consultaRecogidas.current) setErrorRecogidas(e.message);
+    } finally {
+      if (consulta === consultaRecogidas.current) setCargandoRecogidas(false);
+    }
+  };
 
   const cargarMovimientos = async (inicio = desde, fin = hasta) => {
     const consulta = ++consultaMovimientos.current;
@@ -279,6 +314,7 @@ export default function Reportes() {
     if (sel === 'resumen-facturas-notas') return cargarResumen();
     if (sel === 'revision-diaria-pdv') return cargarRevision();
     if (sel === 'movimientos-caja') return cargarMovimientos();
+    if (sel === 'recogidas-caja') return cargarRecogidas();
     const params = new URLSearchParams();
     if (desde) params.set('desde', desde);
     if (hasta) params.set('hasta', hasta);
@@ -296,20 +332,21 @@ export default function Reportes() {
     if (sel === 'resumen-facturas-notas') return cargarResumen(hoy, hoy);
     if (sel === 'revision-diaria-pdv') return cargarRevision(hoy, hoy);
     if (sel === 'movimientos-caja') return cargarMovimientos(hoy, hoy);
+    if (sel === 'recogidas-caja') return cargarRecogidas(hoy, hoy);
     api.get(`/reportes?desde=${hoy}&hasta=${hoy}`).then(setRep).catch((e) => notify(e.message, 'err'));
     api.get(`/reportes/pedidos-mesa?desde=${hoy}&hasta=${hoy}`).then(setPedidosMesa).catch(() => setPedidosMesa([]));
     api.get(`/reportes/cocina?desde=${hoy}&hasta=${hoy}`).then(setCocina).catch(() => setCocina([]));
   };
 
   useEffect(() => {
-    if (['historial-pedidos', 'resumen-facturas-notas', 'revision-diaria-pdv', 'movimientos-caja'].includes(sel) || !rep) cargar();
+    if (REPORTES_PROPIOS.includes(sel) || !rep) cargar();
   }, [sel]);
 
   const maxDia = useMemo(() => Math.max(1, ...(rep?.ventasPorDia || []).map((v) => v.total)), [rep]);
   const maxSemana = useMemo(() => Math.max(1, ...(rep?.ventasPorSemana || []).map((v) => v.total)), [rep]);
   const maxMes = useMemo(() => Math.max(1, ...(rep?.ventasPorMes || []).map((v) => v.total)), [rep]);
 
-  if (!rep && !['historial-pedidos', 'resumen-facturas-notas', 'revision-diaria-pdv', 'movimientos-caja'].includes(sel)) return <LoadingState label="Cargando reportes…" />;
+  if (!rep && !REPORTES_PROPIOS.includes(sel)) return <LoadingState label="Cargando reportes…" />;
   const t = rep?.totales;
   const actual = REPORTES.find((r) => r.id === sel);
   const centrosRevision = [...new Map(revision.map((fila) => [JSON.stringify([fila.compania, fila.centro]), `${fila.compania} / ${fila.centro}`])).entries()];
@@ -323,6 +360,14 @@ export default function Reportes() {
     (!cajeroMovimiento || JSON.stringify(fila.cajeroId) === cajeroMovimiento)
     && (!cajaMovimiento || JSON.stringify(fila.cajaId) === cajaMovimiento)
     && (!tipoMovimiento || fila.tipo === tipoMovimiento));
+  const cajerosRecogidas = [...new Map(recogidas.map((fila) => [JSON.stringify(fila.cajeroId), fila.cajero])).entries()];
+  const cajasRecogidas = [...new Map(recogidas.map((fila) => [JSON.stringify(fila.cajaId), fila.caja])).entries()];
+  const recogidasFiltradas = recogidas.filter((fila) =>
+    (!cajeroRecogida || JSON.stringify(fila.cajeroId) === cajeroRecogida)
+    && (!cajaRecogida || JSON.stringify(fila.cajaId) === cajaRecogida)
+    && (!tipoRecogida || fila.tipo === tipoRecogida));
+  const reporteAncho = ['movimientos-caja', 'recogidas-caja'].includes(sel);
+  const notaExportacion = sel === 'movimientos-caja' ? notaMovimientos : sel === 'recogidas-caja' ? notaRecogidas : null;
 
   // Construye { columnas, filas } del reporte actual para exportar
   const datosReporte = () => {
@@ -423,6 +468,18 @@ export default function Reportes() {
           columnas: columnasMovimientos,
           filas: movimientosFiltrados.map(filaMovimiento),
         };
+      case 'recogidas-caja': {
+        const totales = totalesRecogidas(recogidasFiltradas);
+        const vacias = Array(columnasRecogidas.length - 2).fill('');
+        return {
+          columnas: columnasRecogidas,
+          filas: recogidasFiltradas.length ? [
+            ...recogidasFiltradas.map(filaRecogida),
+            ['Total recogidas parciales', ...vacias.slice(0, 9), money(totales.parciales), ...vacias.slice(9)],
+            ['Total recogidas finales', ...vacias.slice(0, 9), money(totales.finales), ...vacias.slice(9)],
+          ] : [],
+        };
+      }
       case 'gastos':
         return {
           columnas: ['Producto', 'Unidades', 'Costo insumos unit.', 'Costo total', 'Venta', 'Utilidad'],
@@ -498,15 +555,18 @@ export default function Reportes() {
     }
   };
 
-  const rangoDesde = sel === 'historial-pedidos' ? filtrosHistorial.desde : sel === 'resumen-facturas-notas' ? filtrosResumen.desde : sel === 'revision-diaria-pdv' ? filtrosRevision.desde : sel === 'movimientos-caja' ? filtrosMovimientos.desde : desde;
-  const rangoHasta = sel === 'historial-pedidos' ? filtrosHistorial.hasta : sel === 'resumen-facturas-notas' ? filtrosResumen.hasta : sel === 'revision-diaria-pdv' ? filtrosRevision.hasta : sel === 'movimientos-caja' ? filtrosMovimientos.hasta : hasta;
+  const rangoDesde = sel === 'historial-pedidos' ? filtrosHistorial.desde : sel === 'resumen-facturas-notas' ? filtrosResumen.desde : sel === 'revision-diaria-pdv' ? filtrosRevision.desde : sel === 'movimientos-caja' ? filtrosMovimientos.desde : sel === 'recogidas-caja' ? filtrosRecogidas.desde : desde;
+  const rangoHasta = sel === 'historial-pedidos' ? filtrosHistorial.hasta : sel === 'resumen-facturas-notas' ? filtrosResumen.hasta : sel === 'revision-diaria-pdv' ? filtrosRevision.hasta : sel === 'movimientos-caja' ? filtrosMovimientos.hasta : sel === 'recogidas-caja' ? filtrosRecogidas.hasta : hasta;
   const rangoTexto = (rangoDesde || rangoHasta ? `${rangoDesde || '...'} a ${rangoHasta || '...'}` : 'Todo el histórico')
     + (sel === 'historial-pedidos' && filtrosHistorial.motivo ? ` · Motivo: ${filtrosHistorial.motivo}` : '')
     + (sel === 'revision-diaria-pdv' && centroRevision ? ` · Centro: ${centrosRevision.find(([id]) => id === centroRevision)?.[1]}` : '')
     + (sel === 'revision-diaria-pdv' && cajaRevision ? ` · Caja: ${cajasRevision.find(([id]) => id === cajaRevision)?.[1]}` : '')
     + (sel === 'movimientos-caja' && cajeroMovimiento ? ` · Cajero: ${cajerosMovimientos.find(([id]) => id === cajeroMovimiento)?.[1]}` : '')
     + (sel === 'movimientos-caja' && cajaMovimiento ? ` · Caja: ${cajasMovimientos.find(([id]) => id === cajaMovimiento)?.[1]}` : '')
-    + (sel === 'movimientos-caja' && tipoMovimiento ? ` · Tipo: ${tipoMovimiento}` : '');
+    + (sel === 'movimientos-caja' && tipoMovimiento ? ` · Tipo: ${tipoMovimiento}` : '')
+    + (sel === 'recogidas-caja' && cajeroRecogida ? ` · Cajero: ${cajerosRecogidas.find(([id]) => id === cajeroRecogida)?.[1]}` : '')
+    + (sel === 'recogidas-caja' && cajaRecogida ? ` · Caja: ${cajasRecogidas.find(([id]) => id === cajaRecogida)?.[1]}` : '')
+    + (sel === 'recogidas-caja' && tipoRecogida ? ` · Tipo: ${tipoRecogida === 'FINAL' ? 'Final' : 'Parcial'}` : '');
 
   const exportarExcel = async () => {
     const { columnas, filas } = datosReporte();
@@ -581,11 +641,11 @@ export default function Reportes() {
       });
     });
 
-    if (sel === 'movimientos-caja') {
+    if (notaExportacion) {
       const numFila = filaEncabezado + filas.length + 2;
       ws.mergeCells(`A${numFila}:${lastCol}${numFila}`);
       const celda = ws.getCell(`A${numFila}`);
-      celda.value = notaMovimientos;
+      celda.value = notaExportacion;
       celda.alignment = { wrapText: true, vertical: 'middle' };
       ws.getRow(numFila).height = 30;
     }
@@ -618,16 +678,16 @@ export default function Reportes() {
       .join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${actual?.nombre || 'Reporte'}</title>
     <style>
-      @page { size: ${sel === 'movimientos-caja' ? 'A3 landscape' : 'A4'}; margin: 16mm; }
+      @page { size: ${reporteAncho ? 'A3 landscape' : 'A4'}; margin: 16mm; }
       body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; }
       .head { border-bottom: 3px solid #E13626; padding-bottom: 8px; margin-bottom: 16px; }
       .marca { font-size: 22px; font-weight: 900; color: #E13626; letter-spacing: 1px; }
       .marca-logo { height: 30px; display: block; margin-bottom: 4px; }
       h1 { font-size: 18px; margin: 4px 0 2px; }
       .sub { color: #555; font-size: 12px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: ${sel === 'movimientos-caja' ? '7px' : '13px'}; overflow-wrap: anywhere; }
-      th { background: #E13626; color: #fff; text-align: left; padding: ${sel === 'movimientos-caja' ? '3px' : '8px 10px'}; font-size: ${sel === 'movimientos-caja' ? '7px' : '12px'}; text-transform: uppercase; letter-spacing: .4px; }
-      td { padding: ${sel === 'movimientos-caja' ? '3px' : '7px 10px'}; border-bottom: 1px solid #e5e7eb; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: ${reporteAncho ? '7px' : '13px'}; overflow-wrap: anywhere; }
+      th { background: #E13626; color: #fff; text-align: left; padding: ${reporteAncho ? '3px' : '8px 10px'}; font-size: ${reporteAncho ? '7px' : '12px'}; text-transform: uppercase; letter-spacing: .4px; }
+      td { padding: ${reporteAncho ? '3px' : '7px 10px'}; border-bottom: 1px solid #e5e7eb; }
       tr:nth-child(even) td { background: #f8fafc; }
       .r { text-align: right; }
       .pie { margin-top: 18px; color: #888; font-size: 11px; text-align: center; }
@@ -638,7 +698,7 @@ export default function Reportes() {
         <div class="sub">Rango: ${rangoTexto.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]))} · Generado: ${fechaHoraColombia(new Date())}</div>
       </div>
       <table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>
-      ${sel === 'movimientos-caja' ? `<p class="sub">${notaMovimientos}</p>` : ''}
+      ${notaExportacion ? `<p class="sub">${notaExportacion}</p>` : ''}
       <div class="pie">Asados Santacruz · Reporte de ventas</div>
     </body></html>`;
     const win = window.open('', '_blank', 'width=900,height=700');
@@ -813,6 +873,37 @@ export default function Reportes() {
             <p className="mini">{notaMovimientos}</p>
           </>
         );
+      case 'recogidas-caja': {
+        const totales = totalesRecogidas(recogidasFiltradas);
+        return cargandoRecogidas ? <LoadingState label="Cargando recogidas…" /> : errorRecogidas ? <p role="alert">{errorRecogidas}</p> : (
+          <>
+            {recogidasFiltradas.length > 0 && (
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 12 }}>
+                <div className="card metric"><div className="metric-label">Recogidas parciales</div><div className="metric-value">{money(totales.parciales)}</div></div>
+                <div className="card metric"><div className="metric-label">Recogidas finales (cierres)</div><div className="metric-value">{money(totales.finales)}</div></div>
+                <div className="card metric"><div className="metric-label">Total recogido</div><div className="metric-value">{money(totales.parciales + totales.finales)}</div></div>
+              </div>
+            )}
+            <div style={{ overflowX: 'auto' }}>
+              {recogidasFiltradas.length === 0 ? <p className="empty">Sin recogidas ni cierres para los filtros seleccionados.</p> : (
+                <table>
+                  <thead><tr>{columnasRecogidas.map((columna) => <th key={columna}>{columna}</th>)}</tr></thead>
+                  <tbody>
+                    {recogidasFiltradas.map((fila) => (
+                      <tr key={fila.id} style={fila.tipo === 'FINAL' ? { fontWeight: 700 } : undefined}>
+                        {filaRecogida(fila).map((valor, indice) => (
+                          <td key={columnasRecogidas[indice]} style={indice >= 8 && indice <= 14 ? { textAlign: 'right', whiteSpace: 'nowrap' } : undefined}>{valor}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <p className="mini">{notaRecogidas}</p>
+          </>
+        );
+      }
       case 'gastos': {
         const g = rep.gastos || {};
         return (
@@ -1013,6 +1104,30 @@ export default function Reportes() {
                     <label htmlFor="movimiento-tipo">Tipo</label>
                     <select id="movimiento-tipo" value={tipoMovimiento} onChange={(e) => setTipoMovimiento(e.target.value)}>
                       <option value="">Todos</option><option value="INGRESO">Ingreso</option><option value="EGRESO">Egreso</option><option value="RECOGIDA">Recogida</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              {sel === 'recogidas-caja' && (
+                <>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor="recogida-cajero">Cajero</label>
+                    <select id="recogida-cajero" value={cajeroRecogida} onChange={(e) => setCajeroRecogida(e.target.value)}>
+                      <option value="">Todos</option>
+                      {cajerosRecogidas.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor="recogida-caja">Caja</label>
+                    <select id="recogida-caja" value={cajaRecogida} onChange={(e) => setCajaRecogida(e.target.value)}>
+                      <option value="">Todas</option>
+                      {cajasRecogidas.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor="recogida-tipo">Tipo</label>
+                    <select id="recogida-tipo" value={tipoRecogida} onChange={(e) => setTipoRecogida(e.target.value)}>
+                      <option value="">Todas</option><option value="PARCIAL">Parcial</option><option value="FINAL">Final (cierre)</option>
                     </select>
                   </div>
                 </>
