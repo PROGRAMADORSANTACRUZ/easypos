@@ -4,7 +4,7 @@ import { crearLineaPropina, CODIGO_PRODUCTO_PROPINA } from '../src/facturaLineas
 import { mapearItemsFactus, mapearPagosFactus } from '../src/factus.js';
 
 test('la propina genera una linea snapshot exenta con codigo configurable', () => {
-  assert.equal(CODIGO_PRODUCTO_PROPINA, String(process.env.CODIGO_PRODUCTO_PROPINA || '0000').trim() || '0000');
+  assert.equal(CODIGO_PRODUCTO_PROPINA, String(process.env.CODIGO_PRODUCTO_PROPINA || '10600').trim() || '10600');
   assert.deepEqual(crearLineaPropina(800), {
     productoId: null,
     productoCodigo: CODIGO_PRODUCTO_PROPINA,
