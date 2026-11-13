@@ -263,9 +263,12 @@ disponibles; el total de la nota podria incluir propina.
 
 El reporte **Revision diaria PDV** agrupa pagos de facturas POS y electronicas
 por cajero y medio, con detalle por documento y filtros de fecha, centro y caja.
-El neto es el importe aplicado, incluida la propina. El efectivo entregado por el
-cliente y el cambio no se guardan, por lo que ingreso y egreso se muestran como
-no disponibles. Los pagos historicos sin desglose se identifican sin repartirlos,
+El ingreso es lo que entrego el cliente con cada medio, el egreso es el vuelto
+(solo efectivo) y el neto es el importe cobrado, incluida la propina. Cada pago
+guarda `Recibido` y `Vuelto` (migracion `20261113070000_pagos_recibido_vuelto`);
+en pagos anteriores sin valor recibido el ingreso es igual al neto y el egreso es 0.
+El servidor rechaza un recibido menor al aplicado y el vuelto en medios que no son
+efectivo. Los pagos historicos sin desglose se identifican sin repartirlos,
 y las facturas a credito no incluyen el saldo pendiente como pago recibido.
 
 El reporte **Movimientos de caja** muestra cada ingreso o egreso registrado, su

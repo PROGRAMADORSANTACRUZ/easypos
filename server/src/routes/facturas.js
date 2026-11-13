@@ -5,7 +5,7 @@ import { crearFacturaFactus } from '../factus.js';
 import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
 import { centroPermitido, filtroParesCentros } from '../centrosUsuario.js';
 import { calcularInsumosRequeridos, descontarInsumos, validarStockSuficiente } from '../inventarioKits.js';
-import { validarPagosActivos } from '../pagosFactura.js';
+import { datosPagoRecibido, validarPagosActivos } from '../pagosFactura.js';
 import { itemsDeInventarioNormal, validarSinSolicitudesMesa00Pendientes } from '../stockMesa00.js';
 import { crearLineaPropina } from '../facturaLineas.js';
 import { recogidaObligatoriaPendiente, MENSAJE_RECOGIDA_OBLIGATORIA } from './aperturas.js';
@@ -478,10 +478,8 @@ router.post('/dividir', wrap(async (req, res) => {
       const numero = await asignarNumeracion(tx, electronica, companiaCodigo, centroOperacionCodigo);
       const modelo = electronica ? tx.factura : tx.facturaVenta;
       const pagosFactura = emision === 'UNA' ? pagos : [pagos[parte.numero - 1]];
-      const basePago = pagosFactura.map((pago) => ({
-        formaPago: pago.formaPago,
-        monto: Number(pago.monto),
-      }));
+      const basePago = pagosFactura.map(datosPagoRecibido);
+
       const lineaPropina = crearLineaPropina(parte.propina);
       const factura = await modelo.create({
         data: {
@@ -637,7 +635,7 @@ router.post('/', wrap(async (req, res) => {
         total,
         propina: propinaTotal,
         metodoPago: metodoPago || 'EFECTIVO',
-        ...(!credito && { pagos: { create: pagos.map((pago) => ({ formaPago: pago.formaPago, monto: Number(pago.monto) })) } }),
+        ...(!credito && { pagos: { create: pagos.map(datosPagoRecibido) } }),
         credito: !!credito,
         creditoDias: credito ? (Number(creditoDias) || null) : null,
         vence: credito ? calcularVence(creditoDias) : null,
@@ -780,7 +778,7 @@ router.post('/directa', wrap(async (req, res) => {
         total,
         propina: propinaTotal,
         metodoPago: metodoPago || 'EFECTIVO',
-        ...(!credito && { pagos: { create: pagos.map((pago) => ({ formaPago: pago.formaPago, monto: Number(pago.monto) })) } }),
+        ...(!credito && { pagos: { create: pagos.map(datosPagoRecibido) } }),
         credito: !!credito,
         creditoDias: credito ? (Number(creditoDias) || null) : null,
         vence: credito ? calcularVence(creditoDias) : null,

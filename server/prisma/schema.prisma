@@ -1253,6 +1253,8 @@ model Pago {
   metodoPago   MetodoPago? @relation(fields: [metodoPagoId], references: [id], onDelete: SetNull)
   formaPago    String?     @db.VarChar(30) @map("FormaPago")
   monto        Float       @default(0) @map("Monto")
+  recibido     Float?      @map("Recibido") // lo que entrego el cliente con este medio (null en pagos antiguos)
+  vuelto       Float       @default(0) @map("Vuelto") // cambio devuelto al cliente (solo efectivo)
   referencia   String?     @db.VarChar(100) @map("Referencia")
   fecha        DateTime    @default(now()) @map("Fecha")
 

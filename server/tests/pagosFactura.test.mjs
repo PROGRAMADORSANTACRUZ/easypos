@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import { desglosarFactura, efectivoDeFactura } from '../src/routes/aperturas.js';
-import { etiquetaPagos } from '../../client/src/pagosMultiples.js';
-import { separarMetodosPago, separarValoresPago, validarPagosActivos, esMedioEfectivo, codigoPagoDian } from '../src/pagosFactura.js';
+import { etiquetaPagos, resumirPagos } from '../../client/src/pagosMultiples.js';
+import { datosPagoRecibido, separarMetodosPago, separarValoresPago, validarPagosActivos, esMedioEfectivo, codigoPagoDian } from '../src/pagosFactura.js';
 import { cargarPagosFactura } from '../src/factus.js';
 
 test('valida conceptos activos al confirmar y conserva codigos e importes aplicados', async () => {
@@ -23,6 +23,24 @@ test('valida conceptos activos al confirmar y conserva codigos e importes aplica
   await assert.rejects(validarPagosActivos(tx, []), /activos/);
   await assert.rejects(validarPagosActivos(tx, [{ formaPago: 'EFE', monto: 17000 }], { total: 18000 }), /exactamente/);
   await assert.rejects(validarPagosActivos(tx, [{ formaPago: 'EFE', monto: -1 }]), /positivos/);
+});
+
+test('guarda lo recibido y el vuelto solo en efectivo, y el cliente envia lo entregado', async () => {
+  const formas = [{ id: 'EFE', activo: true, formaPagoDian: '10-Efectivo' }, { id: 'QR', activo: true, formaPagoDian: '42' }];
+  const tx = { $queryRaw: async (sql, codigos) => formas.filter((forma) => codigos.includes(forma.id)) };
+  const resumen = resumirPagos([{ formaPago: 'QR', monto: 5000 }, { formaPago: 'EFE', monto: 20000 }], 18000,
+    [{ codigo: 'EFE', esEfectivo: true }, { codigo: 'QR' }]);
+  assert.deepEqual(resumen.aplicados, [
+    { formaPago: 'QR', monto: 5000, recibido: 5000 }, { formaPago: 'EFE', monto: 13000, recibido: 20000 },
+  ]);
+  await validarPagosActivos(tx, resumen.aplicados, { total: 18000 });
+  assert.deepEqual(resumen.aplicados.map(datosPagoRecibido), [
+    { formaPago: 'QR', monto: 5000, recibido: 5000, vuelto: 0 },
+    { formaPago: 'EFE', monto: 13000, recibido: 20000, vuelto: 7000 },
+  ]);
+  assert.deepEqual(datosPagoRecibido({ formaPago: 'QR', monto: 30 }), { formaPago: 'QR', monto: 30, recibido: 30, vuelto: 0 });
+  await assert.rejects(validarPagosActivos(tx, [{ formaPago: 'QR', monto: 100, recibido: 150 }]), /Solo el efectivo/);
+  await assert.rejects(validarPagosActivos(tx, [{ formaPago: 'EFE', monto: 100, recibido: 50 }]), /menor/);
 });
 
 test('reconoce efectivo por Cpto caja, DIAN configurado y registros historicos', () => {

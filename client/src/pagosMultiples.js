@@ -48,7 +48,7 @@ export function resumirPagos(pagos, total, formas = FORMAS_PAGO) {
     const monto = centavos(pago.monto);
     const descontar = esPagoEfectivo(pago.formaPago, formas) ? Math.min(monto, vueltoPendiente) : 0;
     vueltoPendiente -= descontar;
-    return { ...pago, monto: (monto - descontar) / 100 };
+    return { ...pago, monto: (monto - descontar) / 100, recibido: monto / 100 };
   }).filter((pago) => pago.monto > 0);
   return {
     valido: validos && Number.isSafeInteger(totalCentavos) && totalCentavos > 0 &&

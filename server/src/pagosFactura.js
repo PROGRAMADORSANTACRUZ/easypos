@@ -66,6 +66,16 @@ export function codigoPagoDian(codigo, formas = []) {
   }[metodo] || (forma ? 'ZZZ' : '10');
 }
 
+export const esFormaPagoEfectivo = (forma) => ['EFE', 'EFECTIVO'].includes(String(forma?.id || '').toUpperCase())
+  || /^10(?:-|$)/.test(String(forma?.formaPagoDian || '').trim());
+
+// Datos a guardar de un pago: lo aplicado a la factura, lo que entrego el cliente y el vuelto.
+export function datosPagoRecibido(pago) {
+  const monto = Math.round(Number(pago.monto) * 100) / 100;
+  const recibido = pago.recibido == null || pago.recibido === '' ? monto : Math.round(Number(pago.recibido) * 100) / 100;
+  return { formaPago: pago.formaPago, monto, recibido, vuelto: Math.round((recibido - monto) * 100) / 100 };
+}
+
 export async function validarPagosActivos(tx, pagos, factura) {
   if (!Array.isArray(pagos) || !pagos.length || pagos.some((pago) => !pago
     || typeof pago.formaPago !== 'string' || !/^[A-Z0-9_-]{1,10}$/.test(pago.formaPago)
@@ -73,11 +83,21 @@ export async function validarPagosActivos(tx, pagos, factura) {
     throw Object.assign(new Error('Selecciona medios de pago activos y montos positivos.'), { status: 400 });
   }
   const codigos = [...new Set(pagos.map((pago) => pago.formaPago))].sort();
-  const formas = await tx.$queryRaw`SELECT "CptoCaja" AS "id", "Activo" AS "activo" FROM "FormasPago"
+  const formas = await tx.$queryRaw`SELECT "CptoCaja" AS "id", "Activo" AS "activo", "FormaPagoDian" AS "formaPagoDian" FROM "FormasPago"
     WHERE "CptoCaja" = ANY(${codigos}::text[]) ORDER BY "CptoCaja" FOR SHARE`;
   for (const codigo of codigos) {
     if (!formas.some((forma) => forma.id === codigo && forma.activo === true)) {
       throw Object.assign(new Error(`El medio de pago ${codigo} no existe o está inactivo. Actualiza los medios de pago.`), { status: 400 });
+    }
+  }
+  for (const pago of pagos) {
+    if (pago.recibido == null || pago.recibido === '') continue;
+    const { recibido, vuelto } = datosPagoRecibido(pago);
+    if (!Number.isFinite(recibido) || vuelto < 0) {
+      throw Object.assign(new Error('El valor recibido no puede ser menor que el valor aplicado al pago.'), { status: 400 });
+    }
+    if (vuelto > 0 && !esFormaPagoEfectivo(formas.find((forma) => forma.id === pago.formaPago))) {
+      throw Object.assign(new Error('Solo el efectivo permite dar vuelto.'), { status: 400 });
     }
   }
   if (factura) separarMetodosPago(factura, pagos);

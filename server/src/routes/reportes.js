@@ -123,7 +123,7 @@ router.get('/revision-diaria-pdv', wrap(async (req, res) => {
     ...Object.fromEntries([...camposMetodoPago, ...camposValorPago].map((campo) => [campo, true])),
     usuario: { select: { nombre: true } },
     apertura: { select: { caja: { select: { id: true, nombre: true } } } },
-    pagos: { where: { formaPago: { not: null } }, select: { formaPago: true, monto: true } },
+    pagos: { where: { formaPago: { not: null } }, select: { formaPago: true, monto: true, recibido: true, vuelto: true } },
   };
   const [electronicas, ventas, formas] = await Promise.all([
     prisma.factura.findMany({ where: { createdAt: rango }, select }),
@@ -136,7 +136,10 @@ router.get('/revision-diaria-pdv', wrap(async (req, res) => {
     if (!Number.isFinite(esperado) || esperado < 0) {
       throw Object.assign(new Error(`La factura ${factura.id} tiene un total inválido.`), { status: 409 });
     }
-    let pagos = !factura.credito ? factura.pagos.map((pago) => ({ metodo: pago.formaPago, monto: pago.monto })) : [];
+    let pagos = !factura.credito ? factura.pagos.map((pago) => ({
+      metodo: pago.formaPago, monto: pago.monto,
+      ingreso: pago.recibido ?? pago.monto, egreso: pago.vuelto || 0,
+    })) : [];
     if (pagos.some((pago) => !pago.metodo?.trim() || !Number.isFinite(pago.monto) || pago.monto <= 0)) {
       throw Object.assign(new Error(`La factura ${factura.id} tiene un pago registrado inválido.`), { status: 409 });
     }
@@ -152,8 +155,16 @@ router.get('/revision-diaria-pdv', wrap(async (req, res) => {
       pagos = coincide(registrados) ? registrados : coincide(historicos) ? historicos : [{ metodo: 'SIN DESGLOSE', monto: esperado }];
     }
     const acumulados = new Map();
-    for (const pago of pagos) acumulados.set(pago.metodo, Math.round(((acumulados.get(pago.metodo) || 0) + pago.monto) * 100) / 100);
-    for (const [metodo, monto] of acumulados) {
+    const sumar = (a, b) => Math.round(((a || 0) + (b || 0)) * 100) / 100;
+    for (const pago of pagos) {
+      const actual = acumulados.get(pago.metodo) || { monto: 0, ingreso: 0, egreso: 0 };
+      acumulados.set(pago.metodo, {
+        monto: sumar(actual.monto, pago.monto),
+        ingreso: sumar(actual.ingreso, pago.ingreso ?? pago.monto),
+        egreso: sumar(actual.egreso, pago.egreso),
+      });
+    }
+    for (const [metodo, { monto, ingreso, egreso }] of acumulados) {
       const forma = formas.find((item) => item.id === metodo);
       filas.push({
         id: `${factura.id}:${metodo}`, cajeroId: factura.usuarioId || factura.usuarioNombre || '',
@@ -161,7 +172,7 @@ router.get('/revision-diaria-pdv', wrap(async (req, res) => {
         fecha: diaColombia(factura.createdAt), compania: factura.companiaCodigo, centro: factura.centroOperacionCodigo,
         cajaId: factura.apertura?.caja?.id || '', caja: factura.apertura?.caja?.nombre || 'Sin caja',
         documento: `${factura.prefijo || ''}${factura.numeroFactura}`, medioId: metodo,
-        medio: forma?.formaPago || metodo, moneda: 'COP', ingreso: null, egreso: null, neto: monto,
+        medio: forma?.formaPago || metodo, moneda: 'COP', ingreso, egreso, neto: monto,
       });
     }
   }

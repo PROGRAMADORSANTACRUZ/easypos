@@ -42,12 +42,12 @@ function factura(id, { total = 100, propina = 0, credito = false, metodoPago = '
   };
 }
 
-test('desglosa pagos reales por cajero, medio y factura sin inventar efectivo recibido ni cambio', async (t) => {
+test('desglosa pagos por cajero, medio y factura con ingreso recibido, vuelto y neto cobrado', async (t) => {
   const datos = {
     formas: [{ id: 'EFE', formaPago: 'Efectivo' }, { id: 'QR', formaPago: 'QR' }],
     facturas: [factura('electronica', {
       total: 130, propina: 10,
-      pagos: [{ formaPago: 'EFE', monto: 75 }, { formaPago: 'QR', monto: 60 }, { formaPago: 'EFE', monto: 5 }],
+      pagos: [{ formaPago: 'EFE', monto: 75, recibido: 100, vuelto: 25 }, { formaPago: 'QR', monto: 60, recibido: 60, vuelto: 0 }, { formaPago: 'EFE', monto: 5 }],
     }), factura('otra-fecha', { dia: '2026-11-12T05:00:00Z' })],
     ventas: [factura('pos', { total: 30, metodoPago: 'QR', pagos: [{ formaPago: 'QR', monto: 30 }] })],
   };
@@ -59,13 +59,14 @@ test('desglosa pagos reales por cajero, medio y factura sin inventar efectivo re
   assert.deepEqual(efectivo, {
     id: 'electronica:EFE', cajeroId: 'cajero-1', cajero: 'Cajera Uno', fecha: '2026-11-11',
     compania: '001', centro: '405', cajaId: 'caja-1', caja: 'Caja principal',
-    documento: 'POS15', medioId: 'EFE', medio: 'Efectivo', moneda: 'COP', ingreso: null, egreso: null, neto: 80,
+    documento: 'POS15', medioId: 'EFE', medio: 'Efectivo', moneda: 'COP', ingreso: 105, egreso: 25, neto: 80,
   });
-  assert.equal(resultado.body.find((fila) => fila.id === 'electronica:QR').neto, 60);
-  assert.equal(resultado.body.find((fila) => fila.id === 'pos:QR').neto, 30);
+  const qr = resultado.body.find((fila) => fila.id === 'electronica:QR');
+  assert.deepEqual([qr.ingreso, qr.egreso, qr.neto], [60, 0, 60]);
+  assert.deepEqual(['ingreso', 'egreso', 'neto'].map((campo) => resultado.body.find((fila) => fila.id === 'pos:QR')[campo]), [30, 0, 30]);
   for (const consulta of consultas) {
     assert.deepEqual(consulta.select.pagos, {
-      where: { formaPago: { not: null } }, select: { formaPago: true, monto: true },
+      where: { formaPago: { not: null } }, select: { formaPago: true, monto: true, recibido: true, vuelto: true },
     });
   }
 });

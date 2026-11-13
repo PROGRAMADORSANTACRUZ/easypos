@@ -121,7 +121,7 @@ const notasResumen = [
   'Se incluyen las notas registradas en todos los estados, incluso pendientes o rechazadas. Actualmente solo pueden vincularse a facturas electrónicas.',
 ];
 const notasRevision = [
-  'El valor neto es el pago aplicado a la factura, incluida la propina. No se guarda el efectivo entregado ni el cambio.',
+  'Ingreso: dinero recibido del cliente. Egreso: vuelto entregado (solo efectivo). Neto: valor cobrado, incluida la propina. En facturas anteriores al 13/11/2026 no se guardó el valor recibido; su ingreso es igual al neto.',
   'Los medios históricos agrupados o sin desglose se muestran tal como están disponibles, sin repartir importes.',
   'Las facturas a crédito no incluyen la deuda no cobrada; solo se muestra la propina registrada.',
 ];
@@ -143,13 +143,16 @@ function agruparResumen(filas) {
 }
 
 function agruparRevision(filas) {
+  const sumar = (a, b) => Math.round((a + (b || 0)) * 100) / 100;
   const cajeros = new Map();
   for (const fila of filas) {
-    const cajero = cajeros.get(fila.cajeroId) || { id: fila.cajeroId, nombre: fila.cajero, neto: 0, medios: new Map() };
-    const medio = cajero.medios.get(fila.medioId) || { id: fila.medioId, nombre: fila.medio, neto: 0, filas: [] };
+    const cajero = cajeros.get(fila.cajeroId) || { id: fila.cajeroId, nombre: fila.cajero, ingreso: 0, egreso: 0, neto: 0, medios: new Map() };
+    const medio = cajero.medios.get(fila.medioId) || { id: fila.medioId, nombre: fila.medio, ingreso: 0, egreso: 0, neto: 0, filas: [] };
     medio.filas.push(fila);
-    medio.neto = Math.round((medio.neto + fila.neto) * 100) / 100;
-    cajero.neto = Math.round((cajero.neto + fila.neto) * 100) / 100;
+    for (const campo of ['ingreso', 'egreso', 'neto']) {
+      medio[campo] = sumar(medio[campo], fila[campo]);
+      cajero[campo] = sumar(cajero[campo], fila[campo]);
+    }
     cajero.medios.set(fila.medioId, medio);
     cajeros.set(fila.cajeroId, cajero);
   }
@@ -454,9 +457,9 @@ export default function Reportes() {
         return {
           columnas: ['Cajero', 'Medio de pago', 'Fecha', 'Moneda', 'Valor ingreso', 'Valor egreso', 'Valor neto', 'Centro', 'T.P.V. / caja', 'Nro documento'],
           filas: revisionFiltrada.length ? [...agruparRevision(revisionFiltrada).flatMap((cajero) => [
-            [cajero.nombre, 'Total cajero', '', '', 'No disponible', 'No disponible', money(cajero.neto), '', '', ''],
+            [cajero.nombre, 'Total cajero', '', '', money(cajero.ingreso), money(cajero.egreso), money(cajero.neto), '', '', ''],
             ...cajero.medios.flatMap((medio) => [
-              [cajero.nombre, `${medio.nombre} (${medio.id})`, 'Total medio', '', 'No disponible', 'No disponible', money(medio.neto), '', '', ''],
+              [cajero.nombre, `${medio.nombre} (${medio.id})`, 'Total medio', '', money(medio.ingreso), money(medio.egreso), money(medio.neto), '', '', ''],
               ...medio.filas.map((fila) => [
                 cajero.nombre, `${fila.medio} (${fila.medioId})`, fila.fecha, fila.moneda,
                 importeResumen(fila.ingreso), importeResumen(fila.egreso), money(fila.neto),
@@ -834,16 +837,16 @@ export default function Reportes() {
                   {agruparRevision(revisionFiltrada).map((cajero) => (
                     <tbody key={cajero.id}>
                       <tr style={{ fontWeight: 700 }}>
-                        <td>{cajero.nombre}</td><td /><td /><td>No disponible</td><td>No disponible</td><td style={{ textAlign: 'right' }}>{money(cajero.neto)}</td><td /><td /><td />
+                        <td>{cajero.nombre}</td><td /><td /><td style={{ textAlign: 'right' }}>{money(cajero.ingreso)}</td><td style={{ textAlign: 'right' }}>{money(cajero.egreso)}</td><td style={{ textAlign: 'right' }}>{money(cajero.neto)}</td><td /><td /><td />
                       </tr>
                       {cajero.medios.flatMap((medio) => [
                         <tr key={`medio-${medio.id}`} style={{ fontWeight: 700 }}>
-                          <td>{medio.nombre} ({medio.id})</td><td /><td /><td>No disponible</td><td>No disponible</td><td style={{ textAlign: 'right' }}>{money(medio.neto)}</td><td /><td /><td />
+                          <td>{medio.nombre} ({medio.id})</td><td /><td /><td style={{ textAlign: 'right' }}>{money(medio.ingreso)}</td><td style={{ textAlign: 'right' }}>{money(medio.egreso)}</td><td style={{ textAlign: 'right' }}>{money(medio.neto)}</td><td /><td /><td />
                         </tr>,
                         ...medio.filas.map((fila) => (
                           <tr key={fila.id}>
                             <td>{fila.medio}</td><td>{fila.fecha}</td><td>{fila.moneda}</td>
-                            <td>{importeResumen(fila.ingreso)}</td><td>{importeResumen(fila.egreso)}</td>
+                            <td style={{ textAlign: 'right' }}>{importeResumen(fila.ingreso)}</td><td style={{ textAlign: 'right' }}>{importeResumen(fila.egreso)}</td>
                             <td style={{ textAlign: 'right' }}>{money(fila.neto)}</td>
                             <td>{fila.compania} / {fila.centro}</td><td>{fila.caja}</td><td>{fila.documento}</td>
                           </tr>
