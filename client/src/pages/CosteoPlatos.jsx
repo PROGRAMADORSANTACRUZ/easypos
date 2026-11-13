@@ -110,6 +110,50 @@ export default function CosteoPlatos() {
     URL.revokeObjectURL(enlace.href);
   };
 
+  const exportarExcel = async () => {
+    const libro = new ExcelJS.Workbook();
+    const formatoMoneda = '"$" #,##0';
+    const resumen = libro.addWorksheet('Costeo de platos');
+    resumen.columns = [
+      { header: 'Código', key: 'codigo', width: 10 }, { header: 'Plato', key: 'nombre', width: 38 },
+      { header: 'Categoría', key: 'categoria', width: 18 }, { header: 'Costo receta', key: 'costo', width: 14, style: { numFmt: formatoMoneda } },
+      { header: 'Precio venta', key: 'precio', width: 14, style: { numFmt: formatoMoneda } },
+      { header: 'Precio neto', key: 'precioNeto', width: 14, style: { numFmt: formatoMoneda } },
+      { header: 'Margen', key: 'margen', width: 14, style: { numFmt: formatoMoneda } },
+      { header: '% costo', key: 'porcentaje', width: 10, style: { numFmt: '0.0%' } },
+      { header: 'Estado', key: 'estado', width: 18 }, { header: 'Insumos sin costo', key: 'sinCosto', width: 16 },
+    ];
+    datos.platos.forEach((plato) => resumen.addRow({
+      ...plato,
+      porcentaje: plato.costo > 0 && plato.porcentajeCosto != null ? plato.porcentajeCosto / 100 : null,
+      estado: plato.costo === 0 ? 'Sin costo' : plato.porcentajeCosto > objetivo ? `Sobre el ${objetivo} %` : 'Dentro del objetivo',
+      sinCosto: plato.insumosSinCosto,
+    }));
+    const recetas = libro.addWorksheet('Recetas');
+    recetas.columns = [
+      { header: 'Plato', key: 'plato', width: 38 }, { header: 'Referencia', key: 'codigo', width: 12 },
+      { header: 'Insumo', key: 'nombre', width: 34 }, { header: 'Cantidad', key: 'cantidad', width: 10 },
+      { header: 'Unidad', key: 'unidad', width: 10 }, { header: 'Costo unitario', key: 'costoUnitario', width: 14, style: { numFmt: formatoMoneda } },
+      { header: 'Subtotal', key: 'subtotal', width: 14, style: { numFmt: formatoMoneda } },
+    ];
+    datos.platos.forEach((plato) => plato.receta.forEach((linea) => recetas.addRow({ plato: plato.nombre, ...linea })));
+    const hojaInsumos = libro.addWorksheet('Insumos');
+    hojaInsumos.columns = [
+      { header: 'Referencia', key: 'codigo', width: 12 }, { header: 'Insumo', key: 'nombre', width: 38 },
+      { header: 'Unidad', key: 'unidad', width: 10 }, { header: 'Costo unitario', key: 'costo', width: 14, style: { numFmt: formatoMoneda } },
+      { header: 'Usado en (platos)', key: 'platos', width: 16 },
+    ];
+    datos.insumos.forEach((insumo) => hojaInsumos.addRow(insumo));
+    for (const hoja of [resumen, recetas, hojaInsumos]) {
+      hoja.getRow(1).font = { bold: true };
+      hoja.views = [{ state: 'frozen', ySplit: 1 }];
+    }
+    const blob = new Blob([await libro.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const enlace = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `costeo-platos-${new Date().toISOString().slice(0, 10)}.xlsx` });
+    enlace.click();
+    URL.revokeObjectURL(enlace.href);
+  };
+
   const recalcular = async () => {
     setOcupado(true);
     try {
@@ -137,6 +181,9 @@ export default function CosteoPlatos() {
             <button type="button" role="tab" aria-selected={vista === 'insumos'} className={vista === 'insumos' ? 'activa' : ''} onClick={() => setVista('insumos')}>Costos de insumos</button>
           </div>
           <input className="costeo-buscar" placeholder={vista === 'platos' ? 'Buscar plato o insumo…' : 'Buscar insumo…'} value={buscar} onChange={(e) => setBuscar(e.target.value)} />
+          <button type="button" className="btn btn-export btn-export-xls" onClick={exportarExcel} title="Descarga el costeo de platos, las recetas y los insumos">
+            <Icon name="download" size={16} /> Reporte de costos
+          </button>
           {puedeEditar && (
             <div className="costeo-acciones">
               <button type="button" className="btn" onClick={descargarPlantilla}><Icon name="download" size={16} /> Plantilla Excel</button>
