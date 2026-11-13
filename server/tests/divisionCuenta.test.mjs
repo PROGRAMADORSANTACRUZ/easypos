@@ -22,7 +22,7 @@ test('extrae 8% incluido en pesos enteros y conserva el bruto como total en amba
     assert.equal(linea.productoCodigo, '0004');
     assert.equal(linea.productoNombre, 'CHUZO DE CHORIZO');
     assert.equal(linea.unidad, 'U');
-    assert.equal(linea.precioUnitario, 7407);
+    assert.equal(linea.precioUnitario, 8000);
     assert.equal(linea.subtotal, 7407);
     assert.equal(linea.impuesto, 593);
     assert.equal(linea.total, 8000);

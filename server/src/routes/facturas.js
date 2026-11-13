@@ -143,7 +143,7 @@ export function calcularLineaPedido(item, electronica) {
     productoCodigo: item.producto?.codigo || null,
     productoNombre: item.producto?.nombre || null,
     unidad: item.producto?.unidad?.abreviatura || 'U',
-    precioUnitario: item.cantidad ? Math.round(subtotal / item.cantidad) : 0,
+    precioUnitario: Number(item.precioUnit) || 0,
     subtotal,
     impuesto,
     total: totalLinea,
@@ -654,7 +654,7 @@ router.post('/', wrap(async (req, res) => {
               centroOperacionCodigo: num.centroOperacionCodigo,
               cantidad: it.cantidad,
               unidad: it.producto.unidad?.abreviatura || 'U',
-              precioUnitario: it.cantidad ? Math.round((lineaSub - lineaIva) / it.cantidad) : 0,
+              precioUnitario: Number(it.precioUnit) || 0,
               iva: lineaIva,
               total: redondear(lineaSub),
             };
@@ -799,7 +799,7 @@ router.post('/directa', wrap(async (req, res) => {
               centroOperacionCodigo: num.centroOperacionCodigo,
               cantidad: cant,
               unidad: buscar(i.productoId).unidad?.abreviatura || 'U',
-              precioUnitario: cant ? Math.round((lineaSub - lineaIva) / cant) : 0,
+              precioUnitario: Number(precio) || 0,
               iva: lineaIva,
               total: redondear(lineaSub),
             };
