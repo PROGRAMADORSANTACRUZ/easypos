@@ -297,7 +297,9 @@ turno tiene pagos inconsistentes, el saldo de ese turno aparece como no disponib
 dias y en el ano, sin propina y en hora de Colombia, con su avance frente a un
 objetivo; pedidos por hora (12 o 24 horas, sin cancelados); facturado por dia de
 la ultima semana e ingresos (ventas) frente a egresos (compras + egresos de caja)
-de los ultimos 12 meses. Los objetivos los edita quien tenga `dashboard.editar`;
+de los ultimos 12 meses; el top 5 de productos del mes por valor facturado (sin
+la propina), los ultimos 10 productos pedidos y el ranking de vendedores del mes
+(mesero del pedido o, en ventas directas, quien facturo). Los objetivos los edita quien tenga `dashboard.editar`;
 un objetivo vacio deja el indicador sin porcentaje. Antes de desplegar, respalda
 y aplica `server/prisma/migrations/20261113010000_dashboard/migration.sql` en cada
 base de restaurante: crea la tabla de objetivos y asigna los permisos al rol ADMIN.

@@ -78,6 +78,41 @@ function Grafico({ datos, etiqueta, series, tipo = 'barras', alto = 220, formato
   );
 }
 
+const COLORES_TOP = ['var(--primary)', '#7C5CBF', '#F5A524', '#2D9CDB', '#8A8178'];
+
+// Dona del top de productos: cada segmento es proporcional al valor facturado.
+function Dona({ productos }) {
+  const radio = 70;
+  const circunferencia = 2 * Math.PI * radio;
+  const total = productos.reduce((suma, producto) => suma + producto.total, 0);
+  let acumulado = 0;
+  const lider = productos[0];
+  return (
+    <svg viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Top 5 productos del mes">
+      <circle cx="100" cy="100" r={radio} fill="none" stroke="var(--border)" strokeWidth="22" />
+      {total > 0 && productos.map((producto, indice) => {
+        const largo = (producto.total / total) * circunferencia;
+        const segmento = (
+          <circle key={producto.id} cx="100" cy="100" r={radio} fill="none" stroke={COLORES_TOP[indice]} strokeWidth="22"
+            strokeDasharray={`${Math.max(0, largo - 2)} ${circunferencia}`} strokeDashoffset={-acumulado} transform="rotate(-90 100 100)">
+            <title>{`${producto.nombre}: ${money(producto.total)} (${producto.cantidad} und.)`}</title>
+          </circle>
+        );
+        acumulado += largo;
+        return segmento;
+      })}
+      {lider && (
+        <>
+          <text x="100" y="94" textAnchor="middle" fontSize="11" fontWeight="700" fill="currentColor">
+            {lider.nombre.length > 20 ? `${lider.nombre.slice(0, 19)}…` : lider.nombre}
+          </text>
+          <text x="100" y="114" textAnchor="middle" fontSize="15" fill="currentColor">{money(lider.total)}</text>
+        </>
+      )}
+    </svg>
+  );
+}
+
 function Leyenda({ series }) {
   return (
     <div className="row" style={{ gap: 14, flexWrap: 'wrap' }}>
@@ -186,6 +221,57 @@ export default function Dashboard() {
           <Leyenda series={seriesIngresos} />
         </div>
         <Grafico datos={datos.ingresosEgresos} etiqueta={(dato) => dato.etiqueta} series={seriesIngresos} alto={260} />
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <h3 style={{ marginTop: 0 }}>Top 5 productos del mes</h3>
+        {(datos.topProductos || []).length === 0 ? <p className="empty">Aún no hay productos facturados este mes.</p> : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <Dona productos={datos.topProductos} />
+            <Leyenda series={datos.topProductos.map((producto, indice) => ({ clave: producto.id, nombre: `${producto.nombre} · ${money(producto.total)}`, color: COLORES_TOP[indice] }))} />
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 16, alignItems: 'flex-start' }}>
+        <div className="card" style={{ flex: '2 1 520px', minWidth: 0 }}>
+          <h3 style={{ marginTop: 0 }}>Últimos pedidos</h3>
+          {(datos.ultimosPedidos || []).length === 0 ? <p className="empty">Sin pedidos.</p> : (
+            <div style={{ overflowX: 'auto' }}>
+              <table>
+                <thead><tr><th>Mesa</th><th>Producto</th><th>Fecha</th><th style={{ textAlign: 'right' }}>Cantidad</th><th>Estado</th><th>Vendedor</th></tr></thead>
+                <tbody>
+                  {datos.ultimosPedidos.map((pedido) => (
+                    <tr key={pedido.id}>
+                      <td>{pedido.mesa}</td>
+                      <td>{pedido.producto}</td>
+                      <td className="mini">{pedido.fecha ? new Date(pedido.fecha).toLocaleString('es-CO', { timeZone: 'America/Bogota' }) : ''}</td>
+                      <td style={{ textAlign: 'right' }}>{pedido.cantidad}</td>
+                      <td><span className={`badge ${pedido.estado === 'Pagada' ? 'green' : pedido.estado === 'Cancelado' ? 'red' : 'orange'}`}>{pedido.estado}</span></td>
+                      <td>{pedido.vendedor}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="card" style={{ flex: '1 1 280px', minWidth: 0 }}>
+          <h3 style={{ marginTop: 0 }}>Vendedores del mes</h3>
+          {(datos.vendedores || []).length === 0 ? <p className="empty">Aún no hay ventas este mes.</p> : datos.vendedores.map((vendedor, indice) => (
+            <div key={vendedor.id} className="row between" style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', flexWrap: 'nowrap' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <Icon name="usuarios" size={18} />
+                <b style={{ overflowWrap: 'anywhere' }}>{vendedor.nombre}</b>
+                {indice < 3 && <span className={`badge ${indice === 0 ? 'red' : 'gray'}`}>Top {indice + 1}</span>}
+              </span>
+              <span style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                <b>{money(vendedor.total)}</b>
+                <div className="mini">{vendedor.facturas} factura(s)</div>
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
       <p className="mini">Valores facturados sin propina, en hora de Colombia. Pedidos cancelados no se cuentan.</p>
 

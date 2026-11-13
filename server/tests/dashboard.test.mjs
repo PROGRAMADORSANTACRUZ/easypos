@@ -4,7 +4,7 @@ import test from 'node:test';
 import { escalaEje, porcentajeObjetivo } from '../../client/src/dashboardCalculos.js';
 
 process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:1/test';
-const { default: router, calcularDashboard, sumarDias } = await import('../src/routes/dashboard.js');
+const { default: router, calcularDashboard, sumarDias, topProductos, vendedoresDelMes, formatearUltimoPedido } = await import('../src/routes/dashboard.js');
 const { tenantStorage } = await import('../src/prisma.js');
 const { permisoPorMetodo } = await import('../src/middleware/auth.js');
 
@@ -102,4 +102,32 @@ test('la migracion crea los objetivos y da el permiso solo al rol ADMIN, sin dup
   } finally {
     await db.close();
   }
+});
+
+test('top 5 por valor sin propina, ranking de vendedores y formato de ultimos pedidos', () => {
+  const lineas = [
+    { productoId: 'p1', nombre: 'Hamburguesa', cantidad: 2, total: 36000 },
+    { productoId: 'p1', nombre: 'Hamburguesa', cantidad: 1, total: 18000 },
+    { productoId: 'p2', nombre: 'Capuchino', cantidad: 3, total: 21000 },
+    { productoId: null, nombre: 'Propina', cantidad: 1, total: 99999, esPropina: true },
+    ...['p3', 'p4', 'p5', 'p6'].map((id, i) => ({ productoId: id, nombre: `Producto ${id}`, cantidad: 1, total: 1000 * (i + 1) })),
+  ];
+  const top = topProductos(lineas);
+  assert.equal(top.length, 5);
+  assert.deepEqual(top.slice(0, 2).map((p) => [p.nombre, p.cantidad, p.total]), [['Hamburguesa', 3, 54000], ['Capuchino', 3, 21000]]);
+  assert.ok(!top.some((p) => p.nombre === 'Propina'));
+  assert.ok(!top.some((p) => p.id === 'p3'));
+
+  assert.deepEqual(vendedoresDelMes([
+    { vendedorId: 'u:1', vendedor: 'Eloy', total: 50000 },
+    { vendedorId: 'u:2', vendedor: 'Ana', total: 70000 },
+    { vendedorId: 'u:1', vendedor: 'Eloy', total: 28500 },
+  ]).map((v) => [v.nombre, v.facturas, v.total]), [['Eloy', 2, 78500], ['Ana', 1, 70000]]);
+
+  const base = { id: 9, cantidad: 2, producto: { nombre: 'Pepsi' } };
+  assert.deepEqual(formatearUltimoPedido({ ...base, pedido: { id: 3, createdAt: 'x', estado: 'FACTURADO', tipo: 'MESA', mesa: { numero: 5 }, usuario: { nombre: 'Eloy' } } }),
+    { id: 9, pedidoId: 3, mesa: 'Mesa 5', producto: 'Pepsi', fecha: 'x', cantidad: 2, estado: 'Pagada', vendedor: 'Eloy' });
+  const domicilio = formatearUltimoPedido({ ...base, pedido: { estado: 'ABIERTO', tipo: 'DOMICILIO', mesera: { nombre: 'Rosa' } } });
+  assert.deepEqual([domicilio.mesa, domicilio.estado, domicilio.vendedor], ['Domicilio', 'En espera', 'Rosa']);
+  assert.equal(formatearUltimoPedido({ ...base, pedido: { estado: 'FACTURADO', tipo: 'MESA' } }).mesa, 'Venta directa');
 });
