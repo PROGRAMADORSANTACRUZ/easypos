@@ -1708,3 +1708,8 @@ tbody tr:last-child td { border-bottom: none; }
   cursor: pointer; transition: opacity .2s ease, background .2s ease;
 }
 .leyenda-top:hover, .leyenda-top[aria-pressed="true"] { background: var(--panel-2); border-color: var(--border); }
+
+/* ---------- Campos de dinero sin flechas de incremento ---------- */
+input.sin-flechas::-webkit-outer-spin-button,
+input.sin-flechas::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input.sin-flechas { -moz-appearance: textfield; appearance: textfield; }

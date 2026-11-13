@@ -108,7 +108,7 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
               <label htmlFor="cierre-base">Base y movimientos contados</label>
               <span className="mini">Esperado: {money(cuadre.valorInicial + cuadre.totalIngresos - cuadre.totalEgresos)}</span>
               <input
-                id="cierre-base" type="number" min="0" step="0.01"
+                id="cierre-base" type="number" min="0" step="0.01" className="sin-flechas" inputMode="decimal" onWheel={(e) => e.currentTarget.blur()}
                 placeholder="Base más ingresos, menos egresos"
                 value={baseContada}
                 onChange={(e) => setBaseContada(e.target.value)}
@@ -122,7 +122,7 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
                 <div key={medio.id} className="field" style={{ marginTop: 8 }}>
                   <label htmlFor={`cierre-medio-${medio.id}`}>{medio.nombre} ({medio.id}) contado{!medio.activo && ' · inactivo'}</label>
                   <span className="mini">Esperado por ventas: {medio.esperado == null ? 'No disponible: hay pagos sin asignar' : money(medio.esperado)}</span>
-                  <input id={`cierre-medio-${medio.id}`} type="number" min="0" step="0.01" value={contado}
+                  <input id={`cierre-medio-${medio.id}`} type="number" min="0" step="0.01" className="sin-flechas" inputMode="decimal" onWheel={(e) => e.currentTarget.blur()} value={contado}
                     onChange={(e) => setContados((actuales) => ({ ...actuales, [medio.id]: e.target.value }))} />
                   {contado !== '' && medio.esperado != null && <Diferencia valor={diferencia(contado, medio.esperado)} />}
                 </div>
