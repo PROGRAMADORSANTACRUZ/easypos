@@ -29,7 +29,7 @@ async function snapshotProducto(productoId) {
   return {
     productoCodigo: producto.codigo,
     productoNombre: producto.nombre,
-    unidad: producto.unidad?.abreviatura || 'UND',
+    unidad: producto.unidad?.abreviatura || 'U',
   };
 }
 

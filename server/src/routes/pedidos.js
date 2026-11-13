@@ -64,7 +64,7 @@ function normalizarCantidades(items, productos) {
     const cantidad = Number(item.cantidad);
     const factor = Number(producto.unidad?.factorConversion) > 0 ? Number(producto.unidad.factorConversion) : 1;
     if (!Number.isFinite(cantidad) || cantidad <= 0 || Math.abs(cantidad * factor - Math.round(cantidad * factor)) > 0.000001) {
-      return { error: `Cantidad inválida para ${producto.nombre}; usa pasos de ${1 / factor} ${producto.unidad?.abreviatura || 'UND'}.` };
+      return { error: `Cantidad inválida para ${producto.nombre}; usa pasos de ${1 / factor} ${producto.unidad?.abreviatura || 'U'}.` };
     }
     normalizados.push({ ...item, productoId: String(item.productoId), cantidad });
   }

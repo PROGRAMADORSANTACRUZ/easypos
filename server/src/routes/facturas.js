@@ -14,8 +14,9 @@ const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 const redondear = (n) => Math.round(n * 100) / 100;
+// El impuesto y la base se guardan en pesos enteros (sin decimales); el total de la linea no cambia.
 export const impuestoSobrePrecio = (precio, porcentaje, incluido = false) =>
-  redondear(precio * porcentaje / (incluido ? 100 + porcentaje : 100));
+  Math.round(precio * porcentaje / (incluido ? 100 + porcentaje : 100));
 
 // Calcula la fecha de vencimiento sumando los dias de credito a hoy.
 const calcularVence = (dias) => {
@@ -141,8 +142,8 @@ export function calcularLineaPedido(item, electronica) {
     item,
     productoCodigo: item.producto?.codigo || null,
     productoNombre: item.producto?.nombre || null,
-    unidad: item.producto?.unidad?.abreviatura || 'UND',
-    precioUnitario: item.cantidad ? redondear(subtotal / item.cantidad) : 0,
+    unidad: item.producto?.unidad?.abreviatura || 'U',
+    precioUnitario: item.cantidad ? Math.round(subtotal / item.cantidad) : 0,
     subtotal,
     impuesto,
     total: totalLinea,
@@ -179,7 +180,7 @@ export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, 
           productoCodigo: linea.item.producto?.codigo || null,
           productoNombre: linea.item.producto?.nombre || null,
           cantidad: cantidadesPartes[indice],
-          unidad: linea.item.producto?.unidad?.abreviatura || 'UND',
+          unidad: linea.item.producto?.unidad?.abreviatura || 'U',
           precioUnitario: linea.precioUnitario,
           subtotal: subtotalParte,
           impuesto: impuestoParte,
@@ -222,7 +223,7 @@ export function crearPartesPedido(pedido, { modo, cantidadPartes, asignaciones, 
           productoCodigo: linea.item.producto?.codigo || null,
           productoNombre: linea.item.producto?.nombre || null,
           cantidad,
-          unidad: linea.item.producto?.unidad?.abreviatura || 'UND',
+          unidad: linea.item.producto?.unidad?.abreviatura || 'U',
           precioUnitario: linea.precioUnitario,
           subtotal: subtotalParte,
           impuesto: impuestoParte,
@@ -652,8 +653,8 @@ router.post('/', wrap(async (req, res) => {
               companiaCodigo: num.companiaCodigo,
               centroOperacionCodigo: num.centroOperacionCodigo,
               cantidad: it.cantidad,
-              unidad: it.producto.unidad?.abreviatura || 'UND',
-              precioUnitario: it.cantidad ? redondear((lineaSub - lineaIva) / it.cantidad) : 0,
+              unidad: it.producto.unidad?.abreviatura || 'U',
+              precioUnitario: it.cantidad ? Math.round((lineaSub - lineaIva) / it.cantidad) : 0,
               iva: lineaIva,
               total: redondear(lineaSub),
             };
@@ -704,7 +705,7 @@ router.post('/directa', wrap(async (req, res) => {
     const cantidad = Number(i.cantidad);
     const factor = Number(producto.unidad?.factorConversion) > 0 ? Number(producto.unidad.factorConversion) : 1;
     if (!Number.isFinite(cantidad) || cantidad <= 0 || Math.abs(cantidad * factor - Math.round(cantidad * factor)) > 0.000001) {
-      return res.status(400).json({ error: `Cantidad inválida para ${producto.nombre}; usa pasos de ${1 / factor} ${producto.unidad?.abreviatura || 'UND'}.` });
+      return res.status(400).json({ error: `Cantidad inválida para ${producto.nombre}; usa pasos de ${1 / factor} ${producto.unidad?.abreviatura || 'U'}.` });
     }
   }
   // Insumos requeridos segun los kits
@@ -797,8 +798,8 @@ router.post('/directa', wrap(async (req, res) => {
               companiaCodigo: num.companiaCodigo,
               centroOperacionCodigo: num.centroOperacionCodigo,
               cantidad: cant,
-              unidad: buscar(i.productoId).unidad?.abreviatura || 'UND',
-              precioUnitario: cant ? redondear((lineaSub - lineaIva) / cant) : 0,
+              unidad: buscar(i.productoId).unidad?.abreviatura || 'U',
+              precioUnitario: cant ? Math.round((lineaSub - lineaIva) / cant) : 0,
               iva: lineaIva,
               total: redondear(lineaSub),
             };

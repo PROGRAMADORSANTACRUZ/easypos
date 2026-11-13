@@ -5,7 +5,7 @@ import { Icon } from '../icons.jsx';
 import { useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, EmptyState } from '../components/ui/index.jsx';
 
-const vacio = { codigo: '', nombre: '', unidad: 'unidad', stock: 0, stockMinimo: 0, costo: 0 };
+const vacio = { codigo: '', nombre: '', unidad: 'U', stock: 0, stockMinimo: 0, costo: 0 };
 
 // Columnas y filas del inventario para exportar
 function datosInventario(items) {
@@ -200,7 +200,7 @@ export default function Inventario() {
     setForm({
       codigo: item.codigo || '',
       nombre: item.nombre || '',
-      unidad: item.unidad || 'UNIDAD',
+      unidad: item.unidad || 'U',
       stock: item.stock ?? 0,
       stockMinimo: item.stockMinimo ?? 0,
       costo: item.costo ?? 0,

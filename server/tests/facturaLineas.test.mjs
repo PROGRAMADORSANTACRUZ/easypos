@@ -10,7 +10,7 @@ test('la propina genera una linea snapshot exenta con codigo configurable', () =
     productoCodigo: CODIGO_PRODUCTO_PROPINA,
     productoNombre: 'Propina',
     cantidad: 1,
-    unidad: 'UND',
+    unidad: 'U',
     precioUnitario: 800,
     iva: 0,
     total: 800,

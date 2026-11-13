@@ -9,7 +9,7 @@ export function crearLineaPropina(valor) {
     productoCodigo: CODIGO_PRODUCTO_PROPINA,
     productoNombre: 'Propina',
     cantidad: 1,
-    unidad: 'UND',
+    unidad: 'U',
     precioUnitario: importe,
     iva: 0,
     total: importe,

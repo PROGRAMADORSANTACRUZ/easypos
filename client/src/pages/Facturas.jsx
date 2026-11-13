@@ -1142,8 +1142,8 @@ export default function Facturas({ electronica = true }) {
   const pasoRapidoUnidad = (producto) => (Number(producto.unidad?.factorConversion) || 1) > 1 ? 0.1 : 1;
 
   const totalProductosDirecta = carrito.reduce((s, c) => s + c.producto.precio * c.cantidad, 0);
-  const impuestoDirecta = Math.round(carrito.reduce((s, c) =>
-    s + c.producto.precio * c.cantidad * (Number(c.producto.iva) || 0) / (100 + (Number(c.producto.iva) || 0)), 0) * 100) / 100;
+  const impuestoDirecta = carrito.reduce((s, c) =>
+    s + Math.round(c.producto.precio * c.cantidad * (Number(c.producto.iva) || 0) / (100 + (Number(c.producto.iva) || 0))), 0);
   const subtotalDirecta = Math.round((totalProductosDirecta - impuestoDirecta) * 100) / 100;
 
   // Categorías presentes en el menú y productos filtrados por categoría + búsqueda
@@ -2009,7 +2009,7 @@ export default function Facturas({ electronica = true }) {
                         {p.foto && <img src={p.foto} alt={p.nombre} className="pc-foto" />}
                         <div className="pc-cat">{p.categoria?.nombre || 'Sin categoría'}</div>
                         <div className="pc-nombre">{p.nombre}</div>
-                        <div className="pc-precio">{money(p.precio)} / {p.unidad?.abreviatura || 'UND'}</div>
+                        <div className="pc-precio">{money(p.precio)} / {p.unidad?.abreviatura || 'U'}</div>
                         {p.disponibles != null && (
                           <div className="pc-disp">{p.disponibles === 0 ? 'Agotado' : `Stock: ${p.disponibles}`}</div>
                         )}
@@ -2040,13 +2040,13 @@ export default function Facturas({ electronica = true }) {
                         <tr key={c.producto.id}>
                           <td>
                             <div style={{ fontWeight: 600, textTransform: 'uppercase' }}>{c.producto.nombre}</div>
-                            <div className="mini">{money(c.producto.precio)} / {c.producto.unidad?.abreviatura || 'UND'}</div>
+                            <div className="mini">{money(c.producto.precio)} / {c.producto.unidad?.abreviatura || 'U'}</div>
                           </td>
                           <td>
                             <div className="qty">
-                              <button className="btn btn-sm" title={`Restar ${pasoRapidoUnidad(c.producto)} ${c.producto.unidad?.abreviatura || 'UND'}`} onClick={() => cambiarDirecta(c.producto.id, -pasoRapidoUnidad(c.producto))}>−</button>
+                              <button className="btn btn-sm" title={`Restar ${pasoRapidoUnidad(c.producto)} ${c.producto.unidad?.abreviatura || 'U'}`} onClick={() => cambiarDirecta(c.producto.id, -pasoRapidoUnidad(c.producto))}>−</button>
                               <input className="qty-num" type="number" min={pasoUnidad(c.producto)} step={pasoUnidad(c.producto)} aria-label={`Cantidad en ${c.producto.unidad?.abreviatura || 'unidades'}`} value={c.cantidad} onChange={(e) => establecerCantidadDirecta(c.producto.id, e.target.value)} />
-                              <button className="btn btn-sm" title={`Sumar ${pasoRapidoUnidad(c.producto)} ${c.producto.unidad?.abreviatura || 'UND'}`} onClick={() => cambiarDirecta(c.producto.id, pasoRapidoUnidad(c.producto))}>+</button>
+                              <button className="btn btn-sm" title={`Sumar ${pasoRapidoUnidad(c.producto)} ${c.producto.unidad?.abreviatura || 'U'}`} onClick={() => cambiarDirecta(c.producto.id, pasoRapidoUnidad(c.producto))}>+</button>
                             </div>
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 700 }}>{money(c.producto.precio * c.cantidad)}</td>

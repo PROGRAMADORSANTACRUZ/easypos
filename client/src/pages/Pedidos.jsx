@@ -141,7 +141,7 @@ export default function Pedidos() {
         nombre: c.producto.nombre,
         cantidad: c.cantidad,
         precioUnit: c.producto.precio,
-        unidad: c.producto.unidad?.abreviatura || 'UND',
+        unidad: c.producto.unidad?.abreviatura || 'U',
         factorConversion: factorUnidad(c.producto),
         disponibles: c.producto.disponibles,
       })),
@@ -342,7 +342,7 @@ export default function Pedidos() {
                   {p.foto && <img src={p.foto} alt={p.nombre} className="pc-foto" />}
                   <div className="pc-cat">{p.categoria?.nombre || 'Sin categoría'}</div>
                   <div className="pc-nombre">{p.nombre}</div>
-                  <div className="pc-precio">{money(p.precio)} / {p.unidad?.abreviatura || 'UND'}</div>
+                  <div className="pc-precio">{money(p.precio)} / {p.unidad?.abreviatura || 'U'}</div>
                   {p.disponibles != null && (
                     <div className="pc-disp">{p.disponibles === 0 ? 'Agotado' : `Stock: ${p.disponibles}`}</div>
                   )}

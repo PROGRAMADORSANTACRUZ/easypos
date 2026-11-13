@@ -51,7 +51,7 @@ router.post('/', wrap(async (req, res) => {
         data: {
           codigo: codigo?.trim() || null,
           nombre: nombre?.trim().toUpperCase(),
-          unidad: unidad?.trim().toUpperCase() || 'UNIDAD',
+          unidad: unidad?.trim().toUpperCase() || 'U',
           stock: Number(stock) || 0,
           stockMinimo: Number(stockMinimo) || 0,
           costo: Number(costo) || 0,
