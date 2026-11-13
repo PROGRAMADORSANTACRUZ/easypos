@@ -1700,3 +1700,11 @@ tbody tr:last-child td { border-bottom: none; }
 .recogida-aviso-moneda { width: 56px; height: 56px; }
 .recogida-aviso-titulo { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
 .recogida-aviso-contador { margin-top: 6px; font-size: 13px; font-weight: 600; }
+
+/* ---------- Leyenda interactiva del top de productos (dashboard) ---------- */
+.leyenda-top {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px;
+  border: 1px solid transparent; background: transparent; color: inherit; font: inherit; font-size: 13px;
+  cursor: pointer; transition: opacity .2s ease, background .2s ease;
+}
+.leyenda-top:hover, .leyenda-top[aria-pressed="true"] { background: var(--panel-2); border-color: var(--border); }

@@ -80,36 +80,72 @@ function Grafico({ datos, etiqueta, series, tipo = 'barras', alto = 220, formato
 
 const COLORES_TOP = ['var(--primary)', '#7C5CBF', '#F5A524', '#2D9CDB', '#8A8178'];
 
-// Dona del top de productos: cada segmento es proporcional al valor facturado.
-function Dona({ productos }) {
-  const radio = 70;
-  const circunferencia = 2 * Math.PI * radio;
+// Trazo de arco SVG entre dos angulos (radianes, 0 = arriba, sentido horario).
+function arco(radio, inicio, fin) {
+  const punto = (angulo) => [100 + radio * Math.sin(angulo), 100 - radio * Math.cos(angulo)];
+  // Un arco de 360 grados no se puede trazar en un solo tramo.
+  if (fin - inicio >= Math.PI * 2 - 1e-6) return `${arco(radio, inicio, inicio + Math.PI)} ${arco(radio, inicio + Math.PI, fin - 1e-4)}`;
+  const [x0, y0] = punto(inicio);
+  const [x1, y1] = punto(fin);
+  return `M ${x0} ${y0} A ${radio} ${radio} 0 ${fin - inicio > Math.PI ? 1 : 0} 1 ${x1} ${y1}`;
+}
+
+// Dona interactiva del top de productos: al pasar o tocar un color, ese segmento sobresale
+// y el centro muestra su nombre y valor; sin seleccion, muestra el mas vendido.
+function TopProductos({ productos }) {
+  const [activo, setActivo] = useState(null);
   const total = productos.reduce((suma, producto) => suma + producto.total, 0);
-  let acumulado = 0;
-  const lider = productos[0];
+  const separacion = productos.length > 1 ? 0.025 : 0;
+  let angulo = 0;
+  const segmentos = productos.map((producto, indice) => {
+    const barrido = total > 0 ? (producto.total / total) * Math.PI * 2 : 0;
+    const segmento = { producto, indice, inicio: angulo + separacion / 2, fin: angulo + barrido - separacion / 2 };
+    angulo += barrido;
+    return segmento;
+  });
+  const mostrado = productos[activo ?? 0];
+  const nombre = mostrado ? (mostrado.nombre.length > 22 ? `${mostrado.nombre.slice(0, 21)}…` : mostrado.nombre) : '';
+  const alternar = (indice) => setActivo((actual) => (actual === indice ? null : indice));
+
   return (
-    <svg viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Top 5 productos del mes">
-      <circle cx="100" cy="100" r={radio} fill="none" stroke="var(--border)" strokeWidth="22" />
-      {total > 0 && productos.map((producto, indice) => {
-        const largo = (producto.total / total) * circunferencia;
-        const segmento = (
-          <circle key={producto.id} cx="100" cy="100" r={radio} fill="none" stroke={COLORES_TOP[indice]} strokeWidth="22"
-            strokeDasharray={`${Math.max(0, largo - 2)} ${circunferencia}`} strokeDashoffset={-acumulado} transform="rotate(-90 100 100)">
-            <title>{`${producto.nombre}: ${money(producto.total)} (${producto.cantidad} und.)`}</title>
-          </circle>
-        );
-        acumulado += largo;
-        return segmento;
-      })}
-      {lider && (
-        <>
-          <text x="100" y="94" textAnchor="middle" fontSize="11" fontWeight="700" fill="currentColor">
-            {lider.nombre.length > 20 ? `${lider.nombre.slice(0, 19)}…` : lider.nombre}
-          </text>
-          <text x="100" y="114" textAnchor="middle" fontSize="15" fill="currentColor">{money(lider.total)}</text>
-        </>
-      )}
-    </svg>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }} onMouseLeave={() => setActivo(null)}>
+      <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label="Top 5 productos del mes" style={{ overflow: 'visible' }}>
+        {segmentos.map(({ producto, indice, inicio, fin }) => {
+          const resaltado = activo === indice;
+          if (fin <= inicio) return null;
+          return (
+            <g key={producto.id} style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setActivo(indice)} onClick={() => alternar(indice)}>
+              <path d={arco(resaltado ? 76 : 70, inicio, fin)} fill="none" stroke={COLORES_TOP[indice]}
+                strokeWidth={resaltado ? 30 : 22} opacity={activo === null || resaltado ? 1 : 0.45}
+                style={{ transition: 'stroke-width .2s ease, opacity .2s ease, d .2s ease' }}>
+                <title>{`${producto.nombre}: ${money(producto.total)} (${producto.cantidad} und.)`}</title>
+              </path>
+              {resaltado && <path d={arco(53, inicio, fin)} fill="none" stroke={COLORES_TOP[indice]} strokeWidth="2.5" strokeLinecap="round" />}
+            </g>
+          );
+        })}
+        {mostrado && (
+          <g aria-live="polite">
+            <text x="100" y="94" textAnchor="middle" fontSize="11" fontWeight="700" fill="currentColor">{nombre}</text>
+            <text x="100" y="114" textAnchor="middle" fontSize="16" fill="currentColor">{money(mostrado.total)}</text>
+            <text x="100" y="130" textAnchor="middle" fontSize="10" fill="var(--muted)">
+              {total > 0 ? `${Math.round((mostrado.total / total) * 1000) / 10}% · ${mostrado.cantidad} und.` : ''}
+            </text>
+          </g>
+        )}
+      </svg>
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {productos.map((producto, indice) => (
+          <button key={producto.id} type="button" className="leyenda-top" aria-pressed={activo === indice}
+            onMouseEnter={() => setActivo(indice)} onFocus={() => setActivo(indice)} onClick={() => alternar(indice)}
+            style={{ opacity: activo === null || activo === indice ? 1 : 0.55, fontWeight: activo === indice ? 800 : 600 }}>
+            <span style={{ width: 12, height: 12, borderRadius: '50%', background: COLORES_TOP[indice], display: 'inline-block', flex: 'none' }} />
+            {producto.nombre}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -227,8 +263,7 @@ export default function Dashboard() {
         <h3 style={{ marginTop: 0 }}>Top 5 productos del mes</h3>
         {(datos.topProductos || []).length === 0 ? <p className="empty">Aún no hay productos facturados este mes.</p> : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-            <Dona productos={datos.topProductos} />
-            <Leyenda series={datos.topProductos.map((producto, indice) => ({ clave: producto.id, nombre: `${producto.nombre} · ${money(producto.total)}`, color: COLORES_TOP[indice] }))} />
+            <TopProductos productos={datos.topProductos} />
           </div>
         )}
       </div>
