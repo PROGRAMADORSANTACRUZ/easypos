@@ -455,18 +455,18 @@ export default function Reportes() {
         };
       case 'revision-diaria-pdv':
         return {
-          columnas: ['Cajero', 'Medio de pago', 'Fecha', 'Moneda', 'Valor ingreso', 'Valor egreso', 'Valor neto', 'Centro', 'T.P.V. / caja', 'Nro documento'],
+          columnas: ['Centro', 'Cajero / medio de pago', 'Moneda', 'Valor ingresado', 'Valor egreso', 'Valor neto', 'T.P.V. / caja', 'Nro documento', 'Fecha'],
           filas: revisionFiltrada.length ? [...agruparRevision(revisionFiltrada).flatMap((cajero) => [
-            [cajero.nombre, 'Total cajero', '', '', money(cajero.ingreso), money(cajero.egreso), money(cajero.neto), '', '', ''],
+            ['', cajero.nombre, '', money(cajero.ingreso), money(cajero.egreso), money(cajero.neto), '', '', ''],
             ...cajero.medios.flatMap((medio) => [
-              [cajero.nombre, `${medio.nombre} (${medio.id})`, 'Total medio', '', money(medio.ingreso), money(medio.egreso), money(medio.neto), '', '', ''],
+              ['', `${medio.nombre} (${medio.id})`, '', money(medio.ingreso), money(medio.egreso), money(medio.neto), '', '', ''],
               ...medio.filas.map((fila) => [
-                cajero.nombre, `${fila.medio} (${fila.medioId})`, fila.fecha, fila.moneda,
+                `${fila.compania} / ${fila.centro}`, fila.medio, fila.moneda,
                 importeResumen(fila.ingreso), importeResumen(fila.egreso), money(fila.neto),
-                `${fila.compania} / ${fila.centro}`, fila.caja, fila.documento,
+                fila.caja, fila.documento, fila.fecha,
               ]),
             ]),
-          ]), ...notasRevision.map((nota) => [nota, '', '', '', '', '', '', '', '', ''])] : [],
+          ]), ...notasRevision.map((nota) => [nota, '', '', '', '', '', '', '', ''])] : [],
         };
       case 'movimientos-caja':
         return {
@@ -832,23 +832,22 @@ export default function Reportes() {
           <>
             <div style={{ overflowX: 'auto' }}>
               {revisionFiltrada.length === 0 ? <p className="empty">Sin pagos para los filtros seleccionados.</p> : (
-                <table>
-                  <thead><tr><th>Cajero / medio de pago</th><th>Fecha</th><th>Moneda</th><th>Valor ingreso</th><th>Valor egreso</th><th>Valor neto</th><th>Centro</th><th>T.P.V. / caja</th><th>Nro documento</th></tr></thead>
+                <table className="tabla-revision">
+                  <thead><tr><th>Centro</th><th className="izq">Cajero / medio de pago</th><th>Moneda</th><th>Valor ingresado</th><th>Valor egreso</th><th>Valor neto</th><th>T.P.V. / caja</th><th>Nro documento</th><th>Fecha</th></tr></thead>
                   {agruparRevision(revisionFiltrada).map((cajero) => (
                     <tbody key={cajero.id}>
-                      <tr style={{ fontWeight: 700 }}>
-                        <td>{cajero.nombre}</td><td /><td /><td style={{ textAlign: 'right' }}>{money(cajero.ingreso)}</td><td style={{ textAlign: 'right' }}>{money(cajero.egreso)}</td><td style={{ textAlign: 'right' }}>{money(cajero.neto)}</td><td /><td /><td />
+                      <tr className="fila-cajero">
+                        <td /><td className="izq">{cajero.nombre}</td><td /><td>{money(cajero.ingreso)}</td><td>{money(cajero.egreso)}</td><td>{money(cajero.neto)}</td><td /><td /><td />
                       </tr>
                       {cajero.medios.flatMap((medio) => [
-                        <tr key={`medio-${medio.id}`} style={{ fontWeight: 700 }}>
-                          <td>{medio.nombre} ({medio.id})</td><td /><td /><td style={{ textAlign: 'right' }}>{money(medio.ingreso)}</td><td style={{ textAlign: 'right' }}>{money(medio.egreso)}</td><td style={{ textAlign: 'right' }}>{money(medio.neto)}</td><td /><td /><td />
+                        <tr key={`medio-${medio.id}`} className="fila-medio">
+                          <td /><td className="izq">{medio.nombre} ({medio.id})</td><td /><td>{money(medio.ingreso)}</td><td>{money(medio.egreso)}</td><td>{money(medio.neto)}</td><td /><td /><td />
                         </tr>,
                         ...medio.filas.map((fila) => (
                           <tr key={fila.id}>
-                            <td>{fila.medio}</td><td>{fila.fecha}</td><td>{fila.moneda}</td>
-                            <td style={{ textAlign: 'right' }}>{importeResumen(fila.ingreso)}</td><td style={{ textAlign: 'right' }}>{importeResumen(fila.egreso)}</td>
-                            <td style={{ textAlign: 'right' }}>{money(fila.neto)}</td>
-                            <td>{fila.compania} / {fila.centro}</td><td>{fila.caja}</td><td>{fila.documento}</td>
+                            <td>{fila.compania} / {fila.centro}</td><td className="izq detalle">{fila.medio}</td><td>{fila.moneda}</td>
+                            <td>{importeResumen(fila.ingreso)}</td><td>{importeResumen(fila.egreso)}</td><td>{money(fila.neto)}</td>
+                            <td>{fila.caja}</td><td>{fila.documento}</td><td>{fila.fecha}</td>
                           </tr>
                         )),
                       ])}
