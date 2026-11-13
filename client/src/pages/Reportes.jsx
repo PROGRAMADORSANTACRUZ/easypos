@@ -7,6 +7,7 @@ import { useToast } from '../App.jsx';
 import { LoadingState } from '../components/ui/index.jsx';
 import { fechaHoraColombia, notaMovimientos, columnasMovimientos, filaMovimiento } from '../reporteMovimientosCaja.js';
 import { notaRecogidas, columnasRecogidas, filaRecogida, totalesRecogidas } from '../reporteRecogidasCaja.js';
+import DocumentosCaja, { columnasDocumentosCaja, filaDocumentoCaja } from '../components/DocumentosCaja.jsx';
 
 const ACCIONES_HISTORIAL = {
   CREAR: 'Pedido creado', AGREGAR_PRODUCTO: 'Producto agregado', CAMBIAR_CANTIDAD: 'Cantidad modificada',
@@ -60,6 +61,7 @@ const REPORTES = [
   { id: 'revision-diaria-pdv', nombre: 'Revisión diaria PDV' },
   { id: 'movimientos-caja', nombre: 'Movimientos de caja' },
   { id: 'recogidas-caja', nombre: 'Recogidas de caja (parciales y cierre)' },
+  { id: 'documentos-caja', nombre: 'Movimiento de documentos de caja' },
   { id: 'gastos', nombre: 'Gastos de insumos (por producto)' },
   { id: 'insumos', nombre: 'Consumo de insumos' },
   { id: 'compras-insumo', nombre: 'Compras por insumo' },
@@ -68,7 +70,7 @@ const REPORTES = [
   { id: 'cocina', nombre: 'Preparación de cocina' },
 ];
 // Reportes que consultan su propio endpoint en lugar del reporte general de ventas.
-const REPORTES_PROPIOS = ['historial-pedidos', 'resumen-facturas-notas', 'revision-diaria-pdv', 'movimientos-caja', 'recogidas-caja'];
+const REPORTES_PROPIOS = ['historial-pedidos', 'resumen-facturas-notas', 'revision-diaria-pdv', 'movimientos-caja', 'recogidas-caja', 'documentos-caja'];
 const CAMPOS_RESUMEN = ['bruto', 'descuentos', 'impuestos', 'neto'];
 
 // Tabla simple de ventas por periodo
@@ -202,7 +204,32 @@ export default function Reportes() {
   const [cajaRecogida, setCajaRecogida] = useState('');
   const [tipoRecogida, setTipoRecogida] = useState('');
   const consultaRecogidas = useRef(0);
+  const [documentosCaja, setDocumentosCaja] = useState([]);
+  const [cargandoDocumentos, setCargandoDocumentos] = useState(false);
+  const [errorDocumentos, setErrorDocumentos] = useState('');
+  const [filtrosDocumentos, setFiltrosDocumentos] = useState({ desde: hoy, hasta: hoy });
+  const consultaDocumentos = useRef(0);
   const notify = useToast();
+
+  const cargarDocumentos = async (inicio = desde, fin = hasta) => {
+    const consulta = ++consultaDocumentos.current;
+    const params = new URLSearchParams();
+    if (inicio) params.set('desde', inicio);
+    if (fin) params.set('hasta', fin);
+    setCargandoDocumentos(true);
+    setErrorDocumentos('');
+    setDocumentosCaja([]);
+    try {
+      const datos = await api.get(`/reportes/documentos-caja?${params}`);
+      if (consulta !== consultaDocumentos.current) return;
+      setDocumentosCaja(datos);
+      setFiltrosDocumentos({ desde: inicio, hasta: fin });
+    } catch (e) {
+      if (consulta === consultaDocumentos.current) setErrorDocumentos(e.message);
+    } finally {
+      if (consulta === consultaDocumentos.current) setCargandoDocumentos(false);
+    }
+  };
 
   const cargarRecogidas = async (inicio = desde, fin = hasta) => {
     const consulta = ++consultaRecogidas.current;
@@ -319,6 +346,7 @@ export default function Reportes() {
     if (sel === 'revision-diaria-pdv') return cargarRevision();
     if (sel === 'movimientos-caja') return cargarMovimientos();
     if (sel === 'recogidas-caja') return cargarRecogidas();
+    if (sel === 'documentos-caja') return cargarDocumentos();
     const params = new URLSearchParams();
     if (desde) params.set('desde', desde);
     if (hasta) params.set('hasta', hasta);
@@ -337,6 +365,7 @@ export default function Reportes() {
     if (sel === 'revision-diaria-pdv') return cargarRevision(hoy, hoy);
     if (sel === 'movimientos-caja') return cargarMovimientos(hoy, hoy);
     if (sel === 'recogidas-caja') return cargarRecogidas(hoy, hoy);
+    if (sel === 'documentos-caja') return cargarDocumentos(hoy, hoy);
     api.get(`/reportes?desde=${hoy}&hasta=${hoy}`).then(setRep).catch((e) => notify(e.message, 'err'));
     api.get(`/reportes/pedidos-mesa?desde=${hoy}&hasta=${hoy}`).then(setPedidosMesa).catch(() => setPedidosMesa([]));
     api.get(`/reportes/cocina?desde=${hoy}&hasta=${hoy}`).then(setCocina).catch(() => setCocina([]));
@@ -370,7 +399,7 @@ export default function Reportes() {
     (!cajeroRecogida || JSON.stringify(fila.cajeroId) === cajeroRecogida)
     && (!cajaRecogida || JSON.stringify(fila.cajaId) === cajaRecogida)
     && (!tipoRecogida || fila.tipo === tipoRecogida));
-  const reporteAncho = ['movimientos-caja', 'recogidas-caja'].includes(sel);
+  const reporteAncho = ['movimientos-caja', 'recogidas-caja', 'documentos-caja'].includes(sel);
   const notaExportacion = sel === 'movimientos-caja' ? notaMovimientos : sel === 'recogidas-caja' ? notaRecogidas : null;
 
   // Construye { columnas, filas } del reporte actual para exportar
@@ -468,6 +497,11 @@ export default function Reportes() {
             ]),
           ]), ...notasRevision.map((nota) => [nota, '', '', '', '', '', '', '', ''])] : [],
         };
+      case 'documentos-caja':
+        return {
+          columnas: columnasDocumentosCaja,
+          filas: documentosCaja.map(filaDocumentoCaja),
+        };
       case 'movimientos-caja':
         return {
           columnas: columnasMovimientos,
@@ -560,8 +594,8 @@ export default function Reportes() {
     }
   };
 
-  const rangoDesde = sel === 'historial-pedidos' ? filtrosHistorial.desde : sel === 'resumen-facturas-notas' ? filtrosResumen.desde : sel === 'revision-diaria-pdv' ? filtrosRevision.desde : sel === 'movimientos-caja' ? filtrosMovimientos.desde : sel === 'recogidas-caja' ? filtrosRecogidas.desde : desde;
-  const rangoHasta = sel === 'historial-pedidos' ? filtrosHistorial.hasta : sel === 'resumen-facturas-notas' ? filtrosResumen.hasta : sel === 'revision-diaria-pdv' ? filtrosRevision.hasta : sel === 'movimientos-caja' ? filtrosMovimientos.hasta : sel === 'recogidas-caja' ? filtrosRecogidas.hasta : hasta;
+  const rangoDesde = sel === 'historial-pedidos' ? filtrosHistorial.desde : sel === 'resumen-facturas-notas' ? filtrosResumen.desde : sel === 'revision-diaria-pdv' ? filtrosRevision.desde : sel === 'movimientos-caja' ? filtrosMovimientos.desde : sel === 'recogidas-caja' ? filtrosRecogidas.desde : sel === 'documentos-caja' ? filtrosDocumentos.desde : desde;
+  const rangoHasta = sel === 'historial-pedidos' ? filtrosHistorial.hasta : sel === 'resumen-facturas-notas' ? filtrosResumen.hasta : sel === 'revision-diaria-pdv' ? filtrosRevision.hasta : sel === 'movimientos-caja' ? filtrosMovimientos.hasta : sel === 'recogidas-caja' ? filtrosRecogidas.hasta : sel === 'documentos-caja' ? filtrosDocumentos.hasta : hasta;
   const rangoTexto = (rangoDesde || rangoHasta ? `${rangoDesde || '...'} a ${rangoHasta || '...'}` : 'Todo el histórico')
     + (sel === 'historial-pedidos' && filtrosHistorial.motivo ? ` · Motivo: ${filtrosHistorial.motivo}` : '')
     + (sel === 'revision-diaria-pdv' && centroRevision ? ` · Centro: ${centrosRevision.find(([id]) => id === centroRevision)?.[1]}` : '')
@@ -858,6 +892,10 @@ export default function Reportes() {
             </div>
             {notasRevision.map((nota) => <p key={nota} className="mini">{nota}</p>)}
           </>
+        );
+      case 'documentos-caja':
+        return cargandoDocumentos ? <LoadingState label="Cargando documentos de caja…" /> : errorDocumentos ? <p role="alert">{errorDocumentos}</p> : (
+          <DocumentosCaja documentos={documentosCaja} />
         );
       case 'movimientos-caja':
         return cargandoMovimientos ? <LoadingState label="Cargando movimientos…" /> : errorMovimientos ? <p role="alert">{errorMovimientos}</p> : (

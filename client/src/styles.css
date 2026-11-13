@@ -587,6 +587,30 @@ tbody tr:last-child td { border-bottom: none; }
 .tabla-revision .fila-medio td { font-weight: 700; }
 .tabla-revision tbody tr:last-child td { border-bottom: 1px solid var(--border); }
 
+.tabla-documentos-caja th, .tabla-documentos-caja td,
+.tabla-documento-caja th, .tabla-documento-caja td { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tabla-documentos-caja .izq, .tabla-documento-caja .izq { text-align: left; }
+.tabla-documentos-caja tbody tr { cursor: pointer; user-select: none; }
+.tabla-documentos-caja tbody tr.seleccionada, .tabla-documentos-caja tbody tr.seleccionada:hover { background: var(--primary-soft, rgba(225, 54, 38, .12)); outline: 1px solid var(--primary); }
+.documento-caja-modal { max-width: 980px; }
+.documento-caja-cabecera {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 18px;
+  margin: 14px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2);
+}
+.documento-caja-cabecera div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.documento-caja-cabecera span { color: var(--muted); font-size: var(--fs-caption); text-transform: uppercase; letter-spacing: .4px; }
+.documento-caja-cabecera b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.documento-caja-pestanas { display: flex; gap: 4px; border-bottom: 1px solid var(--border-strong); }
+.documento-caja-pestanas button {
+  background: transparent; color: var(--muted); border: 1px solid transparent; border-bottom: none;
+  padding: 8px 14px; border-radius: 8px 8px 0 0; cursor: pointer; font: inherit; font-weight: 600;
+}
+.documento-caja-pestanas button.activa { background: var(--panel-2); color: var(--text); border-color: var(--border-strong); margin-bottom: -1px; }
+.documento-caja-contenido { max-height: 55vh; overflow: auto; padding-top: 8px; }
+.tabla-documento-caja .negativo { color: var(--red); font-weight: 700; }
+.tabla-documento-caja .positivo { color: var(--green); font-weight: 700; }
+@media (max-width: 700px) { .documento-caja-cabecera { grid-template-columns: 1fr 1fr; } }
+
 .badge {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 10px; border-radius: var(--radius-pill);

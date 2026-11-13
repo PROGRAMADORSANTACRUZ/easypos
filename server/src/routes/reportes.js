@@ -4,6 +4,7 @@ import { diaColombia, inicioDiaColombia, finDiaColombia } from '../fechaColombia
 import { filtroHistorialPedidos, estadoActualPedido, estadoAntesDeReenvio } from '../historialPedidos.js';
 import { camposMetodoPago, camposValorPago, desglosarFactura } from '../pagosFactura.js';
 import { efectivoDeFactura } from './aperturas.js';
+import { construirDocumentosCaja } from '../documentosCaja.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -178,6 +179,49 @@ router.get('/revision-diaria-pdv', wrap(async (req, res) => {
   }
   res.json(filas.sort((a, b) => a.cajero.localeCompare(b.cajero) || a.cajeroId.localeCompare(b.cajeroId)
     || a.medioId.localeCompare(b.medioId) || a.fecha.localeCompare(b.fecha) || a.documento.localeCompare(b.documento)));
+}));
+
+router.get('/documentos-caja', wrap(async (req, res) => {
+  const rango = rangoReporte(req.query.desde, req.query.hasta);
+  const enRango = (fecha) => (!rango.gte || fecha >= rango.gte) && (!rango.lt || fecha < rango.lt);
+  const usuario = { select: { nombre: true, usuario: true } };
+  // Se leen todas las recogidas y cierres para que el consecutivo no dependa del filtro.
+  const [recogidas, cerradas, centrosRaw, formas] = await Promise.all([
+    prisma.movimientoCaja.findMany({
+      where: { tipo: 'RECOGIDA' },
+      select: { id: true, aperturaId: true, fecha: true, monto: true, motivo: true, usuario },
+    }),
+    prisma.aperturaCaja.findMany({ where: { estado: 'CERRADA', fechaCierre: { not: null } }, select: { id: true } }),
+    prisma.$queryRaw`SELECT DISTINCT ON ("aperturaId") "aperturaId", "compania", "centro" FROM (
+        SELECT "AperturaId" AS "aperturaId", "CompaniaCodigo" AS "compania", "CentroOperacionCodigo" AS "centro" FROM "FacturaOperacion"
+        UNION ALL
+        SELECT "AperturaId", "CompaniaCodigo", "CentroOperacionCodigo" FROM "FacturaVentaOperacion"
+      ) t WHERE "aperturaId" IS NOT NULL ORDER BY "aperturaId", "centro"`,
+    prisma.formaPago.findMany({ select: { id: true, formaPago: true, formaPagoDian: true } }),
+  ]);
+  const aperturaIds = [...new Set([...recogidas.map((r) => r.aperturaId), ...cerradas.map((a) => a.id)])];
+  const aperturas = aperturaIds.length ? await prisma.aperturaCaja.findMany({
+    where: { id: { in: aperturaIds } },
+    select: { id: true, estado: true, fechaCierre: true, cuadreMedios: true, caja: { select: { nombre: true } }, usuario },
+  }) : [];
+  const enRangoIds = [...new Set([
+    ...recogidas.filter((r) => enRango(r.fecha)).map((r) => r.aperturaId),
+    ...aperturas.filter((a) => a.fechaCierre && enRango(a.fechaCierre)).map((a) => a.id),
+  ])];
+  const seleccion = { aperturaId: true, prefijo: true, numeroFactura: true, pagos: { where: { formaPago: { not: null } }, select: { formaPago: true, monto: true, referencia: true } } };
+  const [movimientos, facturas, ventas] = enRangoIds.length ? await Promise.all([
+    prisma.movimientoCaja.findMany({ where: { aperturaId: { in: enRangoIds } }, select: { aperturaId: true, tipo: true, monto: true } }),
+    prisma.factura.findMany({ where: { aperturaId: { in: enRangoIds } }, select: seleccion }),
+    prisma.facturaVenta.findMany({ where: { aperturaId: { in: enRangoIds } }, select: seleccion }),
+  ]) : [[], [], []];
+  const pagos = [...facturas, ...ventas].flatMap((factura) => factura.pagos.map((pago) => ({
+    ...pago, aperturaId: factura.aperturaId, documento: `${factura.prefijo || ''}${factura.numeroFactura}`,
+  })));
+  const centros = new Map(centrosRaw.map((fila) => [fila.aperturaId, { compania: fila.compania, centro: fila.centro }]));
+  const documentos = construirDocumentosCaja({ recogidas, aperturas, pagos, movimientos, formas, centros })
+    .filter((documento) => enRango(documento.fecha))
+    .map(({ aperturaId, letra, ...documento }) => ({ ...documento, clase: letra }));
+  res.json(documentos);
 }));
 
 router.get('/movimientos-caja', wrap(async (req, res) => {

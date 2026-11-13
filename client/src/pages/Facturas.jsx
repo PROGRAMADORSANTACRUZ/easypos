@@ -236,7 +236,7 @@ export async function imprimirRecibo(f, efectivo, campoFormato = 'formatoFactura
     ${pagoHtml}
     ${efectivo && efectivo.recibido !== '' && efectivo.recibido != null
       ? `<div class="tot"><span>Recibe</span><span>${money(Number(efectivo.recibido))}</span></div>
-         <div class="tot"><span>Vuelto</span><span>${money(Math.max(0, Number(efectivo.recibido) - (f.total + (f.propina || 0))))}</span></div>`
+         <div class="tot"><span>Vuelto</span><span>${money(efectivo.vuelto != null ? Number(efectivo.vuelto) : Math.max(0, Number(efectivo.recibido) - (f.total + (f.propina || 0))))}</span></div>`
       : ''}
     <div class="pie">
       <div class="big">¡Gracias por su compra!</div>
@@ -987,7 +987,7 @@ export default function Facturas({ electronica = true }) {
       const recFinal = pagoPedido.pagos.some((pago) => esPagoEfectivo(pago.formaPago, mediosActivos)) ? resumen.recibido : null;
       setSel({ ...factura, _recibido: recFinal });
       setCobrando(null);
-      await imprimirGenerada(factura, recFinal != null ? { recibido: recFinal } : null, ventana);
+      await imprimirGenerada(factura, recFinal != null ? { recibido: recFinal, vuelto: resumen.vuelto } : null, ventana);
       await cargar();
       await avisarRecogida();
     } catch (e) {
@@ -1267,7 +1267,7 @@ export default function Facturas({ electronica = true }) {
       const recDirecta = pagosDirecta.pagos.some((pago) => esPagoEfectivo(pago.formaPago, mediosActivos)) ? resumen.recibido : null;
       setSel({ ...factura, _recibido: recDirecta });
       setDirectaAbierta(false);
-      await imprimirGenerada(factura, recDirecta != null ? { recibido: recDirecta } : null, ventana);
+      await imprimirGenerada(factura, recDirecta != null ? { recibido: recDirecta, vuelto: resumen.vuelto } : null, ventana);
       await cargar();
       await avisarRecogida();
     } catch (e) {

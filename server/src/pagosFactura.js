@@ -66,6 +66,8 @@ export function codigoPagoDian(codigo, formas = []) {
   }[metodo] || (forma ? 'ZZZ' : '10');
 }
 
+export const CODIGO_AJUSTE_PESO = 'AJP';
+
 export const esFormaPagoEfectivo = (forma) => ['EFE', 'EFECTIVO'].includes(String(forma?.id || '').toUpperCase())
   || /^10(?:-|$)/.test(String(forma?.formaPagoDian || '').trim());
 
@@ -91,6 +93,10 @@ export async function validarPagosActivos(tx, pagos, factura) {
     }
   }
   for (const pago of pagos) {
+    if (pago.formaPago === CODIGO_AJUSTE_PESO && (Number(pago.monto) >= 50
+      || !pagos.some((otro) => esFormaPagoEfectivo(formas.find((forma) => forma.id === otro.formaPago))))) {
+      throw Object.assign(new Error('El ajuste al peso solo aplica a cobros en efectivo y debe ser menor a $50.'), { status: 400 });
+    }
     if (pago.recibido == null || pago.recibido === '') continue;
     const { recibido, vuelto } = datosPagoRecibido(pago);
     if (!Number.isFinite(recibido) || vuelto < 0) {

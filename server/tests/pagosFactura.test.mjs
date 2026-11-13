@@ -43,6 +43,27 @@ test('guarda lo recibido y el vuelto solo en efectivo, y el cliente envia lo ent
   await assert.rejects(validarPagosActivos(tx, [{ formaPago: 'EFE', monto: 100, recibido: 50 }]), /menor/);
 });
 
+test('redondea el cobro en efectivo hacia abajo a $50 y registra la diferencia como ajuste al peso', async () => {
+  const medios = [{ codigo: 'EFE', esEfectivo: true }, { codigo: 'DAT' }];
+  const efectivo = resumirPagos([{ formaPago: 'EFE', monto: 20000 }], 15527, medios);
+  assert.equal(efectivo.ajuste, 27);
+  assert.equal(efectivo.vuelto, 4500);
+  assert.equal(efectivo.valido, true);
+  assert.deepEqual(efectivo.aplicados, [
+    { formaPago: 'EFE', monto: 15500, recibido: 20000 }, { formaPago: 'AJP', monto: 27, recibido: 27 },
+  ]);
+  const mixto = resumirPagos([{ formaPago: 'DAT', monto: 10000 }, { formaPago: 'EFE', monto: 5500 }], 15547, medios);
+  assert.deepEqual([mixto.ajuste, mixto.pendiente, mixto.valido], [47, 0, true]);
+  assert.equal(resumirPagos([{ formaPago: 'DAT', monto: 15527 }], 15527, medios).ajuste, 0);
+  assert.equal(resumirPagos([{ formaPago: 'DAT', monto: 15500 }, { formaPago: 'EFE', monto: 100 }], 15527, medios).ajuste, 0);
+
+  const formas = [{ id: 'EFE', activo: true, formaPagoDian: '10' }, { id: 'DAT', activo: true }, { id: 'AJP', activo: true }];
+  const tx = { $queryRaw: async (sql, codigos) => formas.filter((forma) => codigos.includes(forma.id)) };
+  await validarPagosActivos(tx, efectivo.aplicados, { total: 15527 });
+  await assert.rejects(validarPagosActivos(tx, [{ formaPago: 'DAT', monto: 15500 }, { formaPago: 'AJP', monto: 27 }]), /ajuste al peso/);
+  await assert.rejects(validarPagosActivos(tx, [{ formaPago: 'EFE', monto: 15450 }, { formaPago: 'AJP', monto: 77 }]), /ajuste al peso/);
+});
+
 test('reconoce efectivo por Cpto caja, DIAN configurado y registros historicos', () => {
   assert.equal(esMedioEfectivo('EFE'), true);
   assert.equal(esMedioEfectivo('EFECTIVO'), true);
@@ -219,10 +240,10 @@ test('conserva el tratamiento de propinas de facturas mixtas anteriores y pagos 
 });
 
 test('el formato del cliente conserva centavos al calcular el cierre de caja', () => {
-  const pagos = [{ formaPago: 'EFECTIVO', monto: 15000.25 }, { formaPago: 'TARJETA', monto: 10000.5 }];
-  const metodoPago = etiquetaPagos(pagos, 25000.75);
-  assert.deepEqual(desglosarFactura({ total: 25000.75, propina: 0, metodoPago }), [
-    { metodo: 'EFECTIVO', monto: 15000.25 }, { metodo: 'TARJETA', monto: 10000.5 },
+  const pagos = [{ formaPago: 'EFECTIVO', monto: 15000 }, { formaPago: 'TARJETA', monto: 10000.5 }];
+  const metodoPago = etiquetaPagos(pagos, 25000.5);
+  assert.deepEqual(desglosarFactura({ total: 25000.5, propina: 0, metodoPago }), [
+    { metodo: 'EFECTIVO', monto: 15000 }, { metodo: 'TARJETA', monto: 10000.5 },
   ]);
 });
 

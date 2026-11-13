@@ -279,6 +279,28 @@ adiciones y recogidas no se registran en el movimiento y aparecen como no
 disponibles; no se infieren a partir del tipo de ingreso o egreso. Las recogidas
 parciales si se identifican en su columna.
 
+El reporte **Movimiento de documentos de caja** lista un documento por cada
+recogida parcial (`E`, por ejemplo `E04-405-00000001`) y por cada cierre de caja
+(`G`, con todos los medios de pago agrupados). El consecutivo se asigna en orden
+cronologico por letra, compania y centro (tomado de las facturas de la apertura).
+Las columnas reparten los saldos asi: Efectivo = EFE, Tarjeta credito = DAT/DTF,
+Tarjeta debito = DBO, Cheque = medio con codigo DIAN 20 y Otros = el resto (AJP,
+QR, transferencias). Con doble clic (o Enter) se abre el detalle con tres
+pestanas: **Conceptos de caja** (saldo de cada medio como debito; los faltantes
+como credito del medio mas un debito `FAL`, y los sobrantes como debito del medio
+mas un credito `SOB`), **Medios de pago** (efectivo en una linea y cada pago de
+otros medios con su referencia y documento) y **Cuadre fisico** (saldo, fisico
+contado y diferencia por medio, guardados al cerrar caja; en cierres antiguos el
+fisico no esta registrado).
+
+**Ajuste al peso (AJP).** Cuando un cobro incluye efectivo, la parte en efectivo
+se redondea hacia abajo al multiplo de $50 y la diferencia (menor a $50) se
+registra como un pago `AJP - AJUSTE AL PESO` (referencia "Redondeo documento").
+El total de la factura no cambia. El medio se crea con la migracion
+`20261113080000_ajuste_al_peso`, no aparece como boton de cobro y en el cierre se
+cuenta como cualquier otro medio. El servidor rechaza un AJP de $50 o mas o sin
+pago en efectivo.
+
 **Recogida parcial.** El efectivo en caja sin la base (ventas en efectivo +
 ingresos - egresos - recogidas) se compara con un tope de $1.000.000
 (configurable con `TOPE_RECOGIDA_CAJA`); con base de $300.000 se activa al haber $1.300.000 en caja. Al alcanzarlo, una moneda parpadeante lo indica y se abre un recuadro al entrar a

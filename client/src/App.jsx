@@ -128,6 +128,7 @@ const REPORTES_NAV = [
   { id: 'revision-diaria-pdv', nombre: 'Revisión diaria PDV' },
   { id: 'movimientos-caja', nombre: 'Movimientos de caja' },
   { id: 'recogidas-caja', nombre: 'Recogidas de caja (parciales y cierre)' },
+  { id: 'documentos-caja', nombre: 'Movimiento de documentos de caja' },
   { id: 'gastos', nombre: 'Gastos de insumos (por producto)' },
   { id: 'insumos', nombre: 'Consumo de insumos' },
   { id: 'pedidos-mesa', nombre: 'Pedidos por mesa' },

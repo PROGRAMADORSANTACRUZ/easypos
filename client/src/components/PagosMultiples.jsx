@@ -51,6 +51,9 @@ export default function PagosMultiples({ value = { recibe: '', pagos: [] }, onCh
       </div>
       <div aria-live="polite">
         <div className="total-line"><span>Total recibido</span><span>{monedaPago(resumen.recibido)}</span></div>
+        {resumen.ajuste > 0 && (
+          <div className="total-line"><span>Ajuste al peso (AJP)</span><span>{monedaPago(resumen.ajuste)}</span></div>
+        )}
         <div className="total-line grand"><span>Pendiente</span><span>{monedaPago(resumen.pendiente)}</span></div>
         {resumen.vuelto > 0 && (
           <div className="total-line grand"><span>Vuelto</span><span>{monedaPago(resumen.vuelto)}</span></div>

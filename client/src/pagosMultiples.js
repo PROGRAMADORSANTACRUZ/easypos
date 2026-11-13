@@ -4,8 +4,12 @@ export const FORMAS_PAGO = [
   { codigo: 'TRANSFERENCIA', nombre: 'Transferencia', icono: 'swap' },
 ];
 
+export const CODIGO_AJUSTE_PESO = 'AJP';
+// El efectivo se cobra redondeado hacia abajo a este multiplo (en centavos); la diferencia es el ajuste al peso.
+const MULTIPLO_EFECTIVO_CENTAVOS = 5000;
+
 export function formasPagoActivas(registros) {
-  return (registros || []).filter((forma) => forma.activo === true).map((forma) => ({
+  return (registros || []).filter((forma) => forma.activo === true && forma.id !== CODIGO_AJUSTE_PESO).map((forma) => ({
     codigo: forma.id,
     nombre: forma.formaPago,
     esEfectivo: forma.id === 'EFE' || /^10(?:-|$)/.test(forma.formaPagoDian || ''),
@@ -35,13 +39,18 @@ export function agregarPago(pagos, formaPago, valor, formas = FORMAS_PAGO) {
 }
 
 export function resumirPagos(pagos, total, formas = FORMAS_PAGO) {
-  const totalCentavos = centavos(total);
+  const totalFactura = centavos(total);
   const validos = pagos.length > 0 && new Set(pagos.map((pago) => pago.formaPago)).size <= 4 && pagos.every((pago) =>
     formas.some((forma) => forma.codigo === pago.formaPago) &&
     Number.isSafeInteger(centavos(pago.monto)) && centavos(pago.monto) > 0);
   const recibidoCentavos = pagos.reduce((suma, pago) => suma + (centavos(pago.monto) || 0), 0);
   const noEfectivo = pagos.filter((pago) => !esPagoEfectivo(pago.formaPago, formas))
     .reduce((suma, pago) => suma + (centavos(pago.monto) || 0), 0);
+  const conEfectivo = pagos.some((pago) => esPagoEfectivo(pago.formaPago, formas));
+  const ajusteCentavos = conEfectivo && new Set(pagos.map((pago) => pago.formaPago)).size < 4
+    && totalFactura - noEfectivo >= MULTIPLO_EFECTIVO_CENTAVOS
+    ? (totalFactura - noEfectivo) % MULTIPLO_EFECTIVO_CENTAVOS : 0;
+  const totalCentavos = totalFactura - ajusteCentavos;
   const vueltoCentavos = Math.max(0, recibidoCentavos - totalCentavos);
   let vueltoPendiente = vueltoCentavos;
   const aplicados = pagos.map((pago) => {
@@ -50,12 +59,14 @@ export function resumirPagos(pagos, total, formas = FORMAS_PAGO) {
     vueltoPendiente -= descontar;
     return { ...pago, monto: (monto - descontar) / 100, recibido: monto / 100 };
   }).filter((pago) => pago.monto > 0);
+  if (ajusteCentavos > 0) aplicados.push({ formaPago: CODIGO_AJUSTE_PESO, monto: ajusteCentavos / 100, recibido: ajusteCentavos / 100 });
   return {
-    valido: validos && Number.isSafeInteger(totalCentavos) && totalCentavos > 0 &&
+    valido: validos && Number.isSafeInteger(totalFactura) && totalFactura > 0 &&
       recibidoCentavos >= totalCentavos && noEfectivo <= totalCentavos,
     recibido: recibidoCentavos / 100,
     pendiente: Math.max(0, totalCentavos - recibidoCentavos) / 100,
     vuelto: vueltoCentavos / 100,
+    ajuste: ajusteCentavos / 100,
     aplicados,
   };
 }
