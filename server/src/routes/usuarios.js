@@ -8,28 +8,24 @@ import { centrosUnicos } from '../centrosUsuario.js';
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-// Freno basico anti fuerza-bruta en memoria: bloquea 15 min tras 5 intentos fallidos
-// por combinacion IP+usuario. Se reinicia si el proceso se reinicia (aceptable para un POS local).
-const INTENTOS_MAX = 5;
-const BLOQUEO_MS = 15 * 60 * 1000;
-const intentosLogin = new Map(); // clave -> { fallos, bloqueadoHasta }
-function claveIntento(req, usuario) {
-  return `${req.ip}:${usuario}`;
-}
-function registrarFallo(clave) {
-  const actual = intentosLogin.get(clave) || { fallos: 0, bloqueadoHasta: 0 };
-  actual.fallos += 1;
-  if (actual.fallos >= INTENTOS_MAX) actual.bloqueadoHasta = Date.now() + BLOQUEO_MS;
-  intentosLogin.set(clave, actual);
-}
-function limpiarIntentos(clave) {
-  intentosLogin.delete(clave);
+// Sin bloqueo por intentos fallidos (decision del negocio): solo se agrega una pausa corta
+// a cada fallo para frenar intentos automaticos sin impedir que el usuario siga intentando.
+const PAUSA_FALLO_MS = 700;
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// La contrasena se acepta sin importar mayusculas/minusculas ni espacios al inicio o al final,
+// porque los formularios del POS escriben en mayusculas y se confundia al ingresar.
+export function contrasenaCoincide(password, hash) {
+  if (typeof password !== 'string' || !hash) return false;
+  const limpia = password.trim();
+  const variantes = [...new Set([password, limpia, limpia.toUpperCase(), limpia.toLowerCase()])];
+  return variantes.some((variante) => variante && bcrypt.compareSync(variante, hash));
 }
 
 // Politica minima de contrasena. Devuelve mensaje de error o null si es valida.
 const PASSWORD_MIN = 6;
 function validarPassword(password) {
-  if (typeof password !== 'string' || password.length < PASSWORD_MIN) {
+  if (typeof password !== 'string' || password.trim().length < PASSWORD_MIN) {
     return `La contraseña debe tener al menos ${PASSWORD_MIN} caracteres`;
   }
   if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
@@ -65,21 +61,14 @@ router.post('/login', wrap(async (req, res) => {
   const { usuario, password } = req.body;
   if (!usuario || !password) return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
 
-  const usuarioNormalizado = normalizarUsuario(usuario);
-  const clave = claveIntento(req, usuarioNormalizado);
-  const intento = intentosLogin.get(clave);
-  if (intento?.bloqueadoHasta > Date.now()) {
-    const minutos = Math.ceil((intento.bloqueadoHasta - Date.now()) / 60000);
-    return res.status(429).json({ error: `Demasiados intentos fallidos. Intenta de nuevo en ${minutos} min.` });
-  }
+  const usuarioNormalizado = normalizarUsuario(String(usuario).trim());
 
   const u = await prisma.usuario.findFirst({ where: { usuario: { equals: usuarioNormalizado, mode: 'insensitive' } } });
-  if (!u || !bcrypt.compareSync(password, u.passwordHash)) {
-    registrarFallo(clave);
+  if (!u || !contrasenaCoincide(password, u.passwordHash)) {
+    await esperar(PAUSA_FALLO_MS);
     return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
   }
   if (!u.activo) return res.status(403).json({ error: 'Usuario inactivo' });
-  limpiarIntentos(clave);
   await auditar({ req, usuarioId: u.id, accion: 'LOGIN', entidad: 'Usuario', entidadId: u.id, detalle: u.usuario });
   const datos = await conRolesYPermisos(u);
   // Si el request trajo un restaurante resuelto (header x-tenant-id), lo devolvemos
@@ -200,7 +189,7 @@ router.post('/', soloAdmin, wrap(async (req, res) => {
   if (existe) return res.status(409).json({ error: 'Ese usuario ya existe' });
   const creado = await prisma.$transaction(async (tx) => {
     const nuevoUsuario = await tx.usuario.create({
-      data: { nombre: nombreNormalizado, usuario: usuarioNormalizado, correo: correoNormalizado || null, passwordHash: bcrypt.hashSync(password, 10) },
+      data: { nombre: nombreNormalizado, usuario: usuarioNormalizado, correo: correoNormalizado || null, passwordHash: bcrypt.hashSync(password.trim(), 10) },
     });
     await asignarRoles(nuevoUsuario.id, roles, tx);
     await tx.usuarioCentroOperacion.createMany({
@@ -247,7 +236,7 @@ router.put('/:id', soloAdmin, wrap(async (req, res) => {
         ...(nombreNormalizado !== undefined && { nombre: nombreNormalizado }),
         ...(usuarioNormalizado !== undefined && { usuario: usuarioNormalizado }),
         ...(correoNormalizado !== undefined && { correo: correoNormalizado }),
-        ...(password !== undefined && password !== '' && { passwordHash: bcrypt.hashSync(password, 10) }),
+        ...(password !== undefined && password !== '' && { passwordHash: bcrypt.hashSync(password.trim(), 10) }),
         ...(activo !== undefined && { activo }),
       },
     });

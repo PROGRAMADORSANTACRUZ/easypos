@@ -50,10 +50,13 @@ test('el usuario escrito en mayúsculas permite entrar a cuentas históricas en 
   assert.equal(response.body.usuario, 'rodolfo');
 });
 
-test('el bloqueo anti-fuerza-bruta agrupa intentos aunque cambie la capitalización', async (t) => {
+test('no bloquea tras varios fallos y acepta la contraseña sin importar mayúsculas ni espacios', async (t) => {
   const solicitar = await entorno(t);
-  for (const intento of ['rodolfo', 'RODOLFO', 'Rodolfo', 'rOdOlFo', 'RODOLFO']) {
+  for (const intento of ['rodolfo', 'RODOLFO', 'Rodolfo', 'rOdOlFo', 'RODOLFO', 'RODOLFO']) {
     assert.equal((await solicitar(intento, 'incorrecta')).status, 401);
   }
-  assert.equal((await solicitar('RODOLFO', 'clave123')).status, 429);
+  assert.equal((await solicitar('RODOLFO', 'clave123')).status, 200);
+  assert.equal((await solicitar(' rodolfo ', 'CLAVE123')).status, 200);
+  assert.equal((await solicitar('RODOLFO', ' Clave123 ')).status, 200);
+  assert.equal((await solicitar('RODOLFO', 'clave1234')).status, 401);
 });

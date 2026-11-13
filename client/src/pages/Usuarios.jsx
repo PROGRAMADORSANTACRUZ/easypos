@@ -47,6 +47,7 @@ export default function Usuarios() {
   const [uForm, setUForm] = useState(uVacio);
   const [editId, setEditId] = useState(null);
   const [modalUsuario, setModalUsuario] = useState(false);
+  const [verPassword, setVerPassword] = useState(false);
   const notify = useToast();
 
   const cargar = async () => {
@@ -267,7 +268,7 @@ export default function Usuarios() {
             </>
           )}
         >
-          <form id="usuario-form" onSubmit={guardarUsuario}>
+          <form id="usuario-form" onSubmit={guardarUsuario} autoComplete="off">
             <div className="field">
               <label>Nombre completo</label>
               <input autoCapitalize="characters" style={{ textTransform: 'uppercase' }} value={uForm.nombre} onChange={(e) => setUForm({ ...uForm, nombre: e.target.value.toUpperCase() })} required />
@@ -275,7 +276,7 @@ export default function Usuarios() {
             <div className="grid form-2col" style={{ gap: 12 }}>
               <div className="field">
                 <label>Usuario (acceso)</label>
-                <input autoCapitalize="characters" style={{ textTransform: 'uppercase' }} value={uForm.usuario} onChange={(e) => setUForm({ ...uForm, usuario: e.target.value.toUpperCase() })} required />
+                <input name="usuario-acceso" autoComplete="off" autoCapitalize="characters" style={{ textTransform: 'uppercase' }} value={uForm.usuario} onChange={(e) => setUForm({ ...uForm, usuario: e.target.value.toUpperCase() })} required />
               </div>
               <div className="field">
                 <label>Correo</label>
@@ -283,15 +284,25 @@ export default function Usuarios() {
               </div>
             </div>
             <div className="field">
-              <label>{editId ? 'Contraseña (dejar vacío para mantener)' : 'Contraseña'}</label>
-              <input
-                type="password"
-                value={uForm.password}
-                onChange={(e) => setUForm({ ...uForm, password: e.target.value })}
-                placeholder={editId ? '••••••' : ''}
-                required={!editId}
-              />
-              <span className="mini">Mínimo 6 caracteres, con letras y números.</span>
+              <label htmlFor="usuario-password">{editId ? 'Contraseña (dejar vacío para mantener)' : 'Contraseña'}</label>
+              <div className="login-password">
+                <input
+                  id="usuario-password"
+                  name="nueva-contrasena"
+                  type={verPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  value={uForm.password}
+                  onChange={(e) => setUForm({ ...uForm, password: e.target.value })}
+                  placeholder={editId ? '••••••' : ''}
+                  required={!editId}
+                />
+                <button type="button" className="login-password__toggle" aria-pressed={verPassword}
+                  aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'} title={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  onClick={() => setVerPassword((visible) => !visible)}>
+                  <Icon name={verPassword ? 'eyeOff' : 'eye'} size={18} />
+                </button>
+              </div>
+              <span className="mini">Mínimo 6 caracteres, con letras y números. Al ingresar no importan mayúsculas ni minúsculas.</span>
             </div>
             <div className="field">
               <label>Roles</label>
