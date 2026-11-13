@@ -28,6 +28,7 @@ import CrudPage from './components/CrudPage.jsx';
 import { CENTROS_OPERACIONES_CFG, COMPANIAS_CFG, CRUD_ENTIDADES } from './crudConfig.js';
 import Productos from './pages/Productos.jsx';
 import Kits from './pages/Kits.jsx';
+import CosteoPlatos from './pages/CosteoPlatos.jsx';
 import Facturas from './pages/Facturas.jsx';
 import Cortesias from './pages/Cortesias.jsx';
 import Cuentas from './pages/Cuentas.jsx';
@@ -75,7 +76,7 @@ const GRUPO_POR_MODULO = {
   mesas: 'ventas', cocina: 'ventas', factura_venta: 'ventas', cortesias: 'ventas', pedidos: 'ventas',
   domicilios: 'ventas', repartidor: 'ventas',
   cuentas: 'ventas', clientes: 'ventas', caja: 'ventas',
-  productos: 'inventario', inventario: 'inventario', bodegas: 'inventario', movimientos: 'inventario', compras: 'inventario', proveedores: 'inventario',
+  productos: 'inventario', inventario: 'inventario', costeo: 'inventario', bodegas: 'inventario', movimientos: 'inventario', compras: 'inventario', proveedores: 'inventario',
   facturas: 'dian', resoluciones: 'dian', notas_credito: 'dian', notas_debito: 'dian', retenciones: 'dian', eventos_dian: 'dian', logs_integraciones: 'dian',
   empresa: 'parametros', companias: 'parametros', centros_operaciones: 'parametros', asignacion_cajas: 'parametros', tipos_documentos: 'parametros',
   reportes: 'reportes', dashboard: 'reportes',
@@ -159,6 +160,7 @@ export const NAV_GRUPOS = [
     items: [
       { permiso: 'productos.ver', ruta: '/productos', label: 'Productos', icon: 'productos' },
       { permiso: 'productos.ver', ruta: '/kits', label: 'Kits', icon: 'kits' },
+      { permiso: 'costeo.ver', ruta: '/costeo', label: 'Costeo de platos', icon: 'costeo' },
       { permiso: 'inventario.ver', ruta: '/ensamble', label: 'Ensamble', icon: 'kits' },
       { permiso: 'inventario.ver', ruta: '/inventario', label: 'Inventario', icon: 'inventario' },
       { permiso: 'inventario.ver', ruta: '/bajas', label: 'Bajas', icon: 'movimientos' },
@@ -526,6 +528,7 @@ export default function App() {
               {puede(user, 'cocina.ver') && <Route path="/cocina" element={<Cocina />} />}
               {puede(user, 'productos.ver') && <Route path="/productos" element={<Productos />} />}
               {puede(user, 'productos.ver') && <Route path="/kits" element={<Kits />} />}
+              {puede(user, 'costeo.ver') && <Route path="/costeo" element={<CosteoPlatos />} />}
               {puede(user, 'inventario.ver') && <Route path="/ensamble" element={<Ensamble />} />}
               {puede(user, 'inventario.ver') && <Route path="/inventario" element={<Inventario />} />}
               {puede(user, 'inventario.ver') && <Route path="/bajas" element={<Bajas />} />}

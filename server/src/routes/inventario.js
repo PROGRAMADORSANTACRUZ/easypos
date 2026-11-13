@@ -3,6 +3,7 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { ajustarStockEnBodega, buscarBodegaCompras } from '../inventarioKits.js';
 import { actualizarReferenciasExistentesSiesa } from '../siesaProductos.js';
+import { recalcularCostosPlatos } from '../costeoPlatos.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -91,6 +92,7 @@ router.put('/:id', wrap(async (req, res) => {
         },
         include: { cuentaContable: true },
       });
+      if (costo !== undefined && Number(costo) !== anterior.costo) await recalcularCostosPlatos(tx, { itemIds: [id] });
       if (stock !== undefined) {
         const bodega = await buscarBodegaCompras(tx);
         await ajustarStockEnBodega(tx, id, bodega.id, Number(stock) - anterior.stock);

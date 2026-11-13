@@ -17,6 +17,7 @@ const MODULOS = {
   cuentas: ['ver', 'abonar'],
   productos: ['ver', 'crear', 'editar', 'eliminar'],
   inventario: ['ver', 'crear', 'editar', 'eliminar'],
+  costeo: ['ver', 'editar'],
   bodegas: ['ver', 'crear', 'editar', 'eliminar'],
   movimientos: ['ver', 'crear', 'editar', 'eliminar'],
   caja: ['ver', 'crear', 'editar', 'eliminar', 'abrir', 'cerrar'],

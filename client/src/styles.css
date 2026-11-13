@@ -611,6 +611,26 @@ tbody tr:last-child td { border-bottom: none; }
 .tabla-documento-caja .positivo { color: var(--green); font-weight: 700; }
 @media (max-width: 700px) { .documento-caja-cabecera { grid-template-columns: 1fr 1fr; } }
 
+.costeo-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.costeo-kpis .card { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; }
+.costeo-kpis span { color: var(--muted); font-size: var(--fs-caption); text-transform: uppercase; letter-spacing: .4px; }
+.costeo-kpis b { font-size: 1.5rem; }
+.costeo-kpis b.alto { color: var(--red); }
+.costeo-barra { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 12px; }
+.costeo-buscar { flex: 1 1 220px; max-width: 340px; }
+.costeo-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.costeo-acciones .btn { display: inline-flex; align-items: center; gap: 6px; }
+.tabla-costeo th, .tabla-costeo td { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tabla-costeo .izq { text-align: left; }
+.tabla-costeo .negativo { color: var(--red); font-weight: 700; }
+.tabla-costeo .fila-plato { cursor: pointer; }
+.tabla-costeo .fila-plato td:first-child svg { vertical-align: -2px; color: var(--muted); }
+.tabla-costeo .fila-receta > td { background: var(--panel-2); padding: 8px 12px 12px 34px; }
+.tabla-costeo.receta th { position: static; background: transparent; }
+.costeo-input { width: 130px; text-align: right; }
+.costeo-input.vacio { border-color: var(--red); }
+@media (max-width: 900px) { .costeo-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 .badge {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 10px; border-radius: var(--radius-pill);

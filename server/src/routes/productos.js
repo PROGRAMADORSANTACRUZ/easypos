@@ -3,6 +3,7 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { imprimirComandaPorEstacion } from '../impresionCocina.js';
 import { sincronizarItemsSiesa } from '../siesaProductos.js';
+import { costoReceta, recalcularCostosPlatos } from '../costeoPlatos.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -159,6 +160,8 @@ router.post('/', wrap(async (req, res) => {
       include: { componentes: { include: { item: true } }, categoria: true, impuesto: true, unidad: true },
     });
     await auditar({ req, accion: 'CREAR', entidad: 'producto', entidadId: producto.id, detalle: producto.nombre });
+    if (producto.esKit) producto.costo = costoReceta(producto.componentes);
+    if (producto.esKit) await prisma.producto.update({ where: { id: producto.id }, data: { costo: producto.costo } });
     res.status(201).json(producto);
   } catch (e) {
     if (e.code === 'P2002') return res.status(409).json({ error: 'Ya existe un producto con ese código' });
@@ -193,7 +196,8 @@ router.put('/:id', wrap(async (req, res) => {
           });
         }
       }
-      return tx.producto.update({
+      const recetaNueva = Array.isArray(componentes) && componentes.length > 0;
+      const actualizado = await tx.producto.update({
         where: { id },
         data: {
           ...(nombre !== undefined && { nombre: nombre?.trim().toUpperCase() }),
@@ -201,7 +205,7 @@ router.put('/:id', wrap(async (req, res) => {
           ...(codigo !== undefined && { codigo: codigo?.trim() || null }),
           ...(codigoBarras !== undefined && { codigoBarras: codigoBarras?.trim() || null }),
           ...(descripcion !== undefined && { descripcion: descripcion?.trim().toUpperCase() || null }),
-          ...(costo !== undefined && { costo: Number(costo) || 0 }),
+          ...(costo !== undefined && !recetaNueva && { costo: Number(costo) || 0 }),
           ...(impuestoId !== undefined && { impuestoId: impuestoId ? String(impuestoId) : null }),
           ...(ivaSync !== undefined ? { iva: ivaSync } : (iva !== undefined && { iva: Number(iva) || 0 })),
           ...(unidadId !== undefined && { unidadId: unidadId ? String(unidadId) : null }),
@@ -213,6 +217,10 @@ router.put('/:id', wrap(async (req, res) => {
         },
         include: { componentes: { include: { item: true } }, categoria: true, impuesto: true, unidad: true },
       });
+      if (!recetaNueva) return actualizado;
+      // El costo de un plato con receta se calcula con sus insumos.
+      await recalcularCostosPlatos(tx, { productoIds: [id] });
+      return tx.producto.findUnique({ where: { id }, include: { componentes: { include: { item: true } }, categoria: true, impuesto: true, unidad: true } });
     });
 
     await auditar({ req, accion: 'EDITAR', entidad: 'producto', entidadId: producto.id, detalle: producto.nombre });

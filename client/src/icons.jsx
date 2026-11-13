@@ -4,7 +4,7 @@ import {
   ShoppingCart, Armchair, ReceiptText, HandCoins, Sandwich, Package,
   Warehouse, ArrowLeftRight, Banknote, ScrollText, FileMinus, FilePlus, Percent,
   ShoppingBag, Factory, Users, BarChart3, UserCog, ShieldCheck, Building2,
-  Database, ClipboardList, Sun, Moon, ChevronDown, Tags, PartyPopper,
+  Database, ClipboardList, Sun, Moon, ChevronDown, ChevronRight, Upload, Tags, PartyPopper,
   BadgeDollarSign, FileText, Truck, CreditCard, Coins, UserRound, FolderTree,
   Landmark, Antenna, Plug, Circle, Calculator, Gift,
   Pencil, Trash2, X, Plus, Minus, DollarSign, Save, Check, Ban, RotateCw, Download,
@@ -60,6 +60,9 @@ const MAP = {
   sun: Sun,
   moon: Moon,
   chevronDown: ChevronDown,
+  chevronRight: ChevronRight,
+  upload: Upload,
+  costeo: Calculator,
   // Acciones
   edit: Pencil,
   delete: Trash2,

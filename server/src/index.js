@@ -58,6 +58,7 @@ import cortesiasRouter from './routes/cortesias.js';
 import usuariosRouter from './routes/usuarios.js';
 import reportesRouter from './routes/reportes.js';
 import dashboardRouter from './routes/dashboard.js';
+import costeoRouter from './routes/costeo.js';
 import clientesRouter from './routes/clientes.js';
 import catalogosSiesaRouter from './routes/catalogosSiesa.js';
 import cuentasRouter from './routes/cuentas.js';
@@ -157,6 +158,7 @@ app.use('/api/cortesias', requireAuth, permisoModuloFacturacion('cortesias'), co
 app.use('/api/usuarios', usuariosRouter);
 app.use('/api/reportes', requireAuth, permisoPorMetodo('reportes'), reportesRouter);
 app.use('/api/dashboard', requireAuth, permisoPorMetodo('dashboard'), dashboardRouter);
+app.use('/api/costeo', requireAuth, permisoPorMetodo('costeo'), costeoRouter);
 app.use('/api/clientes', requireAuth, permisoPorMetodo('clientes'), clientesRouter);
 app.use('/api/catalogos-siesa', requireAuth, permisoPorMetodo('clientes'), catalogosSiesaRouter);
 app.use('/api/cuentas', requireAuth, permisoPorMetodo('cuentas'), cuentasRouter);

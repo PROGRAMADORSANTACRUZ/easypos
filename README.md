@@ -293,6 +293,17 @@ otros medios con su referencia y documento) y **Cuadre fisico** (saldo, fisico
 contado y diferencia por medio, guardados al cerrar caja; en cierres antiguos el
 fisico no esta registrado).
 
+**Costeo de platos** (Inventario y Compras > Costeo de platos, permisos `costeo.ver`
+y `costeo.editar`, migracion `20261113090000_costeo_platos`). Muestra cada plato con
+receta: costo (suma de cantidad x costo unitario de sus insumos), precio de venta,
+precio neto sin impuesto, margen y % de costo sobre el neto (en rojo si supera el
+objetivo, 33 % por defecto o `OBJETIVO_COSTO_PLATO`). Al abrir un plato se ve su
+receta con el costo y la participacion de cada insumo. En la pestana **Costos de
+insumos** se edita el costo unitario de cada insumo; tambien se puede descargar una
+plantilla y **importar costos desde Excel** (columnas `Referencia` -codigo o nombre
+del insumo- y `Costo`). Cada cambio de costo de un insumo (aqui, en Inventario o por
+importacion) y cada cambio de receta recalcula y guarda el costo (`Producto.Costo`)
+de los platos afectados; el boton **Recalcular** los actualiza todos.
 **Ajuste al peso (AJP).** Cuando un cobro incluye efectivo, la parte en efectivo
 se redondea hacia abajo al multiplo de $50 y la diferencia (menor a $50) se
 registra como un pago `AJP - AJUSTE AL PESO` (referencia "Redondeo documento").
