@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { costoReceta, indicadoresPlato, leerCosto, recalcularCostosPlatos } from '../costeoPlatos.js';
+import { diaColombia, inicioDiaColombia, finDiaColombia } from '../fechaColombia.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -44,6 +45,45 @@ async function datosCosteo() {
 
 router.get('/', wrap(async (_req, res) => {
   res.json(await datosCosteo());
+}));
+
+// Costo de lo vendido en un periodo: unidades vendidas de cada plato x costo actual de su receta.
+router.get('/ventas', wrap(async (req, res) => {
+  const { desde, hasta } = req.query;
+  const valida = (valor) => typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor) && diaColombia(inicioDiaColombia(valor)) === valor;
+  if (!valida(desde) || !valida(hasta) || desde > hasta) return res.status(400).json({ error: 'Selecciona un rango de fechas válido.' });
+  const where = { fecha: { gte: inicioDiaColombia(desde), lt: finDiaColombia(hasta) }, productoId: { not: null } };
+  const select = { productoId: true, cantidad: true, total: true, iva: true };
+  const [electronicas, pos, { platos }] = await Promise.all([
+    prisma.facturaDetalle.findMany({ where, select }),
+    prisma.facturaVentaDetalle.findMany({ where, select }),
+    datosCosteo(),
+  ]);
+  const porPlato = new Map(platos.map((plato) => [plato.id, plato]));
+  const acumulado = new Map();
+  for (const linea of [...electronicas, ...pos]) {
+    const plato = porPlato.get(linea.productoId);
+    if (!plato) continue;
+    const fila = acumulado.get(plato.id) || { id: plato.id, nombre: plato.nombre, categoria: plato.categoria, costoUnitario: plato.costo, unidades: 0, ventaNeta: 0 };
+    fila.unidades += Number(linea.cantidad) || 0;
+    fila.ventaNeta += (Number(linea.total) || 0) - (Number(linea.iva) || 0);
+    acumulado.set(plato.id, fila);
+  }
+  const r2 = (valor) => Math.round(valor * 100) / 100;
+  const filas = [...acumulado.values()].map((fila) => {
+    const costoTotal = r2(fila.costoUnitario * fila.unidades);
+    const ventaNeta = r2(fila.ventaNeta);
+    return {
+      ...fila, unidades: r2(fila.unidades), ventaNeta, costoTotal, utilidad: r2(ventaNeta - costoTotal),
+      porcentajeCosto: ventaNeta > 0 ? r2(costoTotal / ventaNeta * 100) : null,
+    };
+  }).sort((a, b) => b.costoTotal - a.costoTotal || b.ventaNeta - a.ventaNeta);
+  const ventaNeta = r2(filas.reduce((s, f) => s + f.ventaNeta, 0));
+  const costoTotal = r2(filas.reduce((s, f) => s + f.costoTotal, 0));
+  res.json({
+    desde, hasta, filas,
+    totales: { unidades: r2(filas.reduce((s, f) => s + f.unidades, 0)), ventaNeta, costoTotal, utilidad: r2(ventaNeta - costoTotal), porcentajeCosto: ventaNeta > 0 ? r2(costoTotal / ventaNeta * 100) : null },
+  });
 }));
 
 // Cambia el costo de un insumo y recalcula al instante los platos que lo usan.

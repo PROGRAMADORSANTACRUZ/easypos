@@ -93,4 +93,15 @@ test('importa costos por referencia o nombre, recalcula platos e informa lo no e
   assert.equal(platos[0].costo, 10000);
   assert.equal(cuerpo.platos[0].costo, 10000);
   assert.equal(cuerpo.platos[0].porcentajeCosto, 50);
+
+  const filtros = [];
+  const lineas = (filas) => async ({ where }) => { filtros.push(where); return filas; };
+  db.facturaDetalle = { findMany: lineas([{ productoId: 'p1', cantidad: 2, total: 43200, iva: 3200 }]) };
+  db.facturaVentaDetalle = { findMany: lineas([{ productoId: 'p1', cantidad: 1, total: 21600, iva: 1600 }, { productoId: 'otro', cantidad: 5, total: 5000, iva: 0 }]) };
+  const base = `http://127.0.0.1:${server.address().port}/costeo/ventas`;
+  const ventas = await (await fetch(`${base}?desde=2026-11-01&hasta=2026-11-13`)).json();
+  assert.deepEqual(ventas.filas.map((f) => [f.nombre, f.unidades, f.costoTotal, f.ventaNeta, f.utilidad, f.porcentajeCosto]), [['CHICHARRON + AREPA', 3, 30000, 60000, 30000, 50]]);
+  assert.deepEqual(ventas.totales, { unidades: 3, ventaNeta: 60000, costoTotal: 30000, utilidad: 30000, porcentajeCosto: 50 });
+  assert.ok(filtros[0].fecha.gte instanceof Date && filtros[0].fecha.lt instanceof Date);
+  assert.equal((await fetch(`${base}?desde=2026-11-13&hasta=2026-11-01`)).status, 400);
 });

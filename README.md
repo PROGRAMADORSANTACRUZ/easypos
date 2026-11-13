@@ -303,7 +303,7 @@ insumos** se edita el costo unitario de cada insumo; tambien se puede descargar 
 plantilla y **importar costos desde Excel** (columnas `Referencia` -codigo o nombre
 del insumo- y `Costo`). Cada cambio de costo de un insumo (aqui, en Inventario o por
 importacion) y cada cambio de receta recalcula y guarda el costo (`Producto.Costo`)
-de los platos afectados; el boton **Recalcular** los actualiza todos. El boton **Reporte de costos** descarga un Excel con tres hojas: costeo de platos (costo, precios, margen, % de costo y estado frente al objetivo), recetas (insumo por insumo) e insumos.
+de los platos afectados; el boton **Recalcular** los actualiza todos. El boton **Reporte de costos** descarga un Excel con tres hojas: costeo de platos (costo, precios, margen, % de costo y estado frente al objetivo), recetas (insumo por insumo) e insumos. La pestana **Costo de ventas (por fechas)** filtra Desde/Hasta y muestra por plato las unidades vendidas, el costo (unidades x costo actual de la receta), la venta neta sin impuesto ni propina, la utilidad y el % de costo, con totales y exportacion a Excel.
 **Ajuste al peso (AJP).** Cuando un cobro incluye efectivo, la parte en efectivo
 se redondea hacia abajo al multiplo de $50 y la diferencia (menor a $50) se
 registra como un pago `AJP - AJUSTE AL PESO` (referencia "Redondeo documento").

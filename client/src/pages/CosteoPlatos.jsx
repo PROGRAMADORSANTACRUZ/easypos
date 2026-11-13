@@ -42,7 +42,18 @@ export default function CosteoPlatos() {
   const [abierto, setAbierto] = useState(null);
   const [edicion, setEdicion] = useState({});
   const [ocupado, setOcupado] = useState(false);
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+  const [rango, setRango] = useState({ desde: `${hoy.slice(0, 8)}01`, hasta: hoy });
+  const [ventas, setVentas] = useState(null);
+  const [cargandoVentas, setCargandoVentas] = useState(false);
   const archivoRef = useRef(null);
+
+  const consultarVentas = async () => {
+    if (!rango.desde || !rango.hasta || rango.desde > rango.hasta) return notify('Selecciona un rango de fechas válido.', 'err');
+    setCargandoVentas(true);
+    try { setVentas(await api.get(`/costeo/ventas?desde=${rango.desde}&hasta=${rango.hasta}`)); } catch (e) { notify(e.message, 'err'); } finally { setCargandoVentas(false); }
+  };
+  useEffect(() => { if (vista === 'ventas' && !ventas) consultarVentas(); }, [vista]);
 
   const cargar = async () => {
     try { setDatos(await api.get('/costeo')); } catch (e) { notify(e.message, 'err'); }
@@ -154,6 +165,28 @@ export default function CosteoPlatos() {
     URL.revokeObjectURL(enlace.href);
   };
 
+  const exportarVentas = async () => {
+    if (!ventas?.filas.length) return notify('No hay ventas para exportar en ese rango.', 'err');
+    const libro = new ExcelJS.Workbook();
+    const hoja = libro.addWorksheet('Costo de ventas');
+    const formatoMoneda = '"$" #,##0';
+    hoja.addRow([`Costo de ventas del ${ventas.desde} al ${ventas.hasta}`]).font = { bold: true, size: 13 };
+    hoja.addRow([]);
+    const columnas = ['Plato', 'Categoría', 'Unidades', 'Costo unitario', 'Costo total', 'Venta neta', 'Utilidad', '% costo'];
+    hoja.addRow(columnas).font = { bold: true };
+    const filaDatos = (f) => [f.nombre, f.categoria, f.unidades, f.costoUnitario, f.costoTotal, f.ventaNeta, f.utilidad, f.porcentajeCosto == null ? null : f.porcentajeCosto / 100];
+    ventas.filas.forEach((fila) => hoja.addRow(filaDatos(fila)));
+    const t = ventas.totales;
+    hoja.addRow(['TOTAL', '', t.unidades, null, t.costoTotal, t.ventaNeta, t.utilidad, t.porcentajeCosto == null ? null : t.porcentajeCosto / 100]).font = { bold: true };
+    [38, 18, 10, 14, 14, 14, 14, 10].forEach((ancho, i) => { hoja.getColumn(i + 1).width = ancho; });
+    [4, 5, 6, 7].forEach((col) => { hoja.getColumn(col).numFmt = formatoMoneda; });
+    hoja.getColumn(8).numFmt = '0.0%';
+    const blob = new Blob([await libro.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const enlace = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `costo-ventas-${ventas.desde}-a-${ventas.hasta}.xlsx` });
+    enlace.click();
+    URL.revokeObjectURL(enlace.href);
+  };
+
   const recalcular = async () => {
     setOcupado(true);
     try {
@@ -179,7 +212,22 @@ export default function CosteoPlatos() {
           <div className="documento-caja-pestanas" role="tablist">
             <button type="button" role="tab" aria-selected={vista === 'platos'} className={vista === 'platos' ? 'activa' : ''} onClick={() => setVista('platos')}>Platos</button>
             <button type="button" role="tab" aria-selected={vista === 'insumos'} className={vista === 'insumos' ? 'activa' : ''} onClick={() => setVista('insumos')}>Costos de insumos</button>
+            <button type="button" role="tab" aria-selected={vista === 'ventas'} className={vista === 'ventas' ? 'activa' : ''} onClick={() => setVista('ventas')}>Costo de ventas (por fechas)</button>
           </div>
+          {vista === 'ventas' ? (
+            <div className="costeo-acciones" style={{ alignItems: 'flex-end' }}>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="costeo-desde">Desde</label>
+                <input id="costeo-desde" type="date" value={rango.desde} max={rango.hasta || undefined} onChange={(e) => setRango({ ...rango, desde: e.target.value })} />
+              </div>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="costeo-hasta">Hasta</label>
+                <input id="costeo-hasta" type="date" value={rango.hasta} min={rango.desde || undefined} onChange={(e) => setRango({ ...rango, hasta: e.target.value })} />
+              </div>
+              <button type="button" className="btn btn-primary" disabled={cargandoVentas} onClick={consultarVentas}>Consultar</button>
+              <button type="button" className="btn btn-export btn-export-xls" onClick={exportarVentas}><Icon name="download" size={16} /> Excel</button>
+            </div>
+          ) : (<>
           <input className="costeo-buscar" placeholder={vista === 'platos' ? 'Buscar plato o insumo…' : 'Buscar insumo…'} value={buscar} onChange={(e) => setBuscar(e.target.value)} />
           <button type="button" className="btn btn-export btn-export-xls" onClick={exportarExcel} title="Descarga el costeo de platos, las recetas y los insumos">
             <Icon name="download" size={16} /> Reporte de costos
@@ -192,9 +240,36 @@ export default function CosteoPlatos() {
               <input ref={archivoRef} type="file" accept=".xlsx" hidden onChange={importar} />
             </div>
           )}
+          </>)}
         </div>
 
-        {vista === 'platos' ? (
+        {vista === 'ventas' ? (
+          cargandoVentas || !ventas ? <LoadingState label="Calculando costo de ventas…" /> : (
+            <div style={{ overflowX: 'auto' }}>
+              <div className="costeo-kpis" style={{ marginTop: 4 }}>
+                <div className="card"><span>Venta neta</span><b>{money(ventas.totales.ventaNeta)}</b></div>
+                <div className="card"><span>Costo de lo vendido</span><b>{money(ventas.totales.costoTotal)}</b></div>
+                <div className="card"><span>Utilidad bruta</span><b className={ventas.totales.utilidad < 0 ? 'alto' : ''}>{money(ventas.totales.utilidad)}</b></div>
+                <div className="card"><span>% costo</span><b className={ventas.totales.porcentajeCosto > objetivo ? 'alto' : ''}>{porcentaje(ventas.totales.porcentajeCosto)}</b></div>
+              </div>
+              <table className="tabla-costeo">
+                <thead><tr><th className="izq">Plato</th><th className="izq">Categoría</th><th>Unidades</th><th>Costo unitario</th><th>Costo total</th><th>Venta neta</th><th>Utilidad</th><th>% costo</th></tr></thead>
+                <tbody>
+                  {ventas.filas.map((fila) => (
+                    <tr key={fila.id}>
+                      <td className="izq">{fila.nombre}</td><td className="izq">{fila.categoria}</td>
+                      <td>{fila.unidades.toLocaleString('es-CO')}</td><td>{fila.costoUnitario > 0 ? money(fila.costoUnitario) : 'Sin costo'}</td>
+                      <td><b>{money(fila.costoTotal)}</b></td><td>{money(fila.ventaNeta)}</td>
+                      <td className={fila.utilidad < 0 ? 'negativo' : ''}>{money(fila.utilidad)}</td>
+                      <td><span className={`badge ${fila.costoTotal === 0 ? '' : fila.porcentajeCosto > objetivo ? 'red' : 'green'}`}>{fila.costoTotal === 0 ? 'Sin costo' : porcentaje(fila.porcentajeCosto)}</span></td>
+                    </tr>
+                  ))}
+                  {!ventas.filas.length && <tr><td colSpan={8} className="empty">No hay platos con receta vendidos entre {ventas.desde} y {ventas.hasta}.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : vista === 'platos' ? (
           <div style={{ overflowX: 'auto' }}>
             <table className="tabla-costeo">
               <thead><tr><th className="izq">Plato</th><th className="izq">Categoría</th><th>Costo receta</th><th>Precio venta</th><th>Precio neto</th><th>Margen</th><th>% costo</th><th>Insumos sin costo</th></tr></thead>
@@ -269,6 +344,7 @@ export default function CosteoPlatos() {
           El costo del plato es la suma de cantidad × costo unitario de cada insumo de su receta y queda guardado en el plato.
           El % de costo se calcula sobre el precio neto (precio de venta sin impuesto); en rojo los que superan el {objetivo} %.
           Para importar, usa un Excel con las columnas «Referencia» (código o nombre del insumo) y «Costo».
+          En «Costo de ventas» se multiplican las unidades vendidas en el rango por el costo actual de la receta; la venta neta no incluye impuesto ni propina.
         </p>
       </div>
     </div>
