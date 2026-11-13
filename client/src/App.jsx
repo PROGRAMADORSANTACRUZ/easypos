@@ -124,7 +124,7 @@ const REPORTES_NAV = [
   { id: 'mesa', nombre: 'Ventas por mesa' },
   { id: 'formapago', nombre: 'Ventas por forma de pago' },
   { id: 'facturas', nombre: 'Detalle de facturas' },
-  { id: 'resumen-facturas-notas', nombre: 'Resumen de facturas y notas POS acumuladas' },
+  { id: 'resumen-facturas-notas', nombre: 'Resumen de facturas y notas' },
   { id: 'revision-diaria-pdv', nombre: 'Revisión diaria PDV' },
   { id: 'movimientos-caja', nombre: 'Movimientos de caja' },
   { id: 'recogidas-caja', nombre: 'Recogidas de caja (parciales y cierre)' },

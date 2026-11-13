@@ -247,7 +247,7 @@ en cada factura y, para facturas anteriores sin esos registros, su metodo histor
 Si los pagos registrados no coinciden con el total y la propina, se solicita revisar
 la factura antes de cerrar para evitar un cuadre incorrecto.
 
-El reporte **Resumen de facturas y notas POS acumuladas** agrupa facturas POS y
+El reporte **Resumen de facturas y notas** agrupa facturas POS y
 electronicas y notas credito/debito por cajero, fecha, caja y tipo de documento.
 Las columnas siguen el orden: Cajero / fecha, T.P.V., Valor bruto, Valor descuentos,
 Valor impuestos, Valor neto y Tipo docto.
