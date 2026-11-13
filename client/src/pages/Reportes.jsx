@@ -69,6 +69,7 @@ const REPORTES = [
 ];
 // Reportes que consultan su propio endpoint en lugar del reporte general de ventas.
 const REPORTES_PROPIOS = ['historial-pedidos', 'resumen-facturas-notas', 'revision-diaria-pdv', 'movimientos-caja', 'recogidas-caja'];
+const CAMPOS_RESUMEN = ['bruto', 'descuentos', 'impuestos', 'neto'];
 
 // Tabla simple de ventas por periodo
 function TablaPeriodo({ datos, maxTotal }) {
@@ -439,14 +440,15 @@ export default function Reportes() {
         };
       case 'resumen-facturas-notas':
         return {
-          columnas: ['Cajero', 'Fecha', 'T.P.V. / caja', 'Tipo documento', 'Valor bruto', 'Descuentos', 'Impuestos', 'Valor neto', 'Propina'],
+          columnas: ['Cajero / fecha', 'T.P.V.', 'Valor bruto', 'Valor descuentos', 'Valor impuestos', 'Valor neto', 'Tipo docto.'],
           filas: resumen.length ? [...agruparResumen(resumen).flatMap((grupo) => [
-            [grupo.cajero, 'Total cajero', '', '', ...['bruto', 'descuentos', 'impuestos', 'neto', 'propina'].map((campo) => importeResumen(grupo[campo]))],
+            [grupo.cajero, '', ...CAMPOS_RESUMEN.map((campo) => importeResumen(grupo[campo])), ''],
             ...grupo.filas.map((fila) => [
-              grupo.cajero, fila.fecha, fila.caja, fila.tipo,
-              ...['bruto', 'descuentos', 'impuestos', 'neto', 'propina'].map((campo) => importeResumen(fila[campo])),
+              fila.fecha, fila.caja,
+              ...CAMPOS_RESUMEN.map((campo) => importeResumen(fila[campo])),
+              fila.tipo,
             ]),
-          ]), ...notasResumen.map((nota) => [nota, '', '', '', '', '', '', '', ''])] : [],
+          ]), ...notasResumen.map((nota) => [nota, '', '', '', '', '', ''])] : [],
         };
       case 'revision-diaria-pdv':
         return {
@@ -799,17 +801,19 @@ export default function Reportes() {
             <div style={{ overflowX: 'auto' }}>
               {resumen.length === 0 ? <p className="empty">Sin facturas ni notas en el periodo.</p> : (
                 <table>
-                  <thead><tr><th>Cajero / fecha</th><th>T.P.V. / caja</th><th>Tipo documento</th><th>Valor bruto</th><th>Descuentos</th><th>Impuestos</th><th>Valor neto</th><th>Propina</th></tr></thead>
+                  <thead><tr><th>Cajero / fecha</th><th>T.P.V.</th><th style={{ textAlign: 'right' }}>Valor bruto</th><th style={{ textAlign: 'right' }}>Valor descuentos</th><th style={{ textAlign: 'right' }}>Valor impuestos</th><th style={{ textAlign: 'right' }}>Valor neto</th><th>Tipo docto.</th></tr></thead>
                   {agruparResumen(resumen).map((grupo) => (
                     <tbody key={grupo.id}>
                       <tr style={{ fontWeight: 700 }}>
-                        <td>{grupo.cajero}</td><td /><td>Total cajero</td>
-                        {['bruto', 'descuentos', 'impuestos', 'neto', 'propina'].map((campo) => <td key={campo} style={{ textAlign: 'right' }}>{importeResumen(grupo[campo])}</td>)}
+                        <td>{grupo.cajero}</td><td />
+                        {CAMPOS_RESUMEN.map((campo) => <td key={campo} style={{ textAlign: 'right' }}>{importeResumen(grupo[campo])}</td>)}
+                        <td />
                       </tr>
                       {grupo.filas.map((fila) => (
                         <tr key={JSON.stringify([fila.fecha, fila.cajaId, fila.tipo])}>
-                          <td>{fila.fecha}</td><td>{fila.caja}</td><td>{fila.tipo}</td>
-                          {['bruto', 'descuentos', 'impuestos', 'neto', 'propina'].map((campo) => <td key={campo} style={{ textAlign: 'right' }}>{importeResumen(fila[campo])}</td>)}
+                          <td>{fila.fecha}</td><td>{fila.caja}</td>
+                          {CAMPOS_RESUMEN.map((campo) => <td key={campo} style={{ textAlign: 'right' }}>{importeResumen(fila[campo])}</td>)}
+                          <td>{fila.tipo}</td>
                         </tr>
                       ))}
                     </tbody>

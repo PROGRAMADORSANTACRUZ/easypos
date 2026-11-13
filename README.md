@@ -249,12 +249,14 @@ la factura antes de cerrar para evitar un cuadre incorrecto.
 
 El reporte **Resumen de facturas y notas POS acumuladas** agrupa facturas POS y
 electronicas y notas credito/debito por cajero, fecha, caja y tipo de documento.
+Las columnas siguen el orden: Cajero / fecha, T.P.V., Valor bruto, Valor descuentos,
+Valor impuestos, Valor neto y Tipo docto.
 Filtra cada documento por su fecha en Colombia; las notas usan el cajero y la caja
 de su factura vinculada, o muestran que no estan disponibles. Incluye las notas de
-todos los estados. El bruto de las facturas es el subtotal registrado, el neto no
-incluye su propina y la propina aparece por separado. Los descuentos no se registran
+todos los estados. El bruto de las facturas es el subtotal registrado y el neto no
+incluye la propina (que no se muestra en este reporte). Los descuentos no se registran
 y aparecen como no disponibles. Las notas solo guardan un total: se suma para debito
-y se resta para credito, sin inventar su desglose de bruto, impuestos o propina.
+y se resta para credito, sin inventar su desglose de bruto o impuestos.
 Actualmente las notas solo pueden vincularse a facturas electronicas.
 Por ello, un total por cajero que incluye notas muestra esos desgloses como no
 disponibles; el total de la nota podria incluir propina.
