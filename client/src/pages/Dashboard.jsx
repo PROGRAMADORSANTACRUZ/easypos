@@ -24,23 +24,45 @@ function Anillo({ porcentaje }) {
   );
 }
 
+// Ancho real del contenedor, para dibujar en pixeles y no escalar textos ni barras.
+function useAncho(inicial = 640) {
+  const [nodo, setNodo] = useState(null);
+  const [ancho, setAncho] = useState(inicial);
+  useEffect(() => {
+    if (!nodo) return undefined;
+    const medir = () => setAncho(Math.max(240, Math.floor(nodo.clientWidth)));
+    medir();
+    const observador = new ResizeObserver(medir);
+    observador.observe(nodo);
+    return () => observador.disconnect();
+  }, [nodo]);
+  return [setNodo, ancho];
+}
+
 // Grafico de lineas o barras agrupadas en SVG; "series" = [{ clave, nombre, color }].
-function Grafico({ datos, etiqueta, series, tipo = 'barras', alto = 220, formato = (v) => compacto.format(v) }) {
-  const ancho = 640;
-  const margen = { arriba: 12, derecha: 12, abajo: 30, izquierda: 60 };
+function Grafico({ datos, etiqueta: etiquetaLarga, etiquetaCorta, series, tipo = 'barras', alto = 220, enteros = false, formato = (v) => compacto.format(v) }) {
+  const [refContenedor, ancho] = useAncho();
+  const margen = { arriba: 12, derecha: 12, abajo: 30, izquierda: 56 };
   const maximo = Math.max(0, ...datos.flatMap((dato) => series.map((serie) => dato[serie.clave] || 0)));
-  const { tope, paso } = escalaEje(maximo);
+  const escala = escalaEje(maximo);
+  // Para conteos (pedidos) el eje solo usa numeros enteros.
+  const paso = enteros ? Math.max(1, Math.ceil(escala.paso)) : escala.paso;
+  const tope = enteros ? Math.max(paso, Math.ceil(Math.max(maximo, 1) / paso) * paso) : escala.tope;
   const areaAncho = ancho - margen.izquierda - margen.derecha;
   const areaAlto = alto - margen.arriba - margen.abajo;
   const y = (valor) => margen.arriba + areaAlto - (valor / tope) * areaAlto;
   const banda = areaAncho / Math.max(1, datos.length);
   const xCentro = (indice) => margen.izquierda + banda * indice + banda / 2;
   const marcas = Array.from({ length: Math.round(tope / paso) + 1 }, (_, indice) => indice * paso);
-  const saltoEtiqueta = Math.max(1, Math.ceil(datos.length / 12));
+  // Se saltan etiquetas del eje X cuando no caben sin montarse (unos 7 px por caracter a 12 px).
+  const anchoDe = (fn) => Math.max(...datos.map((dato) => String(fn(dato)).length), 1) * 7 + 10;
+  const etiqueta = etiquetaCorta && anchoDe(etiquetaLarga) > banda ? etiquetaCorta : etiquetaLarga;
+  const saltoEtiqueta = Math.max(1, Math.ceil(anchoDe(etiqueta) / banda));
   const anchoBarra = Math.min(48, (banda * 0.7) / series.length);
 
   return (
-    <svg viewBox={`0 0 ${ancho} ${alto}`} width="100%" role="img" style={{ display: 'block' }}>
+    <div ref={refContenedor} style={{ width: '100%' }}>
+    <svg viewBox={`0 0 ${ancho} ${alto}`} width={ancho} height={alto} role="img" style={{ display: 'block', maxWidth: '100%' }}>
       {marcas.map((marca) => (
         <g key={marca}>
           <line x1={margen.izquierda} x2={ancho - margen.derecha} y1={y(marca)} y2={y(marca)} stroke="var(--border)" strokeDasharray="3 3" />
@@ -75,8 +97,12 @@ function Grafico({ datos, etiqueta, series, tipo = 'barras', alto = 220, formato
         </g>
       ))}
     </svg>
+    </div>
   );
 }
+
+// "Dic 2025" -> "Dic 25" para que los meses quepan en el eje.
+const mesCorto = (etiqueta) => etiqueta.replace(/ \d{2}(\d{2})$/, ' $1');
 
 const COLORES_TOP = ['var(--primary)', '#7C5CBF', '#F5A524', '#2D9CDB', '#8A8178'];
 
@@ -242,11 +268,11 @@ export default function Dashboard() {
             </select>
           </div>
           <Grafico tipo="linea" datos={datos.pedidosPorHora} etiqueta={(dato) => dato.hora}
-            series={[{ clave: 'cantidad', nombre: 'Pedidos', color: 'var(--primary)' }]} formato={(v) => String(v)} />
+            series={[{ clave: 'cantidad', nombre: 'Pedidos', color: 'var(--primary)' }]} enteros formato={(v) => String(v)} />
         </div>
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Facturado últimos 7 días</h3>
-          <Grafico datos={datos.facturado7Dias} etiqueta={(dato) => dato.etiqueta}
+          <Grafico datos={datos.facturado7Dias} etiqueta={(dato) => dato.etiqueta} etiquetaCorta={(dato) => dato.etiqueta.slice(0, 3)}
             series={[{ clave: 'total', nombre: 'Facturado', color: 'var(--primary)', formatoTitulo: money }]} />
         </div>
       </div>
@@ -256,7 +282,7 @@ export default function Dashboard() {
           <h3 style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="reportes" size={18} /> Ingresos vs egresos · últimos 12 meses</h3>
           <Leyenda series={seriesIngresos} />
         </div>
-        <Grafico datos={datos.ingresosEgresos} etiqueta={(dato) => dato.etiqueta} series={seriesIngresos} alto={260} />
+        <Grafico datos={datos.ingresosEgresos} etiqueta={(dato) => mesCorto(dato.etiqueta)} etiquetaCorta={(dato) => dato.etiqueta.slice(0, 3)} series={seriesIngresos} alto={260} />
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>
