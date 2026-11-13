@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import express from 'express';
 import test from 'node:test';
+import { rangosMesas, resumenMesas } from '../../client/src/mesasResumen.js';
 
 process.env.JWT_SECRET ||= 'test-usuarios-mesas';
 process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:1/test';
@@ -10,9 +11,12 @@ const { firmarToken } = await import('../src/middleware/auth.js');
 
 async function entorno(t) {
   const mesas = new Map([
-    [1, { id: 1, numero: 1, esFantasma: false, usuarioAsignadoId: null }],
-    [0, { id: 0, numero: 0, esFantasma: true, usuarioAsignadoId: null }],
+    [1, { id: 1, numero: 1, esFantasma: false }],
+    [2, { id: 2, numero: 2, esFantasma: false }],
+    [0, { id: 0, numero: 0, esFantasma: true }],
   ]);
+  const asignaciones = [];
+  const mesasDe = (usuarioId) => asignaciones.filter((a) => a.usuarioId === usuarioId).map((a) => a.mesaId).sort();
   const usuarios = [];
   const admin = {
     id: 'admin-id', usuario: 'admin', nombre: 'Admin', activo: true,
@@ -40,15 +44,16 @@ async function entorno(t) {
     usuarioCentroOperacion: { createMany: async () => ({ count: 1 }) },
     mesa: {
       findMany: async ({ where }) => where.id.in.map((id) => mesas.get(id)).filter((mesa) => mesa && mesa.esFantasma === where.esFantasma).map(({ id }) => ({ id })),
-      updateMany: async ({ where, data }) => {
-        let count = 0;
-        for (const mesa of mesas.values()) {
-          const cumpleDueno = where.usuarioAsignadoId === undefined || mesa.usuarioAsignadoId === where.usuarioAsignadoId;
-          const cumpleId = where.id?.in ? where.id.in.includes(mesa.id) : where.id?.notIn ? !where.id.notIn.includes(mesa.id) : true;
-          const cumpleFantasma = where.esFantasma === undefined || mesa.esFantasma === where.esFantasma;
-          if (cumpleDueno && cumpleId && cumpleFantasma) { Object.assign(mesa, data); count += 1; }
-        }
-        return { count };
+    },
+    usuarioMesa: {
+      deleteMany: async ({ where }) => {
+        const antes = asignaciones.length;
+        for (let i = asignaciones.length - 1; i >= 0; i -= 1) if (asignaciones[i].usuarioId === where.usuarioId) asignaciones.splice(i, 1);
+        return { count: antes - asignaciones.length };
+      },
+      createMany: async ({ data }) => {
+        for (const fila of data) if (!asignaciones.some((a) => a.usuarioId === fila.usuarioId && a.mesaId === fila.mesaId)) asignaciones.push(fila);
+        return { count: data.length };
       },
     },
     auditoria: { create: async () => ({ id: 1 }) },
@@ -79,18 +84,27 @@ async function entorno(t) {
     });
     return { status: response.status, body: await response.json() };
   };
-  return { solicitar, solicitarLista, mesas };
+  return { solicitar, solicitarLista, mesasDe, asignaciones };
 }
 
 test('ADMIN puede asignar mesas normales a un MESERO', async (t) => {
-  const { solicitar, mesas } = await entorno(t);
+  const { solicitar, mesasDe } = await entorno(t);
   const response = await solicitar([1]);
   assert.equal(response.status, 201);
   assert.equal(response.body.nombre, 'MESERO PRUEBA');
   assert.equal(response.body.usuario, 'MESERO1');
   assert.equal(response.body.correo, 'MESERO@EJEMPLO.COM');
-  assert.equal(mesas.get(1).usuarioAsignadoId, response.body.id);
-  assert.equal(mesas.get(0).usuarioAsignadoId, null);
+  assert.deepEqual(mesasDe(response.body.id), [1]);
+});
+
+test('varios meseros comparten las mismas mesas sin quitarselas entre ellos', async (t) => {
+  const { solicitar, mesasDe } = await entorno(t);
+  const primero = await solicitar([1, 2]);
+  const segundo = await solicitar([1, 2]);
+  assert.equal(primero.status, 201);
+  assert.equal(segundo.status, 201);
+  assert.deepEqual(mesasDe(primero.body.id), [1, 2]);
+  assert.deepEqual(mesasDe(segundo.body.id), [1, 2]);
 });
 
 test('la lista de usuarios requiere permiso usuarios.ver', async (t) => {
@@ -100,12 +114,12 @@ test('la lista de usuarios requiere permiso usuarios.ver', async (t) => {
 });
 
 test('no permite duplicar un usuario con diferencias de mayúsculas', async (t) => {
-  const { solicitar, mesas } = await entorno(t);
+  const { solicitar, mesasDe } = await entorno(t);
   const creado = await solicitar([1], 'mesero1');
   const duplicado = await solicitar([1], 'MESERO1');
   assert.equal(creado.status, 201);
   assert.equal(duplicado.status, 409);
-  assert.equal(mesas.get(1).usuarioAsignadoId, creado.body.id);
+  assert.deepEqual(mesasDe(creado.body.id), [1]);
 });
 
 test('GET usuarios exige usuarios.ver incluso con sesión autenticada', async (t) => {
@@ -117,10 +131,43 @@ test('GET usuarios exige usuarios.ver incluso con sesión autenticada', async (t
 });
 
 test('no permite asignar Mesa00 y permite crear MESERO sin mesas asignadas', async (t) => {
-  const { solicitar, mesas } = await entorno(t);
+  const { solicitar, asignaciones } = await entorno(t);
   assert.equal((await solicitar([0])).status, 400);
   assert.equal((await solicitar([])).status, 201);
   assert.equal((await solicitar(undefined)).status, 201);
-  assert.equal(mesas.get(0).usuarioAsignadoId, null);
-  assert.equal(mesas.get(1).usuarioAsignadoId, null);
+  assert.deepEqual(asignaciones, []);
+});
+
+test('la migracion copia las mesas asignadas, ignora Mesa00 y permite compartir mesas', async () => {
+  const { PGlite } = await import('@electric-sql/pglite');
+  const { readFile } = await import('node:fs/promises');
+  const db = new PGlite();
+  try {
+    await db.exec(`
+      CREATE TABLE "Usuarios" ("Id" UUID PRIMARY KEY);
+      CREATE TABLE "Mesa" (id SERIAL PRIMARY KEY, numero INT UNIQUE, "esFantasma" BOOLEAN DEFAULT false, "usuarioAsignadoId" UUID);
+      INSERT INTO "Usuarios" VALUES ('00000000-0000-4000-8000-000000000001'), ('00000000-0000-4000-8000-000000000002');
+      INSERT INTO "Mesa" (numero, "esFantasma", "usuarioAsignadoId") VALUES
+        (1, false, '00000000-0000-4000-8000-000000000001'), (2, false, NULL), (0, true, '00000000-0000-4000-8000-000000000001');
+    `);
+    const sql = await readFile(new URL('../prisma/migrations/20261113060000_mesas_compartidas_meseros/migration.sql', import.meta.url), 'utf8');
+    await db.exec(sql);
+    await db.exec(sql);
+    const copiadas = await db.query('SELECT "UsuarioId", m.numero FROM "UsuariosMesas" um JOIN "Mesa" m ON m.id = um."MesaId" ORDER BY 2');
+    assert.deepEqual(copiadas.rows, [{ UsuarioId: '00000000-0000-4000-8000-000000000001', numero: 1 }]);
+    await db.query(`INSERT INTO "UsuariosMesas" VALUES ('00000000-0000-4000-8000-000000000002', 1)`);
+    assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM "UsuariosMesas" WHERE "MesaId" = 1')).rows[0].n, 2);
+    await db.query(`DELETE FROM "Usuarios" WHERE "Id" = '00000000-0000-4000-8000-000000000002'`);
+    assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM "UsuariosMesas"')).rows[0].n, 1);
+  } finally {
+    await db.close();
+  }
+});
+
+test('resume las mesas marcadas en rangos, como Todas o como Ninguna', () => {
+  assert.equal(rangosMesas([7, 1, 2, 3, 5, 8, 3]), '1–3, 5, 7–8');
+  const mesas = (numeros) => numeros.map((numero) => ({ id: numero, numero }));
+  assert.deepEqual(resumenMesas(mesas([1, 2, 3]), 3), { tipo: 'todas', texto: 'Todas (3)', detalle: '1–3' });
+  assert.deepEqual(resumenMesas(mesas([4]), 45), { tipo: 'algunas', texto: '1 mesa', detalle: '4' });
+  assert.deepEqual(resumenMesas([], 45), { tipo: 'ninguna', texto: 'Ninguna', detalle: '' });
 });

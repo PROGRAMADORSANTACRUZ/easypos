@@ -150,7 +150,11 @@ En `server/.env`:
 
 Los meseros comparten las mesas: pueden consultar y continuar pedidos creados
 por sus companeros segun los permisos de su rol, sin restricciones por mesero
-asignado. La asignacion de mesas en Usuarios es opcional y no limita el acceso.
+asignado. La asignacion de mesas en Usuarios es opcional y no limita el acceso;
+varios meseros pueden tener marcadas las mismas mesas (botones Marcar todas /
+Desmarcar todas). Antes de desplegar, respalda y aplica
+`server/prisma/migrations/20261113060000_mesas_compartidas_meseros/migration.sql`,
+que copia las asignaciones anteriores a la nueva tabla UsuariosMesas.
 El pedido conserva su creador y el historial registra quien realiza cada cambio.
 Domicilios y Repartidor / Entregas mantienen sus permisos independientes.
 

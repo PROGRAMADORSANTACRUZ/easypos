@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { Icon } from '../icons.jsx';
 import { useAuth, useToast } from '../App.jsx';
 import { PageHeader, Modal, Button } from '../components/ui/index.jsx';
+import { resumenMesas } from '../mesasResumen.js';
 
 const uVacio = { nombre: '', usuario: '', correo: '', password: '', roles: [], centrosOperacionCodigos: [], mesaIds: [], activo: true };
 const normalizarTextoUsuario = (valor) => String(valor ?? '').toUpperCase();
@@ -193,7 +194,7 @@ export default function Usuarios() {
           <h3 style={{ marginTop: 0 }}>Usuarios del sistema</h3>
           <table>
             <thead>
-              <tr><th>Nombre</th><th>Usuario</th><th>Correo</th><th>Roles</th><th>Compañías / centros</th><th>Mesas</th><th>Estado</th><th></th></tr>
+              <tr><th>Nombre</th><th>Usuario</th><th>Correo</th><th>Roles</th><th>Mesas</th><th>Compañías / centros</th><th>Estado</th><th></th></tr>
             </thead>
             <tbody>
               {usuarios.map((u) => (
@@ -206,11 +207,18 @@ export default function Usuarios() {
                     {(!u.roles || u.roles.length === 0) && <span className="mini">—</span>}
                   </td>
                   <td>
-                    {u.mesasAsignadas?.length ? (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 180 }}>
-                        {u.mesasAsignadas.map((mesa) => <span key={mesa.id} className="badge blue">{mesa.numero}</span>)}
-                      </div>
-                    ) : <span className="mini">—</span>}
+                    {(() => {
+                      const resumen = resumenMesas(u.mesasAsignadas || [], mesas.length);
+                      if (resumen.tipo === 'ninguna') return <span className="mini" style={{ color: 'var(--muted)' }}>Ninguna</span>;
+                      return (
+                        <div style={{ maxWidth: 200 }} title={`Mesas: ${resumen.detalle}`}>
+                          <span className={`badge ${resumen.tipo === 'todas' ? 'green' : 'blue'}`}>{resumen.texto}</span>
+                          {resumen.tipo === 'algunas' && (
+                            <div className="mini" style={{ marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{resumen.detalle}</div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td>
                     {u.centrosOperacion?.length ? (
@@ -299,19 +307,27 @@ export default function Usuarios() {
             </div>
             {uForm.roles.includes('MESERO') && (
               <div className="field">
-                <label>Mesas asignadas <span className="mini">(opcional)</span></label>
+                <div className="row between" style={{ marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
+                  <label style={{ margin: 0 }}>Mesas asignadas <span className="mini">({uForm.mesaIds.length} de {mesas.length} · opcional)</span></label>
+                  {mesas.length > 0 && (
+                    <div className="row" style={{ gap: 6 }}>
+                      <button type="button" className="btn btn-sm" disabled={uForm.mesaIds.length === mesas.length}
+                        onClick={() => setUForm((form) => ({ ...form, mesaIds: mesas.map((mesa) => mesa.id) }))}>Marcar todas</button>
+                      <button type="button" className="btn btn-sm" disabled={uForm.mesaIds.length === 0}
+                        onClick={() => setUForm((form) => ({ ...form, mesaIds: [] }))}>Desmarcar todas</button>
+                    </div>
+                  )}
+                </div>
+                <p className="mini" style={{ margin: '0 0 6px' }}>Los meseros comparten las mesas: marcar una aquí no se la quita a otro mesero.</p>
                 {mesas.length === 0 ? <p className="empty">No hay mesas normales disponibles.</p> : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
-                    {mesas.map((mesa) => {
-                      const propietario = usuarios.find((actual) => actual.id !== editId
-                        && actual.mesasAsignadas?.some((asignada) => asignada.id === mesa.id));
-                      return (
-                        <label key={mesa.id} className="mini" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', alignItems: 'start', gap: 6, border: '1px solid var(--border)', borderRadius: 6, padding: 8 }}>
-                          <input type="checkbox" checked={uForm.mesaIds.includes(mesa.id)} onChange={() => alternarMesa(mesa.id)} />
-                          <span>Mesa {mesa.numero}{propietario && <small style={{ display: 'block', color: 'var(--muted)' }}>Asignada a {propietario.nombre}; se reasignará al guardar</small>}</span>
-                        </label>
-                      );
-                    })}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))', gap: 6, maxHeight: 260, overflowY: 'auto', padding: 2 }}>
+                    {mesas.map((mesa) => (
+                      <label key={mesa.id} className="mini" style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', cursor: 'pointer',
+                        background: uForm.mesaIds.includes(mesa.id) ? 'var(--panel-2)' : undefined }}>
+                        <input type="checkbox" checked={uForm.mesaIds.includes(mesa.id)} onChange={() => alternarMesa(mesa.id)} />
+                        <span>Mesa {mesa.numero}</span>
+                      </label>
+                    ))}
                   </div>
                 )}
               </div>

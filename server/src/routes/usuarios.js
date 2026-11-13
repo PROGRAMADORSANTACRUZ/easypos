@@ -124,7 +124,7 @@ router.get('/', exigirPermiso('usuarios.ver'), wrap(async (_req, res) => {
     include: {
       roles: { include: { rol: true } },
       centrosOperacion: { include: { centroOperacion: { include: { compania: true } } } },
-      mesasAsignadas: { where: { esFantasma: false }, orderBy: { numero: 'asc' }, select: { id: true, numero: true } },
+      mesasMesero: { where: { mesa: { esFantasma: false } }, select: { mesa: { select: { id: true, numero: true } } } },
     },
   });
   res.json(
@@ -132,7 +132,8 @@ router.get('/', exigirPermiso('usuarios.ver'), wrap(async (_req, res) => {
       ...sinHash(u),
       roles: u.roles.map((ur) => ur.rol.nombre),
       centrosOperacion: u.centrosOperacion.map(({ centroOperacion }) => centroOperacion),
-      mesasAsignadas: u.mesasAsignadas,
+      mesasAsignadas: (u.mesasMesero || []).map(({ mesa }) => mesa).sort((a, b) => a.numero - b.numero),
+      mesasMesero: undefined,
     }))
   );
 }));
@@ -172,14 +173,12 @@ async function validarMesasAsignadas(mesaIds, roles) {
   return { ids, error: null };
 }
 
+// Las mesas se comparten: marcar una mesa a un mesero no se la quita a los demas.
 async function reemplazarMesasAsignadas(tx, usuarioId, mesaIds) {
   if (mesaIds === undefined) return;
-  await tx.mesa.updateMany({
-    where: { usuarioAsignadoId: usuarioId, ...(mesaIds.length ? { id: { notIn: mesaIds } } : {}) },
-    data: { usuarioAsignadoId: null },
-  });
+  await tx.usuarioMesa.deleteMany({ where: { usuarioId } });
   if (mesaIds.length) {
-    await tx.mesa.updateMany({ where: { id: { in: mesaIds }, esFantasma: false }, data: { usuarioAsignadoId: usuarioId } });
+    await tx.usuarioMesa.createMany({ data: mesaIds.map((mesaId) => ({ usuarioId, mesaId })), skipDuplicates: true });
   }
 }
 

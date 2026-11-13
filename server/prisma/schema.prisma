@@ -44,6 +44,7 @@ model Usuario {
   roles         UsuarioRol[]
   centrosOperacion UsuarioCentroOperacion[]
   mesasAsignadas Mesa[]
+  mesasMesero   UsuarioMesa[]
   auditorias    Auditoria[]
   aperturasCaja AperturaCaja[]
   movimientosCaja MovimientoCaja[]
@@ -212,8 +213,10 @@ model Mesa {
   numero    Int       @unique
   capacidad Int       @default(4)
   esFantasma Boolean  @default(false)
+  // Asignacion historica de un solo mesero; se reemplazo por UsuarioMesa (varios meseros por mesa).
   usuarioAsignadoId String? @db.Uuid
   usuarioAsignado Usuario? @relation(fields: [usuarioAsignadoId], references: [id], onDelete: SetNull)
+  meseros   UsuarioMesa[]
   estado    String    @default("LIBRE") // LIBRE | OCUPADA | RESERVADA
   reservaNombre String? @db.VarChar(150)
   reservaTelefono String? @db.VarChar(50)
@@ -1399,4 +1402,17 @@ model ObjetivoDashboard {
   updatedAt     DateTime @default(now()) @updatedAt @map("FechaActualizacion")
 
   @@map("ObjetivosDashboard")
+}
+
+// Mesas marcadas para cada mesero. Varios meseros pueden tener la misma mesa:
+// la asignacion es informativa y no limita el acceso a las mesas.
+model UsuarioMesa {
+  usuarioId String  @db.Uuid @map("UsuarioId")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  mesaId    Int     @map("MesaId")
+  mesa      Mesa    @relation(fields: [mesaId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, mesaId])
+  @@index([mesaId])
+  @@map("UsuariosMesas")
 }
