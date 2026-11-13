@@ -49,20 +49,26 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
   };
 
   return (
+    // Solo se sale con "Cancelar": el fondo no cierra el recuadro.
     <div
-      onClick={onClose}
+      role="dialog" aria-modal="true" aria-labelledby="cierre-caja-titulo"
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}
     >
-      <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: 440, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-        <h3 style={{ marginTop: 0 }}>Cierre de caja — cuadre</h3>
+      <div className="card" style={{ width: 980, maxWidth: '100%', maxHeight: '92vh', overflowY: 'auto' }}>
+        <h3 id="cierre-caja-titulo" style={{ marginTop: 0 }}>Cierre de caja — cuadre</h3>
         {!cuadre ? (
-          <p className="subtitle">Calculando cuadre…</p>
+          <>
+            <p className="subtitle">Calculando cuadre…</p>
+            <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button></div>
+          </>
         ) : (
           <>
             <p className="subtitle" style={{ marginTop: 0 }}>
               {apertura.caja?.nombre || 'Caja'} · {cuadre.numFacturas} factura(s)
             </p>
 
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
+            <section aria-label="Resumen del turno">
             <div className="row between"><span>Base inicial</span><b>{money(cuadre.valorInicial)}</b></div>
             <div className="row between"><span>Ventas del turno</span><b>{money(cuadre.totalVentas)}</b></div>
             {cuadre.totalPropinas > 0 && (
@@ -89,9 +95,17 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
               <span>Esperado en efectivo</span><b>{money(cuadre.valorEsperado)}</b>
             </div>
             <p className="mini" style={{ marginTop: 4 }}>Base + efectivo recibido ({money(cuadre.totalEfectivo)}) + ingresos - egresos{cuadre.totalRecogidas > 0 ? ` - recogidas (${money(cuadre.totalRecogidas)})` : ''}.</p>
+            {cuadre.totalRecogidas > 0 && <p className="mini" style={{ marginTop: 8 }}>El esperado del efectivo ya descuenta las recogidas parciales ({money(cuadre.totalRecogidas)}).</p>}
+            {cuadre.sinAsignar.length > 0 && (
+              <p className="mini">Pagos sin asignar a un medio: {cuadre.sinAsignar.map((p) => `${p.metodo}: ${money(p.monto)}`).join(' · ')}. No se incluyen en el esperado por medio.</p>
+            )}
+            </section>
 
-            <div className="field" style={{ marginTop: 12 }}>
-              <label htmlFor="cierre-base">Base y movimientos contados (opcional)</label>
+            <section aria-label="Conteo del cierre">
+            <div className="mini" style={{ fontWeight: 700, marginBottom: 4 }}>Conteo (opcional)</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', columnGap: 16 }}>
+            <div className="field" style={{ marginTop: 8 }}>
+              <label htmlFor="cierre-base">Base y movimientos contados</label>
               <span className="mini">Esperado: {money(cuadre.valorInicial + cuadre.totalIngresos - cuadre.totalEgresos)}</span>
               <input
                 id="cierre-base" type="number" min="0" step="0.01"
@@ -100,14 +114,13 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
                 onChange={(e) => setBaseContada(e.target.value)}
                 autoFocus
               />
+              {baseContada !== '' && <Diferencia valor={diferencia(baseContada, cuadre.valorInicial + cuadre.totalIngresos - cuadre.totalEgresos)} />}
             </div>
-            {baseContada !== '' && <Diferencia valor={diferencia(baseContada, cuadre.valorInicial + cuadre.totalIngresos - cuadre.totalEgresos)} />}
-            {cuadre.totalRecogidas > 0 && <p className="mini" style={{ marginTop: 8 }}>El esperado del efectivo ya descuenta las recogidas parciales ({money(cuadre.totalRecogidas)}).</p>}
             {cuadre.medios.map((medio) => {
               const contado = contados[medio.id] ?? '';
               return (
-                <div key={medio.id} className="field" style={{ marginTop: 12 }}>
-                  <label htmlFor={`cierre-medio-${medio.id}`}>{medio.nombre} ({medio.id}) contado (opcional){!medio.activo && ' · inactivo'}</label>
+                <div key={medio.id} className="field" style={{ marginTop: 8 }}>
+                  <label htmlFor={`cierre-medio-${medio.id}`}>{medio.nombre} ({medio.id}) contado{!medio.activo && ' · inactivo'}</label>
                   <span className="mini">Esperado por ventas: {medio.esperado == null ? 'No disponible: hay pagos sin asignar' : money(medio.esperado)}</span>
                   <input id={`cierre-medio-${medio.id}`} type="number" min="0" step="0.01" value={contado}
                     onChange={(e) => setContados((actuales) => ({ ...actuales, [medio.id]: e.target.value }))} />
@@ -115,12 +128,12 @@ export default function CierreCajaModal({ apertura, onClose, onCerrada }) {
                 </div>
               );
             })}
-            {cuadre.sinAsignar.length > 0 && (
-              <p className="mini">Pagos sin asignar a un medio: {cuadre.sinAsignar.map((p) => `${p.metodo}: ${money(p.monto)}`).join(' · ')}. No se incluyen en el esperado por medio.</p>
-            )}
+            </div>
             <div className="field" style={{ marginTop: 10 }}>
-              <label>Observación (opcional)</label>
-              <textarea rows={2} value={obs} onChange={(e) => setObs(e.target.value)} />
+              <label htmlFor="cierre-observacion">Observación (opcional)</label>
+              <textarea id="cierre-observacion" rows={2} value={obs} onChange={(e) => setObs(e.target.value)} />
+            </div>
+            </section>
             </div>
 
             <div className="row" style={{ marginTop: 12, justifyContent: 'flex-end', gap: 8 }}>
