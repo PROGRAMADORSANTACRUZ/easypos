@@ -15,7 +15,7 @@ const RUTAS_MODULO = [
   ['inventario', ['/api/inventario', '/api/bajas', '/api/bodegas', '/api/existencias', '/api/movimientos', '/api/compras', '/api/proveedores']],
   ['dian', ['/api/resoluciones', '/api/notas-credito', '/api/notas-debito', '/api/retenciones', '/api/eventos-dian', '/api/logs-integraciones', '/api/factus']],
   ['parametros', ['/api/companias', '/api/centros-operaciones', '/api/asignacion-cajas', '/api/tipos-documento']],
-  ['reportes', ['/api/reportes']],
+  ['reportes', ['/api/reportes', '/api/dashboard']],
   ['maestros', ['/api/sucursales', '/api/listas-precios', '/api/promociones', '/api/comisiones', '/api/remisiones', '/api/metodos-pago', '/api/terceros', '/api/centros-costo', '/api/cuentas-contables', '/api/impuestos', '/api/unidades-medida']],
   ['admin', ['/api/usuarios', '/api/roles', '/api/permisos', '/api/auditoria']],
 ];

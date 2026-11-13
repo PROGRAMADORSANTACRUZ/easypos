@@ -39,6 +39,7 @@ const MODULOS = {
   unidades_medida: ['ver', 'crear', 'editar', 'eliminar'],
   eventos_dian: ['ver', 'crear', 'editar', 'eliminar'],
   logs_integraciones: ['ver', 'eliminar'],
+  dashboard: ['ver', 'editar'],
   reportes: ['ver'],
   usuarios: ['ver', 'crear', 'editar', 'eliminar'],
   roles: ['ver', 'crear', 'editar', 'eliminar'],

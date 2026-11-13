@@ -16,6 +16,7 @@ const etiquetaPermiso = (codigo) => {
   if (codigo === 'pedidos.eliminar') return 'Cancelar';
   if (codigo === 'pedidos.prefactura') return 'Prefactura';
   if (codigo === 'pedidos.observaciones') return 'Observaciones';
+  if (codigo === 'dashboard.editar') return 'Editar objetivos';
   return codigo.split('.')[1];
 };
 
@@ -72,6 +73,7 @@ export default function Roles() {
       return { id, label, modulos: [...modulos.values()] };
     };
     const grupos = NAV_GRUPOS.filter((g) => g.id !== 'admin').map((g) => grupo(g.id, g.label, g.items));
+    grupos.unshift(grupo('dashboard', 'Dashboard', [{ permiso: 'dashboard.ver', label: 'Dashboard' }]));
     grupos.push(grupo('reportes', 'Reportes', [{ permiso: 'reportes.ver', label: 'Reportes' }]));
     grupos.push(grupo('maestros', 'Maestros / DIAN', CRUD_ENTIDADES.map((e) => ({ permiso: `${e.modulo}.ver`, label: e.label }))));
     const admin = NAV_GRUPOS.find((g) => g.id === 'admin');

@@ -292,6 +292,18 @@ queda en $0; el responsable del cierre se toma de la auditoria. El consecutivo
 sigue el orden cronologico de todas las recogidas y cierres. Si una factura del
 turno tiene pagos inconsistentes, el saldo de ese turno aparece como no disponible.
 
+**Dashboard.** Pantalla de inicio para quien tenga el permiso `dashboard.ver`
+(Roles y permisos > Dashboard). Muestra lo facturado hoy, en los ultimos 7 y 30
+dias y en el ano, sin propina y en hora de Colombia, con su avance frente a un
+objetivo; pedidos por hora (12 o 24 horas, sin cancelados); facturado por dia de
+la ultima semana e ingresos (ventas) frente a egresos (compras + egresos de caja)
+de los ultimos 12 meses. Los objetivos los edita quien tenga `dashboard.editar`;
+un objetivo vacio deja el indicador sin porcentaje. Antes de desplegar, respalda
+y aplica `server/prisma/migrations/20261113010000_dashboard/migration.sql` en cada
+base de restaurante: crea la tabla de objetivos y asigna los permisos al rol ADMIN.
+Los demas roles los reciben desde Roles y permisos; cada usuario debe volver a
+iniciar sesion para ver el cambio.
+
 Para usar este cuadre en una base existente, respalda primero y aplica
 `server/prisma/migrations/20261112120000_cuadre_medios_pago/migration.sql` a cada
 base de restaurante correspondiente, antes de iniciar la version actualizada.

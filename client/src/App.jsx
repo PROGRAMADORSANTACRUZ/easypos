@@ -35,6 +35,7 @@ import Usuarios from './pages/Usuarios.jsx';
 import Roles from './pages/Roles.jsx';
 import Auditoria from './pages/Auditoria.jsx';
 import Reportes from './pages/Reportes.jsx';
+import Dashboard from './pages/Dashboard.jsx';
 import Clientes from './pages/Clientes.jsx';
 import Login from './pages/Login.jsx';
 import SolicitudesMesa00 from './pages/SolicitudesMesa00.jsx';
@@ -77,7 +78,7 @@ const GRUPO_POR_MODULO = {
   productos: 'inventario', inventario: 'inventario', bodegas: 'inventario', movimientos: 'inventario', compras: 'inventario', proveedores: 'inventario',
   facturas: 'dian', resoluciones: 'dian', notas_credito: 'dian', notas_debito: 'dian', retenciones: 'dian', eventos_dian: 'dian', logs_integraciones: 'dian',
   empresa: 'parametros', companias: 'parametros', centros_operaciones: 'parametros', asignacion_cajas: 'parametros', tipos_documentos: 'parametros',
-  reportes: 'reportes',
+  reportes: 'reportes', dashboard: 'reportes',
   sucursales: 'maestros', listas_precios: 'maestros', promociones: 'maestros', comisiones: 'maestros', remisiones: 'maestros', metodos_pago: 'maestros', pagos: 'maestros', terceros: 'maestros', centros_costo: 'maestros', cuentas_contables: 'maestros', impuestos: 'maestros', unidades_medida: 'maestros',
   usuarios: 'admin', roles: 'admin', auditoria: 'admin', permisos: 'admin', restaurantes: 'plataforma',
 };
@@ -102,6 +103,7 @@ const ORDEN_INICIO = [
   ['roles.ver', '/roles'], ['auditoria.ver', '/auditoria'],
 ];
 const rutaInicial = (user) => {
+  if (puede(user, 'dashboard.ver')) return '/dashboard';
   if (user?.roles?.includes('MESERO') && puede(user, 'mesas.ver')) return '/mesas';
   // El primer paso de un cajero es abrir la caja: si puede abrirla, aterriza en Caja.
   if (puede(user, 'caja.abrir')) return '/caja';
@@ -438,6 +440,11 @@ export default function App() {
                 <Icon name="empresa" size={13} /> {user.restaurante.nombre}
               </div>
             )}
+            {puede(user, 'dashboard.ver') && (
+              <NavLink to="/dashboard" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} title="Dashboard">
+                <span className="nav-toggle-label"><Icon name="dashboard" /> Dashboard</span>
+              </NavLink>
+            )}
             {NAV_GRUPOS.filter((g) => g.id !== 'admin').map(renderGrupo)}
 
             {puede(user, 'reportes.ver') && (
@@ -551,6 +558,7 @@ export default function App() {
               {puede(user, 'auditoria.ver') && <Route path="/auditoria" element={<Auditoria />} />}
               {user?.roles?.includes('ADMIN') && <Route path="/admin/mesa-00" element={<SolicitudesMesa00 />} />}
               {puede(user, 'reportes.ver') && <Route path="/reportes" element={<Reportes />} />}
+              {puede(user, 'dashboard.ver') && <Route path="/dashboard" element={<Dashboard />} />}
               <Route path="*" element={<Navigate to={rutaInicio} replace />} />
             </Routes>
           </main>

@@ -1389,3 +1389,14 @@ model LogIntegracion {
   @@map("LogIntegraciones")
 }
 
+// Objetivos de ventas que muestra el dashboard (una sola fila por restaurante)
+model ObjetivoDashboard {
+  id            Int      @id @default(1) @map("Id")
+  objetivoHoy   Float?   @map("ObjetivoHoy")
+  objetivo7Dias Float?   @map("Objetivo7Dias")
+  objetivo30Dias Float?  @map("Objetivo30Dias")
+  objetivoAnio  Float?   @map("ObjetivoAnio")
+  updatedAt     DateTime @default(now()) @updatedAt @map("FechaActualizacion")
+
+  @@map("ObjetivosDashboard")
+}
