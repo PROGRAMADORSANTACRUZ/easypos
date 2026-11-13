@@ -118,7 +118,8 @@ export function formatearUltimoPedido(item) {
     fecha: pedido.createdAt,
     cantidad: item.cantidad,
     estado: ESTADOS_PEDIDO[pedido.estado] || pedido.estado || '',
-    vendedor: nombreUsuario(pedido.usuario) || pedido.mesera?.nombre || 'Sin vendedor',
+    vendedor: nombreUsuario(pedido.usuario) || pedido.mesera?.nombre
+      || nombreUsuario(pedido.facturas?.[0]?.usuario) || nombreUsuario(pedido.facturasVenta?.[0]?.usuario) || 'Sin vendedor',
   };
 }
 
@@ -157,7 +158,14 @@ router.get('/', wrap(async (req, res) => {
       take: 10,
       select: {
         id: true, cantidad: true, producto: { select: { nombre: true } },
-        pedido: { select: { id: true, createdAt: true, estado: true, tipo: true, mesa: { select: { numero: true } }, usuario: { select: { nombre: true, usuario: true } }, mesera: { select: { nombre: true } } } },
+        pedido: {
+          select: {
+            id: true, createdAt: true, estado: true, tipo: true, mesa: { select: { numero: true } },
+            usuario: { select: { nombre: true, usuario: true } }, mesera: { select: { nombre: true } },
+            facturas: { take: 1, select: { usuario: { select: { nombre: true, usuario: true } } } },
+            facturasVenta: { take: 1, select: { usuario: { select: { nombre: true, usuario: true } } } },
+          },
+        },
       },
     }),
   ]);

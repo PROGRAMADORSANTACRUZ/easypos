@@ -130,4 +130,5 @@ test('top 5 por valor sin propina, ranking de vendedores y formato de ultimos pe
   const domicilio = formatearUltimoPedido({ ...base, pedido: { estado: 'ABIERTO', tipo: 'DOMICILIO', mesera: { nombre: 'Rosa' } } });
   assert.deepEqual([domicilio.mesa, domicilio.estado, domicilio.vendedor], ['Domicilio', 'En espera', 'Rosa']);
   assert.equal(formatearUltimoPedido({ ...base, pedido: { estado: 'FACTURADO', tipo: 'MESA' } }).mesa, 'Venta directa');
+  assert.equal(formatearUltimoPedido({ ...base, pedido: { estado: 'FACTURADO', tipo: 'MESA', facturasVenta: [{ usuario: { usuario: 'CAJERO1' } }] } }).vendedor, 'CAJERO1');
 });
