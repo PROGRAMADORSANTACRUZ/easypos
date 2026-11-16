@@ -217,6 +217,18 @@ const grupoDeRuta = (path) => {
   return g?.id || null;
 };
 
+// Solo existe en la app de escritorio: muestra la versión instalada.
+function VersionApp() {
+  const [version, setVersion] = useState('');
+  useEffect(() => {
+    let activo = true;
+    window.posDesktop?.appVersion?.().then((v) => { if (activo) setVersion(v); }).catch(() => {});
+    return () => { activo = false; };
+  }, []);
+  if (!version) return null;
+  return <div className="mini nav-version">POS v{version}</div>;
+}
+
 export default function App() {
   const [toast, setToast] = useState(null);
   const [grupoAbierto, setGrupoAbierto] = useState(null);
@@ -516,6 +528,7 @@ export default function App() {
               <button type="button" className="btn btn-sm" style={{ width: '100%', marginTop: 6 }} onClick={logout}>
                 Cerrar sesión
               </button>
+              <VersionApp />
             </div>
           </aside>
           <main className="content">

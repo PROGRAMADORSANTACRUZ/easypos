@@ -53,6 +53,10 @@ async function autorizarAperturaCajon({ usuario, password }) {
 }
 
 function registrarCanalesCajon() {
+  ipcMain.handle('pos:app-version', (event) => {
+    exigirVentanaPrincipal(event);
+    return app.getVersion();
+  });
   ipcMain.handle('pos:cash-drawer:list-printers', async (event) => {
     exigirVentanaPrincipal(event);
     const printers = await mainWindow.webContents.getPrintersAsync();

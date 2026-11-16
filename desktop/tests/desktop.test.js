@@ -32,7 +32,7 @@ test('installer uses native DPI rendering and high-resolution artwork', () => {
   }
 });
 
-test('preload exposes only the cash drawer bridge', async () => {
+test('preload exposes only the app version and cash drawer bridges', async () => {
   const calls = [];
   let exposedName;
   let exposedApi;
@@ -48,10 +48,12 @@ test('preload exposes only the cash drawer bridge', async () => {
   vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '..', 'preload.js'), 'utf8'), context);
 
   assert.equal(exposedName, 'posDesktop');
-  assert.deepEqual(Object.keys(exposedApi), ['cashDrawer']);
+  assert.deepEqual(Object.keys(exposedApi), ['appVersion', 'cashDrawer']);
+  await exposedApi.appVersion();
   await exposedApi.cashDrawer.listPrinters();
   await exposedApi.cashDrawer.open({ printerName: 'Thermal' });
   assert.deepEqual(calls, [
+    ['pos:app-version'],
     ['pos:cash-drawer:list-printers'],
     ['pos:cash-drawer:open', { printerName: 'Thermal' }],
   ]);

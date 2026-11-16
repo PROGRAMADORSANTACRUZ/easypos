@@ -1199,6 +1199,7 @@ tbody tr:last-child td { border-bottom: none; }
   border-top: 1px solid var(--border);
 }
 .nav-user-nombre { font-weight: 700; font-size: 14px; }
+.nav-version { margin-top: 8px; text-align: center; opacity: .7; }
 .nav-user-rol {
   display: inline-block;
   font-size: 11px;
