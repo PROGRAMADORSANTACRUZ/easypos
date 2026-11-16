@@ -1,6 +1,6 @@
 {
   "name": "pos-desktop",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "App de escritorio POS (Electron)",
   "main": "main.js",
   "type": "commonjs",
