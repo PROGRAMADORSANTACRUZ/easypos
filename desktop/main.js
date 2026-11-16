@@ -2,12 +2,13 @@
 // El backend (API JSON pura) y el frontend (estático) corren en procesos/puertos
 // separados: si el backend falla, la interfaz sigue sirviéndose y puede avisarle al
 // usuario en vez de dejar la ventana en blanco.
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const http = require('node:http');
 const { enviarPulsoCajon } = require('./cash-drawer.js');
 const { crearServidorEstatico } = require('./static-server.js');
+const { iniciarActualizaciones } = require('./updater.js');
 
 const API_PORT = process.env.PORT || 4010;
 const API_ORIGIN = app.isPackaged
@@ -176,6 +177,11 @@ app.whenReady().then(async () => {
     }
   }
   createWindow();
+
+  if (app.isPackaged) {
+    const { autoUpdater } = require('electron-updater');
+    iniciarActualizaciones({ autoUpdater, dialog, getWindow: () => mainWindow });
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

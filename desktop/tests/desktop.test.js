@@ -63,6 +63,7 @@ test('packaged window has only native overlay controls and the POS icon', async 
   let applicationMenu;
   let appId;
   let serverOptions;
+  let updateChecks = 0;
   const app = {
     isPackaged: true,
     whenReady: () => ({ then: (callback) => { ready = callback; } }),
@@ -95,6 +96,10 @@ test('packaged window has only native overlay controls and the POS icon', async 
         return { crearServidorEstatico: async (options) => { serverOptions = options; return { close() {} }; } };
       }
       if (name === './cash-drawer.js') return { enviarPulsoCajon: async () => {} };
+      if (name === './updater.js') return require('../updater.js');
+      if (name === 'electron-updater') {
+        return { autoUpdater: { on() {}, checkForUpdates: async () => { updateChecks += 1; } } };
+      }
       if (name === 'node:child_process') {
         return { spawn: () => { throw new Error('Packaged app must not launch a local backend'); } };
       }
@@ -113,6 +118,37 @@ test('packaged window has only native overlay controls and the POS icon', async 
   assert.equal(windowOptions.webPreferences.contextIsolation, true);
   assert.equal(windowOptions.webPreferences.preload, path.join(desktopDir, 'preload.js'));
   assert.equal(serverOptions.clientDist, path.join(desktopDir, 'web'));
+  assert.equal(updateChecks, 1);
+});
+
+test('updater checks on start and offers to restart once the update is downloaded', async () => {
+  const { iniciarActualizaciones } = require('../updater.js');
+  const handlers = {};
+  const installs = [];
+  let checks = 0;
+  const autoUpdater = {
+    on: (event, handler) => { handlers[event] = handler; },
+    checkForUpdates: async () => { checks += 1; },
+    quitAndInstall: (...args) => installs.push(args),
+  };
+  const answers = [0, 1];
+  const dialog = { showMessageBox: async () => ({ response: answers.shift() }) };
+  iniciarActualizaciones({ autoUpdater, dialog, getWindow: () => null, log: { error() {} } });
+  assert.equal(checks, 1);
+  assert.equal(autoUpdater.autoInstallOnAppQuit, true);
+
+  await handlers['update-downloaded']({ version: '1.0.2' });
+  assert.deepEqual(installs, [[true, true]]);
+  await handlers['update-downloaded']({ version: '1.0.2' });
+  assert.equal(installs.length, 1);
+});
+
+test('release config publishes installers to GitHub for the updater', () => {
+  const { build } = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
+  assert.deepEqual(build.publish.map(({ provider, owner, repo }) => ({ provider, owner, repo })), [
+    { provider: 'github', owner: 'PROGRAMADORSANTACRUZ', repo: 'easypos' },
+  ]);
+  assert.ok(build.files.includes('updater.js'));
 });
 
 test('local desktop routes API through the window origin to preserve session cookies', async () => {
@@ -147,6 +183,7 @@ test('local desktop routes API through the window origin to preserve session coo
         return { crearServidorEstatico: async (options) => { serverOptions = options; return { close() {} }; } };
       }
       if (name === './cash-drawer.js') return { enviarPulsoCajon: async () => {} };
+      if (name === './updater.js') return require('../updater.js');
       if (name === 'node:child_process') return { spawn: () => ({ on() {} }) };
       if (name === 'node:http') {
         return {

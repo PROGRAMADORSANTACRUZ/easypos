@@ -1,6 +1,6 @@
 {
   "name": "pos-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "App de escritorio POS (Electron)",
   "main": "main.js",
   "type": "commonjs",
@@ -30,6 +30,7 @@
       "preload.js",
       "cash-drawer.js",
       "static-server.js",
+      "updater.js",
       "build/icon.ico",
       "web/**"
     ],
@@ -58,9 +59,22 @@
       "installerSidebar": "build/sidebar.bmp",
       "uninstallerSidebar": "build/sidebar.bmp",
       "include": "build/installer.nsh",
-      "installerLanguages": ["es_ES"],
+      "installerLanguages": [
+        "es_ES"
+      ],
       "language": "3082"
     },
-    "artifactName": "POS-Setup-${version}.${ext}"
+    "artifactName": "POS-Setup-${version}.${ext}",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "PROGRAMADORSANTACRUZ",
+        "repo": "easypos",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

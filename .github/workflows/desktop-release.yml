@@ -1,0 +1,53 @@
+name: Publicar POS de escritorio
+
+# Al subir a main un cambio de version en desktop/package.json se compila el
+# instalador de Windows y se publica en GitHub Releases (etiqueta vX.Y.Z).
+# Las apps instaladas lo detectan al abrirse (electron-updater).
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - desktop/package.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Leer version y comprobar si ya esta publicada
+        id: version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = (Get-Content desktop/package.json -Raw | ConvertFrom-Json).version
+          gh release view "v$version" --repo "${{ github.repository }}" *> $null
+          $existe = ($LASTEXITCODE -eq 0)
+          $global:LASTEXITCODE = 0
+          "publicar=$((-not $existe).ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          if ($existe) { Write-Host "v$version ya esta publicada; no hay nada que hacer." }
+
+      - if: steps.version.outputs.publicar == 'true'
+        run: npm ci
+        working-directory: client
+
+      - if: steps.version.outputs.publicar == 'true'
+        run: npm ci
+        working-directory: desktop
+
+      - if: steps.version.outputs.publicar == 'true'
+        name: Compilar y publicar
+        run: npm run dist -- --publish always
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
