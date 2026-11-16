@@ -1646,6 +1646,7 @@ tbody tr:last-child td { border-bottom: none; }
   }
   .cuenta-panel td { padding: 0; border: 0; min-width: 0; overflow-wrap: anywhere; }
   .cuenta-panel td:first-child { grid-column: 1 / -1; }
+  .cuenta-panel td:last-child { width: auto !important; }
 }
 
 /* ---------- Teléfono (≤480) ---------- */
