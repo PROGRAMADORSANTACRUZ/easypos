@@ -4,7 +4,7 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { calcularInsumosRequeridos, validarStockSuficiente, descontarInsumos, revertirInsumos } from '../inventarioKits.js';
 import { imprimirComandaPorEstacion } from '../impresionCocina.js';
-import { conEventoPedido, registrarEventoPedido, estadoAntesDeReenvio, validarMotivoCancelacion } from '../historialPedidos.js';
+import { conEventoPedido, registrarEventoPedido, estadoAntesDeReenvio, validarMotivoCancelacion, itemsCanceladosDeEventos } from '../historialPedidos.js';
 import { consultarEntregaPedido, registrarResultadoCocinaTransaccion } from '../historialCocina.js';
 import { descontarStockMesa00, devolverStockMesa00, itemsDeInventarioNormal } from '../stockMesa00.js';
 
@@ -195,6 +195,15 @@ router.get('/:id', wrap(async (req, res) => {
   });
   if (!pedido) return res.status(404).json({ error: 'Pedido no encontrado' });
   res.json(pedido);
+}));
+
+router.get('/:id/items-cancelados', exigirPermiso('pedidos.ver'), wrap(async (req, res) => {
+  const eventos = await prisma.pedidoEvento.findMany({
+    where: { pedidoId: Number(req.params.id), accion: 'QUITAR_PRODUCTO' },
+    orderBy: { id: 'asc' },
+    select: { fecha: true, usuarioNombre: true, antes: true, despues: true },
+  });
+  res.json(itemsCanceladosDeEventos(eventos));
 }));
 
 router.get('/:id/entrega', exigirPermiso('pedidos.ver'), wrap(async (req, res) => {

@@ -195,10 +195,9 @@ export default function TomarPedido() {
 
   const [mesa, setMesa] = useState(null);
   const [productos, setProductos] = useState([]);
-  const [stockMesa00, setStockMesa00] = useState([]);
   const [pedido, setPedido] = useState(null);      // pedido abierto existente
+  const [cancelados, setCancelados] = useState([]); // productos quitados del pedido (historial)
   const [solicitudesMesa00, setSolicitudesMesa00] = useState([]);
-  const [cantidadesTomaMesa00, setCantidadesTomaMesa00] = useState({});
   const [cantidadesMoverMesa00, setCantidadesMoverMesa00] = useState({});
   const [estadoEntrega, setEstadoEntrega] = useState(null);
   const [errorEntrega, setErrorEntrega] = useState('');
@@ -227,16 +226,14 @@ export default function TomarPedido() {
 
   const cargar = async () => {
     try {
-      const [mesas, ps, abiertos, stock00] = await Promise.all([
+      const [mesas, ps, abiertos] = await Promise.all([
         api.get('/mesas'),
         api.get('/productos'),
         api.get('/pedidos?estado=ABIERTO'),
-        api.get('/mesa00/stock').catch(() => []),
       ]);
       const m = mesas.find((x) => x.id === Number(mesaId));
       setMesa(m);
       setProductos(ps.filter((p) => p.activo !== false && p.precio > 0));
-      setStockMesa00(stock00);
       setMesasLibres(mesas.filter((x) => x.estado === 'LIBRE' && x.id !== Number(mesaId)));
       const abierto = abiertos.find((p) => p.mesaId === Number(mesaId));
       setPedido(abierto || null);
@@ -285,6 +282,16 @@ export default function TomarPedido() {
   };
 
   useEffect(() => { cargar(); }, [mesaId]);
+
+  // Los productos quitados no se borran de la vista: se leen del historial del pedido y se muestran tachados
+  useEffect(() => {
+    if (!pedido?.id) { setCancelados([]); return undefined; }
+    let activo = true;
+    api.get(`/pedidos/${pedido.id}/items-cancelados`)
+      .then((lista) => { if (activo) setCancelados(lista); })
+      .catch(() => { if (activo) setCancelados([]); });
+    return () => { activo = false; };
+  }, [pedido]);
 
   useEffect(() => {
     setEstadoEntrega(null);
@@ -357,7 +364,7 @@ export default function TomarPedido() {
         precioUnit: it.precioUnit,
       }));
     }
-    return carrito.map((c, carritoIndex) => ({
+    return carrito.flatMap((c, carritoIndex) => (c.cancelado ? [] : [{
       id: `${c.producto.id}-${c.desdeMesa00 ? 'mesa00' : 'normal'}-${carritoIndex}`,
       carritoIndex,
       productoId: c.producto.id,
@@ -366,8 +373,17 @@ export default function TomarPedido() {
       precioUnit: c.producto.precio,
       cantidadMesa00: c.cantidadMesa00 || 0,
       notas: c.notas || '',
-    }));
+    }]));
   }, [pedido, carrito]);
+
+  const carritoActivo = useMemo(() => carrito.filter((c) => !c.cancelado), [carrito]);
+
+  // Productos cancelados que se siguen mostrando (tachados y en gris) como registro
+  const itemsCancelados = useMemo(() => (pedido
+    ? cancelados.map((c) => ({ ...c, clave: `${c.id}-${c.fecha}` }))
+    : carrito.flatMap((c, indice) => (c.cancelado
+      ? [{ clave: `local-${indice}`, nombre: c.producto.nombre, cantidad: c.cantidad, precioUnit: c.producto.precio }]
+      : []))), [pedido, cancelados, carrito]);
 
   const subtotal = items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0);
   const puedeEditar = !pedido ? puedeCrearPedido : editando && puedeEditarPedido;
@@ -387,45 +403,11 @@ export default function TomarPedido() {
       }
     } else {
       setCarrito((prev) => {
-        const existe = prev.find((c) => c.producto.id === producto.id && !c.desdeMesa00);
+        const existe = prev.find((c) => c.producto.id === producto.id && !c.desdeMesa00 && !c.cancelado);
         if (existe) return prev.map((c) => (c === existe ? { ...c, cantidad: c.cantidad + 1 } : c));
         return [...prev, { producto, cantidad: 1, cantidadMesa00: 0, desdeMesa00: false }];
       });
     }
-  };
-
-  const tomarSugeridoMesa00 = async (producto) => {
-    const cantidad = Number(cantidadesTomaMesa00[producto.id] || 1);
-    const enCarrito = carrito.filter((item) => item.producto.id === producto.id && item.desdeMesa00)
-      .reduce((total, item) => total + item.cantidad, 0);
-    const disponible = producto.cantidadMesa00 - (pedido ? 0 : enCarrito);
-    if (!Number.isSafeInteger(cantidad) || cantidad < 1 || cantidad > disponible) {
-      return notify(`Solo hay ${disponible} unidades disponibles en Mesa 00`, 'err');
-    }
-    if (pedido) {
-      if (!puedeEditar) return notify('Habilita la edición del pedido para agregar productos', 'err');
-      try {
-        const actualizado = await api.post(`/pedidos/${pedido.id}/items`, {
-          productoId: producto.id, cantidad, cantidadMesa00: cantidad,
-        });
-        setPedido(actualizado);
-        setStockMesa00((actual) => actual.map((item) => item.id === producto.id
-          ? { ...item, cantidadMesa00: item.cantidadMesa00 - cantidad } : item).filter((item) => item.cantidadMesa00 > 0));
-        notify(`${cantidad} ${producto.nombre} agregado${cantidad === 1 ? '' : 's'} desde Mesa 00`);
-      } catch (error) {
-        notify(error.message, 'err');
-      }
-      return;
-    }
-    if (!puedeCrearPedido) return notify('No tienes permiso para crear un pedido', 'err');
-    setCarrito((actual) => {
-      const existente = actual.find((item) => item.producto.id === producto.id && item.desdeMesa00);
-      if (existente) return actual.map((item) => item === existente
-        ? { ...item, cantidad: item.cantidad + cantidad, cantidadMesa00: item.cantidadMesa00 + cantidad }
-        : item);
-      return [...actual, { producto, cantidad, cantidadMesa00: cantidad, desdeMesa00: true }];
-    });
-    notify(`${cantidad} ${producto.nombre} reservado desde Mesa 00`);
   };
 
   const solicitarTrasladoMesa00 = async (item) => {
@@ -449,11 +431,11 @@ export default function TomarPedido() {
         notify(e.message, 'err');
       }
     } else {
-      setCarrito((prev) => prev.filter((_, indice) => indice !== item.carritoIndex));
+      setCarrito((prev) => prev.map((c, indice) => (indice === item.carritoIndex ? { ...c, cancelado: true } : c)));
     }
   };
 
-  // Cambia la cantidad de un item en +/-1 (si llega a 0 se elimina)
+  // Cambia la cantidad de un item en +/-1 (si llega a 0 se cancela y queda tachado)
   const cambiarCantidad = async (item, delta) => {
     const nuevaCant = item.cantidad + delta;
     if (pedido) {
@@ -467,31 +449,26 @@ export default function TomarPedido() {
       }
     } else {
       setCarrito((prev) =>
-        prev
-          .map((c, indice) => (indice === item.carritoIndex ? { ...c, cantidad: nuevaCant, cantidadMesa00: Math.min(c.cantidadMesa00 || 0, nuevaCant) } : c))
-          .filter((c) => c.cantidad > 0)
+        prev.map((c, indice) => {
+          if (indice !== item.carritoIndex) return c;
+          if (nuevaCant <= 0) return { ...c, cancelado: true };
+          return { ...c, cantidad: nuevaCant, cantidadMesa00: Math.min(c.cantidadMesa00 || 0, nuevaCant) };
+        })
       );
     }
   };
 
   const enviarPedido = async () => {
     if (!user?.id) return notify('Inicia sesión para tomar el pedido', 'err');
-    if (carrito.length === 0) return notify('Agrega al menos un producto', 'err');
+    if (carritoActivo.length === 0) return notify('Agrega al menos un producto', 'err');
     setProcesando(true);
     try {
       const nuevo = await api.post('/pedidos', {
         mesaId: Number(mesaId),
-        items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad, cantidadMesa00: c.cantidadMesa00 || 0, notas: c.notas || null })),
+        items: carritoActivo.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad, cantidadMesa00: c.cantidadMesa00 || 0, notas: c.notas || null })),
         ...(puedeEditarObservaciones && { observaciones: observaciones.trim() || null }),
       });
       setPedido(nuevo);
-      const tomadasMesa00 = new Map();
-      for (const item of carrito) {
-        if (item.cantidadMesa00 > 0) tomadasMesa00.set(item.producto.id, (tomadasMesa00.get(item.producto.id) || 0) + item.cantidadMesa00);
-      }
-      setStockMesa00((actual) => actual.map((item) => tomadasMesa00.has(item.id)
-        ? { ...item, cantidadMesa00: item.cantidadMesa00 - tomadasMesa00.get(item.id) } : item)
-        .filter((item) => item.cantidadMesa00 > 0));
       setCarrito([]);
       setEditando(false);
       imprimirComanda(nuevo, { reimpresion: false });
@@ -535,7 +512,7 @@ export default function TomarPedido() {
         fechaHora: new Date(fechaReserva).toISOString(),
         personas: personasReserva,
         clienteId: clienteGuardado.id,
-        items: carrito.map((item) => ({ productoId: item.producto.id, cantidad: item.cantidad, notas: item.notas || null })),
+        items: carritoActivo.map((item) => ({ productoId: item.producto.id, cantidad: item.cantidad, notas: item.notas || null })),
         notas: notaReserva.trim() || observaciones.trim() || '',
       });
       notify(`Reserva creada para la mesa ${mesa.numero}`);
@@ -724,43 +701,6 @@ export default function TomarPedido() {
               <button key={c} className={`cat-chip ${normalizarCategoriaMenu(filtroCat) === normalizarCategoriaMenu(c) ? 'active' : ''}`} onClick={() => setFiltroCat(c)}>{normalizarCategoriaMenu(c)}</button>
             ))}
           </div>
-          {stockMesa00.length > 0 && (
-            <section aria-label="Productos disponibles en Mesa 00" style={{ margin: '14px 0', padding: 12, border: '1px solid var(--border)', borderRadius: 8 }}>
-              <div className="row between" style={{ gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                <strong>Sugeridos de Mesa 00</strong>
-                <span className="mini">Existencia interna no facturable</span>
-              </div>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {stockMesa00.map((producto) => {
-                  const enCarrito = carrito.filter((item) => item.producto.id === producto.id)
-                    .reduce((total, item) => total + (item.cantidadMesa00 || 0), 0);
-                  const disponible = producto.cantidadMesa00 - (pedido ? 0 : enCarrito);
-                  return (
-                    <div key={producto.id} className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
-                      <div>
-                        <strong>{producto.nombre}</strong>
-                        <div className="mini">{disponible} disponibles · {money(producto.precio)}</div>
-                      </div>
-                      <div className="row" style={{ gap: 6 }}>
-                        <input
-                          aria-label={`Cantidad de ${producto.nombre} desde Mesa 00`}
-                          type="number" min="1" max={disponible} step="1"
-                          value={cantidadesTomaMesa00[producto.id] || 1}
-                          onChange={(event) => setCantidadesTomaMesa00((actual) => ({ ...actual, [producto.id]: event.target.value }))}
-                          style={{ width: 76 }}
-                        />
-                        <button
-                          type="button" className="btn btn-sm btn-green"
-                          disabled={disponible < 1 || procesando || (pedido && !puedeEditar)}
-                          onClick={() => tomarSugeridoMesa00(producto)}
-                        >Tomar</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
           {productos.length === 0 ? (
             <p className="empty">No hay productos.</p>
           ) : productosFiltrados.length === 0 ? (
@@ -801,7 +741,7 @@ export default function TomarPedido() {
             </div>
           </div>
 
-          {items.length === 0 ? (
+          {items.length === 0 && itemsCancelados.length === 0 ? (
             <p className="empty">Agrega productos del menú.</p>
           ) : (
             <table>
@@ -871,6 +811,20 @@ export default function TomarPedido() {
                   </tr>
                   );
                 })}
+                {itemsCancelados.map((c) => (
+                  <tr key={c.clave} className="item-cancelado">
+                    <td>
+                      <div className="ic-nombre">{c.nombre}</div>
+                      <div className="mini">
+                        Cancelado{c.usuarioNombre ? ` por ${c.usuarioNombre}` : ''}
+                        {c.fecha ? ` · ${new Date(c.fecha).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}` : ''}
+                      </div>
+                    </td>
+                    <td><span className="qty-num">×{c.cantidad}</span></td>
+                    <td className="ic-total">{money(c.precioUnit * c.cantidad)}</td>
+                    <td style={{ width: 30 }} />
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}
@@ -968,7 +922,7 @@ export default function TomarPedido() {
       {mostrarReserva && (
         <Modal
           title={`Reservar mesa ${mesa.numero}`}
-          subtitle={`Se guardará el cliente y el prepedido de ${carrito.length} producto(s); no se descuenta inventario hasta enviarlo.`}
+          subtitle={`Se guardará el cliente y el prepedido de ${carritoActivo.length} producto(s); no se descuenta inventario hasta enviarlo.`}
           size="lg"
           onClose={() => setMostrarReserva(false)}
           footer={(
@@ -1123,10 +1077,10 @@ export default function TomarPedido() {
                 <textarea rows="2" maxLength={500} value={notaReserva} onChange={(e) => setNotaReserva(e.target.value)} />
               </div>
             </div>
-            {carrito.length > 0 && (
+            {carritoActivo.length > 0 && (
               <div className="reserva-prepedido">
                 <strong>Prepedido</strong>
-                {carrito.map((item) => (
+                {carritoActivo.map((item) => (
                   <div key={item.producto.id}>
                     <span>{item.cantidad}× {item.producto.nombre}</span>
                     <span>{money(item.producto.precio * item.cantidad)}</span>

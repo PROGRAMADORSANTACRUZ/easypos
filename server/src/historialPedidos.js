@@ -103,6 +103,24 @@ export async function registrarEventoPedido(tx, req, pedidoId, accion, antes = n
   });
 }
 
+// Productos quitados de un pedido, reconstruidos del historial: lo que estaba "antes" y ya no está "despues".
+export function itemsCanceladosDeEventos(eventos) {
+  return eventos.flatMap((evento) => {
+    const quedan = new Set((evento.despues?.items || []).map((item) => item.id));
+    return (evento.antes?.items || [])
+      .filter((item) => !quedan.has(item.id))
+      .map((item) => ({
+        id: item.id,
+        nombre: item.nombre,
+        cantidad: item.cantidad,
+        precioUnit: item.precioUnit,
+        notas: item.notas ?? null,
+        fecha: evento.fecha,
+        usuarioNombre: evento.usuarioNombre,
+      }));
+  });
+}
+
 export async function estadoAntesDeReenvio(tx, pedidoId, estadoActual, hastaId) {
   const ultimoReenvio = await tx.pedidoEvento.findFirst({
     where: { pedidoId, accion: 'REENVIAR', ...(hastaId !== undefined && { id: { lt: hastaId } }) },

@@ -1310,6 +1310,11 @@ tbody tr:last-child td { border-bottom: none; }
 .qty { display: inline-flex; align-items: center; gap: 6px; }
 .qty-num { min-width: 22px; text-align: center; font-weight: 700; }
 
+/* Producto cancelado: queda en la cuenta como registro, en gris y tachado */
+.item-cancelado td { color: var(--muted); opacity: .75; }
+.item-cancelado .ic-nombre { font-weight: 600; text-transform: uppercase; text-decoration: line-through; }
+.item-cancelado .ic-total { text-align: right; font-weight: 700; text-decoration: line-through; }
+
 .total-line { display: flex; justify-content: space-between; padding: 6px 0; }
 .total-line.grand { font-size: 20px; font-weight: 800; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 6px; }
 
