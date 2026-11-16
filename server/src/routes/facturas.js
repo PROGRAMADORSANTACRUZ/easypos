@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
-import { crearFacturaFactus } from '../factus.js';
+import { crearFacturaFactus, motivoRechazoFactus } from '../factus.js';
 import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
 import { centroPermitido, filtroParesCentros } from '../centrosUsuario.js';
 import { calcularInsumosRequeridos, descontarInsumos, validarStockSuficiente } from '../inventarioKits.js';
@@ -273,8 +273,8 @@ async function emitirEnFactus(factura) {
       },
     });
   } catch (e) {
-    console.error('Factus: fallo al emitir factura', factura.id, e.message, e.detalle);
-    return prisma.factura.update({
+    console.error('Factus: fallo al emitir factura', factura.id, e.message, JSON.stringify(e.detalle));
+    const actualizada = await prisma.factura.update({
       where: { id: factura.id },
       data: { estadoDIAN: 'ERROR' },
       include: {
@@ -285,6 +285,7 @@ async function emitirEnFactus(factura) {
         detalle: { include: { producto: { include: { impuesto: true } } } },
       },
     });
+    return { ...actualizada, motivoDian: motivoRechazoFactus(e) };
   }
 }
 

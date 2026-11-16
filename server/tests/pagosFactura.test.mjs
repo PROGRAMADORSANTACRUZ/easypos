@@ -4,7 +4,7 @@ import test from 'node:test';
 import { desglosarFactura, efectivoDeFactura } from '../src/routes/aperturas.js';
 import { etiquetaPagos, resumirPagos } from '../../client/src/pagosMultiples.js';
 import { datosPagoRecibido, separarMetodosPago, separarValoresPago, validarPagosActivos, esMedioEfectivo, codigoPagoDian } from '../src/pagosFactura.js';
-import { cargarPagosFactura } from '../src/factus.js';
+import { cargarPagosFactura, motivoRechazoFactus } from '../src/factus.js';
 
 test('valida conceptos activos al confirmar y conserva codigos e importes aplicados', async () => {
   const formas = [{ id: 'EFE', activo: true }, { id: 'QR', activo: true }, { id: 'DTF', activo: false }];
@@ -265,4 +265,13 @@ test('Factus recupera los pagos por factura cuando Prisma no incluyo la relacion
   assert.deepEqual(pagos, [{ formaPago: 'EFE', monto: 12000 }, { formaPago: 'QR', monto: 8000 }]);
   assert.deepEqual(await cargarPagosFactura({ pagos: [{ formaPago: 'DTF', monto: 1 }] }), [{ formaPago: 'DTF', monto: 1 }]);
   assert.deepEqual(await cargarPagosFactura({}), []);
+});
+
+test('resume el motivo de rechazo de Factus con los errores por campo', () => {
+  const err = Object.assign(new Error('Hay errores de validación'), {
+    detalle: { data: { errors: { 'customer.email': ['Correo inválido'], items: ['Total no coincide'] } } },
+  });
+  assert.equal(motivoRechazoFactus(err), 'Hay errores de validación — customer.email: Correo inválido | items: Total no coincide');
+  assert.equal(motivoRechazoFactus(Object.assign(new Error('Sin rango'), { detalle: { data: { errors: ['Rango vencido'] } } })), 'Sin rango — Rango vencido');
+  assert.equal(motivoRechazoFactus(new Error('Factus respondio HTTP 500')), 'Factus respondio HTTP 500');
 });

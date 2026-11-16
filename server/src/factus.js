@@ -59,6 +59,23 @@ export async function factusFetch(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+// Resume en texto el motivo del rechazo que devuelve Factus (validaciones propias o reglas DIAN).
+export function motivoRechazoFactus(err) {
+  const detalle = err?.detalle || {};
+  const textos = [];
+  const recolectar = (valor, campo) => {
+    if (valor == null) return;
+    if (typeof valor === 'string') textos.push(campo ? `${campo}: ${valor}` : valor);
+    else if (Array.isArray(valor)) valor.forEach((item) => recolectar(item, campo));
+    else if (typeof valor === 'object') Object.entries(valor).forEach(([clave, item]) => recolectar(item, Array.isArray(item) || typeof item === 'string' ? clave : campo));
+  };
+  recolectar(detalle.data?.errors ?? detalle.errors);
+  recolectar(detalle.data?.bill?.errors);
+  const base = err?.message || 'Factus rechazó el envío';
+  const unicos = [...new Set(textos)].slice(0, 6);
+  return (unicos.length ? `${base} — ${unicos.join(' | ')}` : base).slice(0, 600);
+}
+
 // Verifica que las credenciales configuradas permitan autenticar contra Factus.
 export async function probarConexionFactus() {
   await solicitarToken();

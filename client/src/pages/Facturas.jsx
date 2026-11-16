@@ -885,7 +885,7 @@ export default function Facturas({ electronica = true }) {
       const actualizada = await api.post(`/facturas/${f.id}/reenviar-dian`, {});
       setFacturas((fs) => fs.map((x) => (x.id === actualizada.id ? { ...x, ...actualizada } : x)));
       setSel((s) => (s && s.id === actualizada.id ? { ...s, ...actualizada } : s));
-      notify(actualizada.estadoDIAN === 'ACEPTADA' ? 'Factura reportada a la DIAN' : 'La DIAN/Factus rechazó el envío, revisa los datos', actualizada.estadoDIAN === 'ACEPTADA' ? 'ok' : 'err');
+      notify(actualizada.estadoDIAN === 'ACEPTADA' ? 'Factura reportada a la DIAN' : `La DIAN/Factus rechazó el envío: ${actualizada.motivoDian || 'revisa los datos'}`, actualizada.estadoDIAN === 'ACEPTADA' ? 'ok' : 'err');
     } catch (e) {
       notify(e.message, 'err');
     } finally {
