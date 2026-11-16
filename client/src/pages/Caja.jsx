@@ -35,6 +35,13 @@ export default function Caja() {
   const [aperturaPagosAbierta, setAperturaPagosAbierta] = useState(null);
   const [cuadresPagos, setCuadresPagos] = useState({});
   const [cargandoCuadre, setCargandoCuadre] = useState(null);
+  const [abrirCajonModal, setAbrirCajonModal] = useState(false);
+  const [impresorasCajon, setImpresorasCajon] = useState([]);
+  const [impresoraCajon, setImpresoraCajon] = useState('');
+  const [supervisorUsuario, setSupervisorUsuario] = useState('');
+  const [supervisorPassword, setSupervisorPassword] = useState('');
+  const [cargandoImpresorasCajon, setCargandoImpresorasCajon] = useState(false);
+  const [abriendoCajon, setAbriendoCajon] = useState(false);
 
   const cargar = async () => {
     try {
@@ -81,6 +88,55 @@ export default function Caja() {
       notify(err.message, 'err');
     } finally {
       setProcesando(false);
+    }
+  };
+
+  const prepararAperturaCajon = async () => {
+    const puente = window.posDesktop?.cashDrawer;
+    if (!puente) {
+      notify('El cajón USB solo se puede abrir desde la aplicación de escritorio del POS.', 'err');
+      return;
+    }
+    setAbrirCajonModal(true);
+    setCargandoImpresorasCajon(true);
+    try {
+      const lista = await puente.listPrinters();
+      setImpresorasCajon(lista);
+      setImpresoraCajon(lista.length === 1 ? lista[0].name : '');
+    } catch (err) {
+      setAbrirCajonModal(false);
+      notify(err.message, 'err');
+    } finally {
+      setCargandoImpresorasCajon(false);
+    }
+  };
+
+  const cerrarCajonModal = () => {
+    setAbrirCajonModal(false);
+    setSupervisorUsuario('');
+    setSupervisorPassword('');
+    setImpresoraCajon('');
+  };
+
+  const abrirCajon = async (e) => {
+    e.preventDefault();
+    const puente = window.posDesktop?.cashDrawer;
+    if (!puente) return notify('El cajón USB solo se puede abrir desde la aplicación de escritorio del POS.', 'err');
+    if (!impresoraCajon) return notify('Selecciona la impresora térmica conectada al cajón.', 'err');
+    try {
+      setAbriendoCajon(true);
+      await puente.open({
+        printerName: impresoraCajon,
+        usuario: supervisorUsuario.trim(),
+        password: supervisorPassword,
+      });
+      notify('Comando de apertura enviado');
+      cerrarCajonModal();
+    } catch (err) {
+      notify(err.message, 'err');
+    } finally {
+      setAbriendoCajon(false);
+      setSupervisorPassword('');
     }
   };
 
@@ -190,6 +246,7 @@ export default function Caja() {
             </div>
             <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <IndicadorRecogida estado={recogida.estado} onClick={abrirRecogida} />
+              {puedeAbrir && <Button variant="secondary" size="sm" icon="cash" onClick={prepararAperturaCajon}>Abrir cajón</Button>}
               <Button variant="success" size="sm" icon="add" onClick={() => { setCuentaContableId(''); setTipoMovimiento('INGRESO'); }}>Ingreso</Button>
               <Button variant="danger" size="sm" icon="minus" onClick={() => { setCuentaContableId(''); setTipoMovimiento('EGRESO'); }}>Egreso</Button>
               <Button variant="secondary" size="sm" icon="cash" onClick={abrirRecogida}>Recogida parcial</Button>
@@ -214,7 +271,12 @@ export default function Caja() {
               <Icon name="lock" size={16} /> <b>No hay caja abierta.</b>{' '}
               {puedeAbrir ? 'Abre un turno con la base inicial.' : 'Pide a un cajero o administrador que abra la caja.'}
             </div>
-            {puedeAbrir && <Button variant="primary" icon="cash" onClick={() => setAbrirModal(true)}>Abrir caja</Button>}
+            {puedeAbrir && (
+              <div className="row" style={{ gap: 8 }}>
+                <Button variant="secondary" icon="cash" onClick={prepararAperturaCajon}>Abrir cajón</Button>
+                <Button variant="primary" icon="cash" onClick={() => setAbrirModal(true)}>Abrir caja</Button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -323,6 +385,72 @@ export default function Caja() {
             <div className="field">
               <label>Base inicial</label>
               <input type="number" step="any" value={valorInicial} onChange={(e) => setValorInicial(e.target.value)} autoFocus placeholder="0" />
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {abrirCajonModal && (
+        <Modal
+          title="Abrir cajón monedero"
+          subtitle="La apertura requiere credenciales de un supervisor."
+          onClose={cerrarCajonModal}
+          size="sm"
+          footer={(
+            <>
+              <Button variant="secondary" onClick={cerrarCajonModal}>Cancelar</Button>
+              <Button
+                variant="primary"
+                type="submit"
+                form="abrir-cajon-form"
+                loading={abriendoCajon}
+                disabled={cargandoImpresorasCajon || impresorasCajon.length === 0}
+              >
+                Abrir cajón
+              </Button>
+            </>
+          )}
+        >
+          <form id="abrir-cajon-form" onSubmit={abrirCajon}>
+            <div className="field">
+              <label htmlFor="cajon-impresora">Impresora térmica</label>
+              <select
+                id="cajon-impresora"
+                value={impresoraCajon}
+                onChange={(e) => setImpresoraCajon(e.target.value)}
+                required
+                disabled={cargandoImpresorasCajon}
+              >
+                <option value="">{cargandoImpresorasCajon ? 'Buscando impresoras…' : 'Seleccionar impresora…'}</option>
+                {impresorasCajon.map((impresora) => (
+                  <option key={impresora.name} value={impresora.name}>{impresora.displayName || impresora.name}</option>
+                ))}
+              </select>
+              {!cargandoImpresorasCajon && impresorasCajon.length === 0 && (
+                <small>No se detectaron impresoras instaladas en este equipo.</small>
+              )}
+              <small>Selecciona la impresora térmica a la que está conectado el cajón por RJ11.</small>
+            </div>
+            <div className="field">
+              <label htmlFor="cajon-supervisor">Usuario supervisor</label>
+              <input
+                id="cajon-supervisor"
+                value={supervisorUsuario}
+                onChange={(e) => setSupervisorUsuario(e.target.value)}
+                autoComplete="username"
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="cajon-password">Contraseña del supervisor</label>
+              <input
+                id="cajon-password"
+                type="password"
+                value={supervisorPassword}
+                onChange={(e) => setSupervisorPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
             </div>
           </form>
         </Modal>

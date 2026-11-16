@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import { randomBytes } from 'node:crypto';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { desglosarFactura, esMedioEfectivo } from '../pagosFactura.js';
+import { contrasenaCoincide } from './usuarios.js';
 
 export { desglosarFactura } from '../pagosFactura.js';
 
@@ -10,11 +12,25 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 
 const conRelaciones = { caja: true, usuario: true };
 const permisosFacturacion = ['facturas.ver', 'facturas.crear', 'factura_venta.ver', 'factura_venta.crear'];
+const autorizacionesCajon = new Map();
+const AUTORIZACION_CAJON_MS = 30_000;
 
 export const TOPE_RECOGIDA = Number(process.env.TOPE_RECOGIDA_CAJA) > 0 ? Number(process.env.TOPE_RECOGIDA_CAJA) : 1000000;
 export const MAX_AVISOS_RECOGIDA = 3;
 export const MENSAJE_RECOGIDA_OBLIGATORIA = 'Debes registrar la recogida parcial de efectivo antes de seguir facturando.';
 const redondear = (valor) => Math.round(valor * 100) / 100;
+
+export function consumirAutorizacionCajon(ticket) {
+  const ahora = Date.now();
+  for (const [valor, autorizacion] of autorizacionesCajon) {
+    if (autorizacion.expira <= ahora) autorizacionesCajon.delete(valor);
+  }
+  if (typeof ticket !== 'string' || !/^[a-f0-9]{64}$/i.test(ticket)) return false;
+  const autorizacion = autorizacionesCajon.get(ticket);
+  if (!autorizacion || autorizacion.expira <= ahora) return false;
+  autorizacionesCajon.delete(ticket);
+  return true;
+}
 
 router.use((req, res, next) => {
   const permisos = req.usuario?.permisos || [];
@@ -28,7 +44,7 @@ router.use((req, res, next) => {
     if (req.path === '/activa' && permisos.some((permiso) => permisosFacturacion.includes(permiso))) return next();
     if (permisos.includes('caja.ver')) return next();
   } else {
-    const permiso = req.method === 'POST' && req.path === '/'
+    const permiso = req.method === 'POST' && ['/', '/autorizar-cajon'].includes(req.path)
       ? 'caja.abrir'
       : req.method === 'POST' && req.path.endsWith('/movimientos')
         ? 'caja.crear'
@@ -43,6 +59,58 @@ router.use((req, res, next) => {
   }
   return res.status(403).json({ error: 'No tienes permiso para esta acción de caja' });
 });
+
+router.post('/autorizar-cajon', wrap(async (req, res) => {
+  const usuario = String(req.body?.usuario || '').trim();
+  const password = req.body?.password;
+  if (!usuario || typeof password !== 'string' || !password) {
+    return res.status(400).json({ error: 'Ingresa el usuario y la contraseña del supervisor' });
+  }
+
+  const supervisor = await prisma.usuario.findFirst({
+    where: { usuario: { equals: usuario, mode: 'insensitive' } },
+    select: {
+      id: true,
+      usuario: true,
+      activo: true,
+      passwordHash: true,
+      roles: {
+        select: {
+          rol: {
+            select: {
+              nombre: true,
+              permisos: { select: { permiso: { select: { codigo: true } } } },
+            },
+          },
+        },
+      },
+    },
+  });
+  const permisos = supervisor?.roles.flatMap(({ rol }) => rol.permisos.map(({ permiso }) => permiso.codigo)) || [];
+  const esSupervisor = supervisor?.roles.some(({ rol }) => rol.nombre === 'ADMIN')
+    || permisos.includes('usuarios.editar')
+    || permisos.includes('roles.editar');
+  if (!supervisor?.activo || !esSupervisor || !permisos.includes('caja.abrir')
+    || !contrasenaCoincide(password, supervisor.passwordHash)) {
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    return res.status(401).json({ error: 'Credenciales de supervisor incorrectas' });
+  }
+
+  const ahora = Date.now();
+  for (const [ticketExistente, autorizacion] of autorizacionesCajon) {
+    if (autorizacion.expira <= ahora) autorizacionesCajon.delete(ticketExistente);
+  }
+  const ticket = randomBytes(32).toString('hex');
+  autorizacionesCajon.set(ticket, { expira: ahora + AUTORIZACION_CAJON_MS });
+  await auditar({
+    req,
+    usuarioId: supervisor.id,
+    accion: 'AUTORIZAR',
+    entidad: 'cajon_monedero',
+    detalle: `Solicitud de apertura por ${req.usuario?.usuario || 'usuario autenticado'}`,
+  });
+  res.json({ ticket });
+}));
 
 function pagosParaCuadre(factura) {
   if (!factura.credito && factura.pagos?.length) {

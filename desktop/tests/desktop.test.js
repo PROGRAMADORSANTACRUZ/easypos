@@ -32,6 +32,31 @@ test('installer uses native DPI rendering and high-resolution artwork', () => {
   }
 });
 
+test('preload exposes only the cash drawer bridge', async () => {
+  const calls = [];
+  let exposedName;
+  let exposedApi;
+  const context = {
+    require: (name) => {
+      assert.equal(name, 'electron');
+      return {
+        contextBridge: { exposeInMainWorld: (key, api) => { exposedName = key; exposedApi = api; } },
+        ipcRenderer: { invoke: (...args) => { calls.push(args); return Promise.resolve(args[0]); } },
+      };
+    },
+  };
+  vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '..', 'preload.js'), 'utf8'), context);
+
+  assert.equal(exposedName, 'posDesktop');
+  assert.deepEqual(Object.keys(exposedApi), ['cashDrawer']);
+  await exposedApi.cashDrawer.listPrinters();
+  await exposedApi.cashDrawer.open({ printerName: 'Thermal' });
+  assert.deepEqual(calls, [
+    ['pos:cash-drawer:list-printers'],
+    ['pos:cash-drawer:open', { printerName: 'Thermal' }],
+  ]);
+});
+
 test('packaged window has only native overlay controls and the POS icon', async () => {
   let ready;
   let windowOptions;
@@ -59,11 +84,17 @@ test('packaged window has only native overlay controls and the POS icon', async 
     console,
     require: (name) => {
       if (name === 'electron') {
-        return { app, BrowserWindow, Menu: { setApplicationMenu: (menu) => { applicationMenu = menu; } } };
+        return {
+          app,
+          BrowserWindow,
+          Menu: { setApplicationMenu: (menu) => { applicationMenu = menu; } },
+          ipcMain: { handle() {} },
+        };
       }
       if (name === './static-server.js') {
         return { crearServidorEstatico: async (options) => { serverOptions = options; return { close() {} }; } };
       }
+      if (name === './cash-drawer.js') return { enviarPulsoCajon: async () => {} };
       if (name === 'node:child_process') {
         return { spawn: () => { throw new Error('Packaged app must not launch a local backend'); } };
       }
@@ -80,6 +111,7 @@ test('packaged window has only native overlay controls and the POS icon', async 
   assert.equal(windowOptions.icon, path.join(desktopDir, 'build', 'icon.ico'));
   assert.equal(windowOptions.webPreferences.nodeIntegration, false);
   assert.equal(windowOptions.webPreferences.contextIsolation, true);
+  assert.equal(windowOptions.webPreferences.preload, path.join(desktopDir, 'preload.js'));
   assert.equal(serverOptions.clientDist, path.join(desktopDir, 'web'));
 });
 
@@ -105,10 +137,16 @@ test('local desktop routes API through the window origin to preserve session coo
     process: { env: { PORT: '4010', CLIENT_PORT: '4011' }, platform: 'win32' },
     console,
     require: (name) => {
-      if (name === 'electron') return { app, BrowserWindow, Menu: { setApplicationMenu: () => {} } };
+      if (name === 'electron') return {
+        app,
+        BrowserWindow,
+        Menu: { setApplicationMenu: () => {} },
+        ipcMain: { handle() {} },
+      };
       if (name === './static-server.js') {
         return { crearServidorEstatico: async (options) => { serverOptions = options; return { close() {} }; } };
       }
+      if (name === './cash-drawer.js') return { enviarPulsoCajon: async () => {} };
       if (name === 'node:child_process') return { spawn: () => ({ on() {} }) };
       if (name === 'node:http') {
         return {

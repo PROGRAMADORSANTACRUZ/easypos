@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
+import bcrypt from 'bcryptjs';
 import express from 'express';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:1/test';
-const { default: aperturasRouter, recogidaObligatoriaPendiente } = await import('../src/routes/aperturas.js');
+const {
+  default: aperturasRouter,
+  consumirAutorizacionCajon,
+  recogidaObligatoriaPendiente,
+} = await import('../src/routes/aperturas.js');
 const { tenantStorage } = await import('../src/prisma.js');
 
 async function entorno(t) {
@@ -52,6 +57,7 @@ async function entorno(t) {
       consultasFacturas.push(consulta);
       return ventas.filter((factura) => (factura.aperturaId || 'turno-1') === consulta.where.aperturaId);
     } },
+    usuario: { findFirst: async () => null },
     auditoria: { create: async () => ({ id: 1, createdAt: new Date() }) },
   };
   const app = express();
@@ -80,6 +86,43 @@ async function entorno(t) {
   };
   return { solicitar, aperturas, movimientos, formas, facturas, ventas, consultasFacturas, db };
 }
+
+test('exige credenciales de administrador para emitir autorización de apertura de cajón de un solo uso', async (t) => {
+  const { solicitar, db } = await entorno(t);
+  const passwordHash = await bcrypt.hash('ClaveSegura123', 4);
+  const supervisor = {
+    id: 'supervisor-1',
+    usuario: 'SUPERVISOR',
+    activo: true,
+    passwordHash,
+    roles: [{ rol: { nombre: 'CAJERO', permisos: [{ permiso: { codigo: 'caja.abrir' } }] } }],
+  };
+  db.usuario.findFirst = async () => supervisor;
+
+  const sinPermiso = await solicitar('POST', '/autorizar-cajon', {
+    usuario: 'SUPERVISOR', password: 'ClaveSegura123',
+  }, 'caja.ver');
+  assert.equal(sinPermiso.status, 403);
+
+  const sinRolSupervisor = await solicitar('POST', '/autorizar-cajon', {
+    usuario: 'SUPERVISOR', password: 'ClaveSegura123',
+  }, 'caja.abrir');
+  assert.equal(sinRolSupervisor.status, 401);
+
+  supervisor.roles = [{ rol: { nombre: 'ADMIN', permisos: [{ permiso: { codigo: 'caja.abrir' } }] } }];
+  const credencialesIncorrectas = await solicitar('POST', '/autorizar-cajon', {
+    usuario: 'SUPERVISOR', password: 'incorrecta',
+  }, 'caja.abrir');
+  assert.equal(credencialesIncorrectas.status, 401);
+
+  const autorizacion = await solicitar('POST', '/autorizar-cajon', {
+    usuario: 'SUPERVISOR', password: 'ClaveSegura123',
+  }, 'caja.abrir');
+  assert.equal(autorizacion.status, 200);
+  assert.match(autorizacion.body.ticket, /^[a-f0-9]{64}$/);
+  assert.equal(consumirAutorizacionCajon(autorizacion.body.ticket), true);
+  assert.equal(consumirAutorizacionCajon(autorizacion.body.ticket), false);
+});
 
 test('aperturas y movimientos requieren permiso y usan al usuario autenticado', async (t) => {
   const { solicitar, aperturas, movimientos } = await entorno(t);

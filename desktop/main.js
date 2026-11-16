@@ -2,10 +2,11 @@
 // El backend (API JSON pura) y el frontend (estático) corren en procesos/puertos
 // separados: si el backend falla, la interfaz sigue sirviéndose y puede avisarle al
 // usuario en vez de dejar la ventana en blanco.
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const http = require('node:http');
+const { enviarPulsoCajon } = require('./cash-drawer.js');
 const { crearServidorEstatico } = require('./static-server.js');
 
 const API_PORT = process.env.PORT || 4010;
@@ -22,6 +23,70 @@ const clientDist = process.env.CLIENT_DIST || (
 let serverProcess = null;
 let staticServer = null;
 let mainWindow = null;
+
+function exigirVentanaPrincipal(event) {
+  if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) {
+    throw new Error('Solicitud no autorizada');
+  }
+  if (new URL(event.senderFrame.url).origin !== new URL(CLIENT_URL).origin) {
+    throw new Error('Solicitud no autorizada');
+  }
+}
+
+async function autorizarAperturaCajon({ usuario, password }) {
+  const cookies = await mainWindow.webContents.session.cookies.get({ url: `${CLIENT_URL}/api` });
+  const sessionCookie = cookies.find((cookie) => cookie.name === 'pos_session');
+  if (!sessionCookie) throw new Error('Inicia sesión en el POS antes de abrir el cajón.');
+
+  const response = await fetch(`${CLIENT_URL}/api/aperturas/autorizar-cajon`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: `${sessionCookie.name}=${sessionCookie.value}`,
+    },
+    body: JSON.stringify({ usuario, password }),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(body?.error || 'No se pudo validar al supervisor.');
+  return body?.ticket;
+}
+
+function registrarCanalesCajon() {
+  ipcMain.handle('pos:cash-drawer:list-printers', async (event) => {
+    exigirVentanaPrincipal(event);
+    const printers = await mainWindow.webContents.getPrintersAsync();
+    return printers.map(({ name, displayName }) => ({ name, displayName: displayName || name }));
+  });
+
+  ipcMain.handle('pos:cash-drawer:open', async (event, request = {}) => {
+    exigirVentanaPrincipal(event);
+    const printerName = String(request.printerName || '').trim();
+    const usuario = String(request.usuario || '').trim();
+    const password = request.password;
+    if (!printerName || !usuario || typeof password !== 'string' || !password) {
+      throw new Error('Selecciona la impresora e ingresa las credenciales del supervisor.');
+    }
+
+    const printers = await mainWindow.webContents.getPrintersAsync();
+    if (!printers.some((printer) => printer.name === printerName)) {
+      throw new Error('La impresora seleccionada ya no está disponible.');
+    }
+
+    const ticket = await autorizarAperturaCajon({ usuario, password });
+    if (!ticket) throw new Error('No se recibió la autorización del supervisor.');
+
+    const response = await fetch(`${CLIENT_URL}/api/aperturas/consumir-cajon`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket }),
+    });
+    const body = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(body?.error || 'La autorización del supervisor expiró.');
+
+    await enviarPulsoCajon(printerName);
+    return { ok: true };
+  });
+}
 
 function startServer() {
   serverProcess = spawn(process.env.POS_NODE || 'node', [path.join(serverDir, 'src', 'index.js')], {
@@ -71,6 +136,7 @@ function createWindow() {
       height: 32,
     },
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -94,6 +160,7 @@ function createWindow() {
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   app.setAppUserModelId('com.gruposantacruz.pos');
+  registrarCanalesCajon();
   if (!app.isPackaged) startServer();
   staticServer = await crearServidorEstatico({
     clientDist,

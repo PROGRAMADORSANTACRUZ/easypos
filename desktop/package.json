@@ -27,6 +27,8 @@
     },
     "files": [
       "main.js",
+      "preload.js",
+      "cash-drawer.js",
       "static-server.js",
       "build/icon.ico",
       "web/**"

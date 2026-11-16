@@ -24,7 +24,7 @@ import cajasRouter from './routes/cajas.js';
 import asignacionCajasRouter from './routes/asignacionCajas.js';
 import tiposDocumentoRouter from './routes/tiposDocumento.js';
 import formasPagoRouter from './routes/formasPago.js';
-import aperturasRouter from './routes/aperturas.js';
+import aperturasRouter, { consumirAutorizacionCajon } from './routes/aperturas.js';
 import facturaDetalleRouter from './routes/facturaDetalle.js';
 import resolucionesRouter from './routes/resoluciones.js';
 import notasCreditoRouter from './routes/notasCredito.js';
@@ -118,6 +118,12 @@ app.use('/api/cajas', requireAuth, permisoPorMetodo('caja'), cajasRouter);
 app.use('/api/asignacion-cajas', requireAuth, permisoPorMetodo('empresa'), asignacionCajasRouter);
 app.use('/api/tipos-documento', requireAuth, tiposDocumentoRouter);
 app.use('/api/formas-pago', requireAuth, formasPagoRouter);
+app.post('/api/aperturas/consumir-cajon', (req, res) => {
+  if (!consumirAutorizacionCajon(req.body?.ticket)) {
+    return res.status(401).json({ error: 'La autorización del supervisor expiró o ya fue utilizada' });
+  }
+  res.json({ ok: true });
+});
 app.use('/api/aperturas', requireAuth, aperturasRouter);
 app.use('/api/factura-detalle', requireAuth, facturaDetalleRouter);
 app.use('/api/resoluciones', requireAuth, permisoPorMetodo('resoluciones'), resolucionesRouter);
