@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import ExcelJS from 'exceljs';
 import { api, money } from '../api.js';
+import { abrirVentanaVacia, escribirEImprimir } from '../print.js';
 import { Icon } from '../icons.jsx';
 import { useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, EmptyState } from '../components/ui/index.jsx';
@@ -143,12 +144,9 @@ function exportarPDF(items, notify) {
     <table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>
     <div class="pie">Asados Santacruz · Reporte de inventario</div>
   </body></html>`;
-  const win = window.open('', '_blank', 'width=900,height=700');
+  const win = abrirVentanaVacia(900, 700);
   if (!win) return notify('Permite las ventanas emergentes para exportar', 'err');
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  win.onload = () => { win.print(); };
+  escribirEImprimir(win, html);
 }
 
 export default function Inventario() {

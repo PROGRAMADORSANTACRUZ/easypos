@@ -1,6 +1,8 @@
 // Utilidades compartidas para imprimir tickets/documentos POS en distintos formatos de papel,
 // configurables por tipo de documento en Empresa (Parámetros).
 import { api } from './api.js';
+import { esApk } from './movil.js';
+import { mostrarVisorApk } from './visorApk.js';
 
 export const FORMATOS_IMPRESION = {
   TICKET_80: { mm: 80, label: 'Ticket 80mm (térmica estándar)' },
@@ -48,13 +50,34 @@ export function estiloPagina(formato) {
 // Abre una ventana en blanco. Debe llamarse de forma SÍNCRONA (primera línea de la función,
 // antes de cualquier await) para que el navegador no bloquee el popup por no venir de un gesto
 // del usuario "reciente" — si se abre después de un await, Chrome/Edge lo bloquean en silencio.
-export function abrirVentanaVacia() {
-  return window.open('', '_blank', 'width=380,height=640');
+export function abrirVentanaVacia(ancho = 380, alto = 640) {
+  if (esApk()) return crearVentanaApk();
+  return window.open('', '_blank', `width=${ancho},height=${alto}`);
+}
+
+// En la APK no hay ventanas emergentes: este objeto imita la parte de `window` que usan las
+// pantallas (document.write/close/focus) y al escribir muestra la tirilla en el visor propio.
+function crearVentanaApk() {
+  let html = '';
+  return {
+    esVisorApk: true,
+    document: { write: (texto) => { html += texto; }, close() {}, images: [] },
+    focus() {},
+    close() {},
+    print() {},
+    addEventListener() {},
+    mostrar: () => mostrarVisorApk(html),
+  };
 }
 
 // Escribe el HTML en una ventana ya abierta y la cierra al terminar o cancelar el diálogo de impresión.
 export function escribirEImprimir(win, html) {
   if (!win) return;
+  if (win.esVisorApk) {
+    win.document.write(html);
+    win.mostrar();
+    return;
+  }
   win.document.write(html);
   win.document.close();
   win.focus();

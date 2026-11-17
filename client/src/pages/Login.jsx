@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, setTenantActual } from '../api.js';
 import { Icon } from '../icons.jsx';
+import { estadoHuella, activarHuella, leerHuella, quitarHuella, motivoHuella } from '../huella.js';
 
 export default function Login({ onLogin }) {
   const [restaurantes, setRestaurantes] = useState([]);
@@ -10,6 +11,8 @@ export default function Login({ onLogin }) {
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [huella, setHuella] = useState({ disponible: false, activada: false });
+  const huellaIntentada = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -24,15 +27,70 @@ export default function Login({ onLogin }) {
     })();
   }, []);
 
+  const iniciarSesion = async (usuarioLogin, clave, restaurante) => {
+    setTenantActual(restaurante || null);
+    return api.post('/usuarios/login', { usuario: usuarioLogin, password: clave });
+  };
+
+  const entrarConHuella = async () => {
+    setError('');
+    let credenciales;
+    try {
+      credenciales = await leerHuella();
+    } catch (err) {
+      const motivo = motivoHuella(err);
+      if (motivo.includes('INVALIDADA')) {
+        setHuella((actual) => ({ ...actual, activada: false }));
+        setError('Cambiaron las huellas del teléfono. Ingresa con tu clave y vuelve a activar la huella.');
+      } else if (!motivo.includes('CANCELADO')) {
+        setError('No se pudo leer la huella. Ingresa con tu usuario y clave.');
+      }
+      return;
+    }
+    setCargando(true);
+    try {
+      const user = await iniciarSesion(credenciales.usuario, credenciales.password, credenciales.restauranteId);
+      onLogin(user);
+    } catch (err) {
+      await quitarHuella().catch(() => {});
+      setHuella((actual) => ({ ...actual, activada: false }));
+      setError(`${err.message}. Ingresa con tu clave para activar la huella de nuevo.`);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    (async () => {
+      const estado = await estadoHuella();
+      setHuella(estado);
+      if (estado.disponible && estado.activada && !huellaIntentada.current) {
+        huellaIntentada.current = true;
+        entrarConHuella();
+      }
+    })();
+  }, []);
+
+  const quitar = async () => {
+    await quitarHuella().catch(() => {});
+    setHuella((actual) => ({ ...actual, activada: false }));
+  };
+
   const enviar = async (e) => {
     e.preventDefault();
     const usuarioNormalizado = String(new FormData(e.currentTarget).get('usuario') || usuario).toUpperCase();
     setUsuario(usuarioNormalizado);
     setError('');
     setCargando(true);
-    setTenantActual(restauranteId || null);
     try {
-      const user = await api.post('/usuarios/login', { usuario: usuarioNormalizado, password });
+      const user = await iniciarSesion(usuarioNormalizado, password, restauranteId);
+      if (huella.disponible && !huella.activada && window.confirm('¿Activar el ingreso con huella en este teléfono?')) {
+        try {
+          await activarHuella({ usuario: usuarioNormalizado, password, restauranteId: restauranteId || null });
+        } catch {
+          // Si se cancela o falla, se entra igual y se puede activar en el próximo ingreso.
+        }
+      }
       onLogin(user);
     } catch (err) {
       setError(err.message);
@@ -91,9 +149,19 @@ export default function Login({ onLogin }) {
             </div>
           </div>
           {error && <div className="login-error">{error}</div>}
+          {huella.disponible && huella.activada && (
+            <button type="button" className="btn" style={{ width: '100%', marginTop: 4 }} disabled={cargando} onClick={entrarConHuella}>
+              Ingresar con huella
+            </button>
+          )}
           <button className="btn btn-primary" style={{ width: '100%', marginTop: 4 }} disabled={cargando}>
             {cargando ? 'Ingresando…' : 'Ingresar'}
           </button>
+          {huella.disponible && huella.activada && (
+            <button type="button" style={{ width: '100%', marginTop: 8, fontSize: 13, background: 'none', border: 0, color: 'var(--muted)', textDecoration: 'underline', cursor: 'pointer' }} onClick={quitar}>
+              Quitar el ingreso con huella
+            </button>
+          )}
         </form>
       </main>
     </div>

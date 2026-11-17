@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ExcelJS from 'exceljs';
 import { api, money } from '../api.js';
+import { abrirVentanaVacia, escribirEImprimir } from '../print.js';
 import { diaColombia } from '../fechaComercial.js';
 import { useToast } from '../App.jsx';
 import { LoadingState } from '../components/ui/index.jsx';
@@ -740,12 +741,9 @@ export default function Reportes() {
       ${notaExportacion ? `<p class="sub">${notaExportacion}</p>` : ''}
       <div class="pie">Asados Santacruz · Reporte de ventas</div>
     </body></html>`;
-    const win = window.open('', '_blank', 'width=900,height=700');
+    const win = abrirVentanaVacia(900, 700);
     if (!win) return notify('Permite las ventanas emergentes para exportar', 'err');
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    win.onload = () => { win.print(); };
+    escribirEImprimir(win, html);
   };
 
   const contenido = () => {
