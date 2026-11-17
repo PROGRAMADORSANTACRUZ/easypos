@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, money } from '../api.js';
+import { categoriasOrdenadas } from '../categoriasMenu.js';
 import { Icon } from '../icons.jsx';
 import { useToast, useAuth } from '../App.jsx';
 import { LoadingState, overlayCierre } from '../components/ui/index.jsx';
@@ -150,7 +151,7 @@ export default function Pedidos() {
   const subtotal = items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0);
   const totalItems = items.length;
 
-  const categoriasMenu = [...new Set(productos.map((p) => p.categoria?.nombre || 'Sin categoría'))].sort();
+  const categoriasMenu = categoriasOrdenadas(productos);
   const productosMenu = productos.filter((p) => {
     const cat = p.categoria?.nombre || 'Sin categoría';
     const okCat = !filtroCat || cat === filtroCat;

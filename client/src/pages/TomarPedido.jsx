@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
+import { categoriasOrdenadas } from '../categoriasMenu.js';
 import { Icon } from '../icons.jsx';
 import { useAuth, useToast } from '../App.jsx';
 import { LoadingState, overlayCierre, Modal, Button } from '../components/ui/index.jsx';
@@ -344,7 +345,7 @@ export default function TomarPedido() {
   }, [pedido?.id]);
 
   // Categorías y productos filtrados del menú
-  const categoriasMenu = [...new Set(productos.map((p) => p.categoria?.nombre || 'Sin categoría'))];
+  const categoriasMenu = categoriasOrdenadas(productos);
   const productosFiltrados = productos.filter((p) => {
     const cat = p.categoria?.nombre || 'Sin categoría';
     const okCat = normalizarCategoriaMenu(cat) === normalizarCategoriaMenu(filtroCat);

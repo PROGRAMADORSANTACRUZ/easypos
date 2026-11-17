@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
+import { categoriasOrdenadas } from '../categoriasMenu.js';
 import { Icon } from '../icons.jsx';
 import { useToast, useAuth } from '../App.jsx';
 import { LoadingState, PageHeader, Modal, Button, EmptyState, overlayCierre } from '../components/ui/index.jsx';
@@ -143,10 +144,7 @@ export default function Cotizaciones() {
     [carrito]
   );
 
-  const categoriasMenu = useMemo(
-    () => [...new Set(productos.map((p) => p.categoria?.nombre || 'Sin categoría'))].sort(),
-    [productos]
-  );
+  const categoriasMenu = useMemo(() => categoriasOrdenadas(productos), [productos]);
   const productosMenu = productos.filter((p) => {
     const cat = p.categoria?.nombre || 'Sin categoría';
     const okCat = !filtroCat || cat === filtroCat;

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import ExcelJS from 'exceljs';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
+import { categoriasOrdenadas } from '../categoriasMenu.js';
 import { Icon } from '../icons.jsx';
 import { Logo, overlayCierre } from '../components/ui/index.jsx';
 import { LOGO_RECIBO } from '../logoRecibo.js';
@@ -1147,7 +1148,7 @@ export default function Facturas({ electronica = true }) {
   const subtotalDirecta = Math.round((totalProductosDirecta - impuestoDirecta) * 100) / 100;
 
   // Categorías presentes en el menú y productos filtrados por categoría + búsqueda
-  const categoriasMenu = [...new Set(productos.map((p) => p.categoria?.nombre || 'Sin categoría'))].sort();
+  const categoriasMenu = categoriasOrdenadas(productos);
   const productosMenu = productos.filter((p) => {
     const cat = p.categoria?.nombre || 'Sin categoría';
     const okCat = !filtroCat || cat === filtroCat;
