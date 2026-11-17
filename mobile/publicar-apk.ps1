@@ -28,7 +28,10 @@ $sha = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
 
 $destino = "$raiz\client\public\movil"
 New-Item -ItemType Directory -Force $destino | Out-Null
-Copy-Item $apk "$destino\POS-Santacruz.apk" -Force
-$json = [ordered]@{ versionCode = $codigo; versionName = $nombre; sha256 = $sha; url = '/movil/POS-Santacruz.apk' } | ConvertTo-Json
+# El nombre lleva la versión: Cloudflare cachea los .apk por horas y un nombre fijo serviría la APK vieja.
+Get-ChildItem $destino -Filter 'POS-Santacruz*.apk' | Remove-Item -Force
+$archivo = "POS-Santacruz-$nombre.apk"
+Copy-Item $apk "$destino\$archivo" -Force
+$json = [ordered]@{ versionCode = $codigo; versionName = $nombre; sha256 = $sha; url = "/movil/$archivo" } | ConvertTo-Json
 [IO.File]::WriteAllText("$destino\version.json", $json, (New-Object Text.UTF8Encoding($false)))
-"APK $nombre (versionCode $codigo) publicada en $destino"
+"APK $nombre (versionCode $codigo) publicada en $destino\$archivo"
