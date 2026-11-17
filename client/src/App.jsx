@@ -218,16 +218,21 @@ const grupoDeRuta = (path) => {
   return g?.id || null;
 };
 
-// Solo existe en la app de escritorio: muestra la versión instalada.
+// Solo existe en la app de escritorio y en la APK: muestra la versión instalada.
 function VersionApp() {
-  const [version, setVersion] = useState('');
+  const [etiqueta, setEtiqueta] = useState('');
   useEffect(() => {
     let activo = true;
-    window.posDesktop?.appVersion?.().then((v) => { if (activo) setVersion(v); }).catch(() => {});
+    const mostrar = (texto) => { if (activo) setEtiqueta(texto); };
+    if (window.posDesktop?.appVersion) {
+      window.posDesktop.appVersion().then((v) => mostrar(`POS v${v}`)).catch(() => {});
+    } else if (window.Capacitor?.nativePromise) {
+      window.Capacitor.nativePromise('ApkUpdater', 'getVersion').then((v) => mostrar(`POS móvil v${v.versionName}`)).catch(() => {});
+    }
     return () => { activo = false; };
   }, []);
-  if (!version) return null;
-  return <div className="mini nav-version">POS v{version}</div>;
+  if (!etiqueta) return null;
+  return <div className="mini nav-version">{etiqueta}</div>;
 }
 
 export default function App() {
