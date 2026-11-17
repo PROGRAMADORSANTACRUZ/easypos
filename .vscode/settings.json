@@ -4,5 +4,7 @@
             "approve": true,
             "matchCommandLine": true
         }
-    }
+    },
+    "chat.permissions.default": "autopilot",
+    "chat.tools.terminal.blockDetectedFileWrites": "outsideWorkspace"
 }
