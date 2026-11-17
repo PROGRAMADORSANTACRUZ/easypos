@@ -1,0 +1,13 @@
+{
+  "appId": "com.gruposantacruz.pos.movil",
+  "appName": "POS Santacruz",
+  "webDir": "www",
+  "server": {
+    "url": "https://pos.grupo-santacruz.com",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
