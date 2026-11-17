@@ -5,3 +5,4 @@ desktop/web
 .env
 *.log
 .DS_Store
+~$*
