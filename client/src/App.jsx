@@ -395,6 +395,7 @@ export default function App() {
     return (
       <ToastCtx.Provider value={notify}>
         <Login onLogin={login} />
+        <ActualizadorApk />
         {toast && <div className={`toast ${toast.tipo === 'err' ? 'err' : 'ok'}`}>{toast.mensaje}</div>}
       </ToastCtx.Provider>
     );
