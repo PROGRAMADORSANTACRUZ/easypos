@@ -1200,6 +1200,14 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .nav-user-nombre { font-weight: 700; font-size: 14px; }
 .nav-version { margin-top: 8px; text-align: center; opacity: .7; }
+
+/* Aviso de nueva versión de la APK */
+.actualizador-apk {
+  position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 60;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 14px; border-radius: var(--radius-md);
+  background: var(--panel); border: 1px solid var(--primary); box-shadow: var(--shadow-sm);
+}
 .nav-user-rol {
   display: inline-block;
   font-size: 11px;

@@ -42,6 +42,7 @@ import Login from './pages/Login.jsx';
 import SolicitudesMesa00 from './pages/SolicitudesMesa00.jsx';
 import { Icon } from './icons.jsx';
 import { LoadingState, Logo } from './components/ui/index.jsx';
+import ActualizadorApk from './components/ActualizadorApk.jsx';
 import { api, limpiarSesionActual, setTenantActual, setUsuarioActual } from './api.js';
 
 const ToastCtx = createContext(() => {});
@@ -579,6 +580,7 @@ export default function App() {
               <Route path="*" element={<Navigate to={rutaInicio} replace />} />
             </Routes>
           </main>
+          <ActualizadorApk />
           {toast && <div className={`toast ${toast.tipo === 'err' ? 'err' : 'ok'}`}>{toast.mensaje}</div>}
         </div>
       </AuthCtx.Provider>
