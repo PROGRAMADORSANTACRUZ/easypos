@@ -13,7 +13,6 @@ export default function Cocina() {
   const [cocineroId, setCocineroId] = useState('');
   const [cargando, setCargando] = useState(true);
   const [marcando, setMarcando] = useState(null);
-  const [itemMarcando, setItemMarcando] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(true);
   const [revisionHistorial, setRevisionHistorial] = useState(0);
@@ -83,7 +82,6 @@ export default function Cocina() {
   const marcarItemListo = async (pedido, item) => {
     try {
       setMarcando(pedido.id);
-      setItemMarcando(item.id);
       const preparacion = await api.put(`/preparacion-cocina/${pedido.id}/items/${item.id}/listo`, { cocineroId: cocineroId || null });
       setPreparaciones((actual) => ({ ...actual, [pedido.id]: preparacion }));
       notify(preparacion.listo ? 'Todos los platos de la comanda están listos' : `${item.producto?.nombre || 'Plato'} marcado como listo`);
@@ -92,7 +90,6 @@ export default function Cocina() {
       notify(e.message, 'err');
     } finally {
       setMarcando(null);
-      setItemMarcando(null);
     }
   };
 
@@ -135,7 +132,7 @@ export default function Cocina() {
       <div className="page-header">
         <div className="page-header__text">
           <h1>Cocina</h1>
-          <p className="subtitle" style={{ margin: 0 }}>Comandas de los pedidos abiertos, con sus ingredientes. Marca cada plato con OK cuando esté listo.</p>
+          <p className="subtitle" style={{ margin: 0 }}>Comandas de los pedidos abiertos, con sus ingredientes. Toca cada plato cuando esté listo; al tocar el último, la comanda queda terminada.</p>
         </div>
         <div className="page-header__actions">
           <select aria-label="Cocinero responsable" value={cocineroId} onChange={(e) => elegirCocinero(e.target.value)} style={{ minWidth: 160 }}>
@@ -164,25 +161,29 @@ export default function Cocina() {
                     && Number(estado.cantidad ?? it.cantidad) === it.cantidad);
                   return (
                   <li key={it.id} style={{ marginBottom: 6, listStyle: 'none', marginLeft: -18 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className={`cocina-plato${listo ? ' cocina-plato--listo' : ''}`}
+                      aria-pressed={listo}
+                      aria-disabled={listo || marcando !== null}
+                      aria-label={listo ? `${it.producto?.nombre || 'Plato'} listo` : `Marcar ${it.producto?.nombre || 'plato'} como listo`}
+                      onClick={() => !listo && marcando === null && marcarItemListo(p, it)}
+                      onKeyDown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && !listo && marcando === null) {
+                          e.preventDefault();
+                          marcarItemListo(p, it);
+                        }
+                      }}
+                    >
                       <strong>{it.cantidad}x {it.producto?.nombre} {it.cantidadMesa00 > 0 && <span className="badge blue">Mesa 00 ×{it.cantidadMesa00}</span>}</strong>
-                      <Button
-                        size="sm"
-                        variant={listo ? 'success' : 'ghost'}
-                        icon="check"
-                        title={listo ? 'Plato listo' : `Marcar ${it.producto?.nombre || 'plato'} como listo`}
-                        aria-label={listo ? `${it.producto?.nombre || 'Plato'} listo` : `Marcar ${it.producto?.nombre || 'plato'} como listo`}
-                        loading={marcando === p.id && itemMarcando === it.id}
-                        disabled={marcando !== null || listo}
-                        onClick={() => marcarItemListo(p, it)}
-                      >OK</Button>
+                      {it.notas && <span className="mini" style={{ display: 'block', opacity: .8 }}>{it.notas}</span>}
+                      {it.producto?.componentes?.length > 0 && (
+                        <div className="mini" style={{ opacity: .75, marginTop: 2 }}>
+                          Ingredientes: {it.producto.componentes.map((c) => c.item?.nombre).join(', ')}
+                        </div>
+                      )}
                     </div>
-                    {it.notas && <span className="mini" style={{ display: 'block', opacity: .8 }}>{it.notas}</span>}
-                    {it.producto?.componentes?.length > 0 && (
-                      <div className="mini" style={{ opacity: .75, marginTop: 2 }}>
-                        Ingredientes: {it.producto.componentes.map((c) => c.item?.nombre).join(', ')}
-                      </div>
-                    )}
                   </li>
                   );
                 })}

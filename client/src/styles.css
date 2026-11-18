@@ -1031,6 +1031,10 @@ tbody tr:last-child td { border-bottom: none; }
 .factura-directa-modal > .row h3 { min-width: 0; flex: 1; }
 
 .cobro-dividir-toggle { width: 100%; margin: 2px 0 12px; }
+.cocina-plato { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer; user-select: none; }
+.cocina-plato:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.cocina-plato--listo { background: var(--green-soft); border-color: var(--green); cursor: default; }
+.cocina-plato[aria-disabled="true"]:not(.cocina-plato--listo) { opacity: .6; cursor: progress; }
 .cocina-historial { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); min-width: 0; }
 .cocina-historial h2 { margin: 0; font-size: 18px; }
 .cocina-historial-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 16px 0; }
