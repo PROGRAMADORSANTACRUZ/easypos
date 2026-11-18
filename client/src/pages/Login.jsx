@@ -42,6 +42,8 @@ export default function Login({ onLogin }) {
       if (motivo.includes('INVALIDADA')) {
         setHuella((actual) => ({ ...actual, activada: false }));
         setError('Cambiaron las huellas del teléfono. Ingresa con tu clave y vuelve a activar la huella.');
+      } else if (motivo.includes('BLOQUEADO')) {
+        setError('La huella está bloqueada por demasiados intentos. Ingresa con tu usuario y clave.');
       } else if (!motivo.includes('CANCELADO')) {
         setError('No se pudo leer la huella. Ingresa con tu usuario y clave.');
       }
@@ -52,9 +54,14 @@ export default function Login({ onLogin }) {
       const user = await iniciarSesion(credenciales.usuario, credenciales.password, credenciales.restauranteId);
       onLogin(user);
     } catch (err) {
-      await quitarHuella().catch(() => {});
-      setHuella((actual) => ({ ...actual, activada: false }));
-      setError(`${err.message}. Ingresa con tu clave para activar la huella de nuevo.`);
+      // Solo se borra la huella si el servidor rechazó las credenciales; un fallo de red o del servidor la conserva.
+      if (err.status === 400 || err.status === 401 || err.status === 403) {
+        await quitarHuella().catch(() => {});
+        setHuella((actual) => ({ ...actual, activada: false }));
+        setError(`${err.message}. Ingresa con tu clave para activar la huella de nuevo.`);
+      } else {
+        setError(`${err.message || 'No se pudo conectar'}. Intenta de nuevo con la huella o ingresa con tu clave.`);
+      }
     } finally {
       setCargando(false);
     }

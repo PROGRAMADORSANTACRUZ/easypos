@@ -54,10 +54,14 @@ public class BiometricoPlugin extends Plugin {
     private boolean hayBiometria() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false;
         Context contexto = getContext();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             BiometricManager gestor = contexto.getSystemService(BiometricManager.class);
             return gestor != null
                 && gestor.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS;
+        }
+        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+            BiometricManager gestor = contexto.getSystemService(BiometricManager.class);
+            return gestor != null && gestor.canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS;
         }
         return contexto.getPackageManager().hasSystemFeature(PackageManager.FEATURE_FINGERPRINT);
     }
@@ -173,7 +177,10 @@ public class BiometricoPlugin extends Plugin {
             new BiometricPrompt.AuthenticationCallback() {
                 @Override
                 public void onAuthenticationError(int codigo, CharSequence mensaje) {
-                    if (!terminado[0]) { terminado[0] = true; call.reject("CANCELADO"); }
+                    if (terminado[0]) return;
+                    terminado[0] = true;
+                    // 7 y 9: demasiados intentos fallidos (bloqueo temporal o permanente).
+                    call.reject(codigo == 7 || codigo == 9 ? "BLOQUEADO" : "CANCELADO");
                 }
 
                 @Override

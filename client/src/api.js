@@ -58,7 +58,7 @@ async function request(path, options = {}) {
     } catch {
       // respuesta sin cuerpo JSON
     }
-    throw new Error(msg);
+    throw Object.assign(new Error(msg), { status: res.status });
   }
   if (res.status === 204) return null;
   return res.json();

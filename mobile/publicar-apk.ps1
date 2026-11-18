@@ -27,6 +27,11 @@ $nombre = [regex]::Match($gradle, 'versionName\s+"([^"]+)"').Groups[1].Value
 $sha = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
 
 $destino = "$raiz\client\public\movil"
+$versionPublicada = "$destino\version.json"
+if (Test-Path $versionPublicada) {
+  $anterior = [int](Get-Content $versionPublicada -Raw | ConvertFrom-Json).versionCode
+  if ($codigo -le $anterior) { throw "versionCode $codigo no es mayor que el ya publicado ($anterior): subelo en build.gradle o los celulares no detectaran la APK" }
+}
 New-Item -ItemType Directory -Force $destino | Out-Null
 # El nombre lleva la versión: Cloudflare cachea los .apk por horas y un nombre fijo serviría la APK vieja.
 Get-ChildItem $destino -Filter 'POS-Santacruz*.apk' | Remove-Item -Force

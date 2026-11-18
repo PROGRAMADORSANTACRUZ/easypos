@@ -1,7 +1,6 @@
 package com.gruposantacruz.pos.movil;
 
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
@@ -28,19 +27,22 @@ public class ImpresionPlugin extends Plugin {
             return;
         }
         getActivity().runOnUiThread(() -> {
+            if (vistaImpresion != null) vistaImpresion.destroy();
+            final boolean[] impreso = {false};
             vistaImpresion = new WebView(getContext());
             vistaImpresion.setWebViewClient(new WebViewClient() {
                 @Override
                 public void onPageFinished(WebView vista, String url) {
-                    PrintManager gestor = (PrintManager) getActivity().getSystemService(Context.PRINT_SERVICE);
-                    PrintDocumentAdapter adaptador = vista.createPrintDocumentAdapter(nombre);
-                    gestor.print(nombre, adaptador, new PrintAttributes.Builder().build());
-                    call.resolve();
-                }
-
-                @Override
-                public void onPageStarted(WebView vista, String url, Bitmap icono) {
-                    // Sin acciones: solo se imprime al terminar de cargar.
+                    if (impreso[0]) return;
+                    impreso[0] = true;
+                    try {
+                        PrintManager gestor = (PrintManager) getActivity().getSystemService(Context.PRINT_SERVICE);
+                        PrintDocumentAdapter adaptador = vista.createPrintDocumentAdapter(nombre);
+                        gestor.print(nombre, adaptador, new PrintAttributes.Builder().build());
+                        call.resolve();
+                    } catch (Exception e) {
+                        call.reject("No se pudo imprimir");
+                    }
                 }
             });
             vistaImpresion.loadDataWithBaseURL(BASE, html, "text/html", "UTF-8", null);

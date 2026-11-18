@@ -6,6 +6,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import androidx.core.content.FileProvider;
+import androidx.core.content.pm.PackageInfoCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -29,7 +30,7 @@ public class ApkUpdaterPlugin extends Plugin {
         try {
             PackageInfo info = getContext().getPackageManager().getPackageInfo(getContext().getPackageName(), 0);
             JSObject resultado = new JSObject();
-            resultado.put("versionCode", info.getLongVersionCode());
+            resultado.put("versionCode", PackageInfoCompat.getLongVersionCode(info));
             resultado.put("versionName", info.versionName);
             call.resolve(resultado);
         } catch (Exception e) {
