@@ -720,6 +720,7 @@ export default function Facturas({ electronica = true }) {
   const abrirRecogida = () => recogida.abrirManual().catch((e) => notify(e.message, 'err'));
 
   const [reenviando, setReenviando] = useState(null); // id de factura en proceso de reenvio a DIAN
+  const [reenviandoSiesa, setReenviandoSiesa] = useState(null); // id de factura en proceso de reenvio a Siesa
 
   // La fecha del historial y el filtro usan siempre el dia comercial de Colombia.
   const NOMBRES_MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -891,6 +892,18 @@ export default function Facturas({ electronica = true }) {
       notify(e.message, 'err');
     } finally {
       setReenviando(null);
+    }
+  };
+
+  const reenviarSiesa = async (f) => {
+    setReenviandoSiesa(f.id);
+    try {
+      const resultado = await api.post(`/facturas/${f.id}/reenviar-siesa`, {});
+      notify(resultado.estado === 'OK' ? 'Factura enviada a Siesa' : `Siesa: ${resultado.mensaje || resultado.estado}`, resultado.estado === 'OK' ? 'ok' : 'err');
+    } catch (e) {
+      notify(e.message, 'err');
+    } finally {
+      setReenviandoSiesa(null);
     }
   };
 
@@ -1887,6 +1900,11 @@ export default function Facturas({ electronica = true }) {
                   </>
                 )}
               </div>}
+              <div style={{ marginBottom: 12, textAlign: 'center' }}>
+                <button type="button" className="btn btn-sm" disabled={reenviandoSiesa === sel.id} onClick={() => reenviarSiesa(sel)} title="Envía la factura a Siesa si aún no fue aceptada">
+                  {reenviandoSiesa === sel.id ? 'Enviando…' : 'Enviar a Siesa'}
+                </button>
+              </div>
               <table>
                 <tbody>
                   {sel.pedido?.items?.map((it) => (

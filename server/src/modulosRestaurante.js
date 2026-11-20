@@ -32,6 +32,7 @@ function gruposParaRuta(req) {
   if (req.path === '/api/factura-detalle' || req.path.startsWith('/api/factura-detalle/')) return ['ventas', 'dian'];
   if (req.path.startsWith('/api/facturas')) {
     if (req.path.endsWith('/reenviar-dian')) return ['dian'];
+    if (req.path.endsWith('/reenviar-siesa')) return ['ventas', 'dian'];
     const electronica = req.query?.electronica ?? req.body?.electronica;
     if (lectura && req.path !== '/api/facturas' && electronica === undefined) return ['ventas', 'dian'];
     return electronica === false || electronica === 'false' ? ['ventas'] : ['dian'];

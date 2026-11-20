@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { crearFacturaFactus, motivoRechazoFactus } from '../factus.js';
+import { enviarVentaSiesaAutomatico, intentarEnvioVentaSiesa } from '../siesaVentas.js';
 import { reservarNumeroDocumento } from '../numeracionDocumentos.js';
 import { centroPermitido, filtroParesCentros } from '../centrosUsuario.js';
 import { calcularInsumosRequeridos, descontarInsumos, validarStockSuficiente } from '../inventarioKits.js';
@@ -374,6 +375,18 @@ router.post('/:id/reenviar-dian', wrap(async (req, res) => {
   res.json(facturaFinal);
 }));
 
+// Reintenta el envío a Siesa de una factura (electrónica o de venta) cuyo envío automático falló.
+router.post('/:id/reenviar-siesa', wrap(async (req, res) => {
+  const id = String(req.params.id);
+  const filtro = { id, AND: [filtroCentrosUsuario(req.usuario)] };
+  const modelo = await prisma.factura.findFirst({ where: filtro, select: { id: true } }) ? 'factura'
+    : await prisma.facturaVenta.findFirst({ where: filtro, select: { id: true } }) ? 'facturaVenta' : null;
+  if (!modelo) return res.status(404).json({ error: 'Factura no encontrada' });
+  const resultado = await intentarEnvioVentaSiesa(modelo, id);
+  await auditar({ req, accion: 'EDITAR', entidad: 'factura', entidadId: id, detalle: `Reenvio a Siesa • ${resultado.estado}` });
+  res.json(resultado);
+}));
+
 // Divide una cuenta y factura cada parte o registra varios pagos en una sola factura.
 router.post('/dividir', wrap(async (req, res) => {
   const {
@@ -547,6 +560,7 @@ router.post('/dividir', wrap(async (req, res) => {
   const finales = [];
   for (const factura of creadas) {
     await auditar({ req, accion: 'FACTURAR', entidad: 'factura', entidadId: factura.id, detalle: `División pedido ${id} • total ${factura.total}` });
+    enviarVentaSiesaAutomatico(electronica ? 'factura' : 'facturaVenta', factura.id);
     finales.push(electronica ? await emitirEnFactus(factura) : factura);
   }
   res.status(201).json({ facturas: finales });
@@ -675,6 +689,7 @@ router.post('/', wrap(async (req, res) => {
   });
 
   await auditar({ req, accion: 'FACTURAR', entidad: 'factura', entidadId: factura.id, detalle: `Pedido ${id} • total ${factura.total}` });
+  enviarVentaSiesaAutomatico(electronica === false ? 'facturaVenta' : 'factura', factura.id);
   const facturaFinal = electronica === false ? factura : await emitirEnFactus(factura);
   res.status(201).json(facturaFinal);
 }));
@@ -820,6 +835,7 @@ router.post('/directa', wrap(async (req, res) => {
   });
 
   await auditar({ req, accion: 'FACTURAR', entidad: 'factura', entidadId: factura.id, detalle: `Venta directa • total ${factura.total}` });
+  enviarVentaSiesaAutomatico(electronica === false ? 'facturaVenta' : 'factura', factura.id);
   if (electronica === false) {
     return res.status(201).json(factura);
   }
