@@ -6,7 +6,6 @@ import { diaColombia } from './fechaColombia.js';
 
 const LOG_SISTEMA = 'SIESA';
 const TIMEOUT_MS = 30_000;
-const ESPERAS_REINTENTO_MS = [30_000, 120_000];
 
 // Valores iguales para todos los restaurantes.
 export const SIESA_FIJOS = Object.freeze({
@@ -265,28 +264,13 @@ export async function intentarEnvioVentaSiesa(modelo, id, { env = process.env, e
     }
     const { status, cuerpo } = await enviar(cfg, construirXmlImportar(lineas, cfg));
     const resultado = interpretarRespuestaSiesa(status, cuerpo);
-    const estado = resultado.ok ? 'OK' : 'ERROR';
+    const estado = resultado.ok ? 'OK' : resultado.transitorio ? 'REINTENTAR' : 'ERROR';
     await registrar(id, estado, { request: lineas.join('\n'), response: cuerpo, mensaje: resultado.mensaje });
-    return { estado, mensaje: resultado.mensaje, transitorio: resultado.transitorio };
+    return { estado, mensaje: resultado.mensaje };
   } catch (error) {
     console.error('Siesa: fallo inesperado al enviar la venta', id, error.message);
     return { estado: 'ERROR', mensaje: error.message };
   } finally {
     enCurso.delete(id);
   }
-}
-
-const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Envio automatico al facturar: no bloquea la respuesta al cajero y reintenta solo fallas de red o de servidor.
-export function enviarVentaSiesaAutomatico(modelo, id, opciones = {}) {
-  const { esperas = ESPERAS_REINTENTO_MS, ...resto } = opciones;
-  (async () => {
-    let resultado = await intentarEnvioVentaSiesa(modelo, id, resto);
-    for (const espera of esperas) {
-      if (!resultado.transitorio) break;
-      await esperar(espera);
-      resultado = await intentarEnvioVentaSiesa(modelo, id, resto);
-    }
-  })().catch((error) => console.error('Siesa: envio automatico fallido', id, error.message));
 }

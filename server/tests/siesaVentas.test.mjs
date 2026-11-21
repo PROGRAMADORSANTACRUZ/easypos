@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   configSiesa, construirPlanoVenta, construirSobreSoap, construirXmlImportar, interpretarRespuestaSiesa, mediosDePago,
 } from '../src/siesaVentas.js';
+import { tenantStorage } from '../src/prisma.js';
+import { enviarPendientesSiesa, iniciarProgramadorSiesa, seleccionarPendientes } from '../src/siesaProgramador.js';
 
 const factura = (extra = {}) => ({
   companiaCodigo: '004',
@@ -101,4 +103,45 @@ test('interpreta la respuesta de Siesa: errores de importacion, fallas SOAP y re
 test('el envio solo se activa con SIESA_VENTAS_ACTIVO=true', () => {
   assert.equal(configSiesa({}).activo, false);
   assert.equal(configSiesa({ SIESA_VENTAS_ACTIVO: 'TRUE', SIESA_WS_USER: 'u' }).activo, true);
+});
+
+test('el programador salta lo ya enviado u omitido y limita los rechazos de Siesa', () => {
+  const facturas = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id }));
+  const log = (id, estado) => ({ tipo: `VENTA:${id}`, estado });
+  const logs = [
+    log('a', 'OK'), log('b', 'OMITIDO'), log('c', 'REINTENTAR'), log('c', 'REINTENTAR'),
+    ...Array.from({ length: 5 }, () => log('d', 'ERROR')), log('e', 'ERROR'),
+  ];
+  assert.deepEqual(seleccionarPendientes(facturas, logs).map(({ id }) => id), ['c', 'e', 'f']);
+  assert.deepEqual(seleccionarPendientes(facturas, logs, 2).map(({ id }) => id), ['c', 'e']);
+});
+
+test('enviarPendientesSiesa consulta desde la fecha indicada y cuenta los resultados', async () => {
+  const consultas = [];
+  const cliente = {
+    factura: { findMany: async (args) => { consultas.push(args); return [{ id: 'f1' }, { id: 'f2' }]; } },
+    facturaVenta: { findMany: async () => [{ id: 'v1' }] },
+    logIntegracion: { findMany: async () => [{ tipo: 'VENTA:f1', estado: 'OK' }] },
+  };
+  const enviados = [];
+  const desde = new Date('2026-11-21T00:00:00-05:00');
+  const resumen = await tenantStorage.run(cliente, () => enviarPendientesSiesa({
+    desde,
+    intentar: async (modelo, id) => { enviados.push(`${modelo}:${id}`); return { estado: id === 'v1' ? 'ERROR' : 'OK' }; },
+  }));
+  assert.deepEqual(enviados, ['factura:f2', 'facturaVenta:v1']);
+  assert.deepEqual(resumen, { OK: 1, ERROR: 1, REINTENTAR: 0, OMITIDO: 0 });
+  assert.deepEqual(consultas[0].where.AND, [{ cabecera: { is: { createdAt: { gte: desde } } } }]);
+});
+
+test('el programador no arranca sin SIESA_ENVIO_DESDE valida', () => {
+  const original = console.error;
+  console.error = () => {};
+  try {
+    assert.equal(iniciarProgramadorSiesa({ SIESA_VENTAS_ACTIVO: 'true' }), null);
+    assert.equal(iniciarProgramadorSiesa({ SIESA_VENTAS_ACTIVO: 'true', SIESA_ENVIO_DESDE: 'no-es-fecha' }), null);
+  } finally {
+    console.error = original;
+  }
+  assert.equal(iniciarProgramadorSiesa({ SIESA_ENVIO_DESDE: '2026-11-21T00:00:00-05:00' }), null);
 });

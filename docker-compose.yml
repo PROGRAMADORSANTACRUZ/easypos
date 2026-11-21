@@ -34,8 +34,11 @@ services:
       FACTUS_PASSWORD: ${FACTUS_PASSWORD:-}
       FACTUS_NUMBERING_RANGE_FACTURA: ${FACTUS_NUMBERING_RANGE_FACTURA:-}
       FACTUS_NUMBERING_RANGE_NOTA_CREDITO: ${FACTUS_NUMBERING_RANGE_NOTA_CREDITO:-}
-      # Envio automatico de ventas a Siesa (servicio web wsUNOEE). Apagado hasta poner SIESA_VENTAS_ACTIVO=true.
+      # Envio de ventas a Siesa (servicio web wsUNOEE), programado cada hora. Apagado hasta SIESA_VENTAS_ACTIVO=true.
+      # SIESA_ENVIO_DESDE es obligatorio al activarlo: solo se envian facturas creadas desde esa fecha.
       SIESA_VENTAS_ACTIVO: ${SIESA_VENTAS_ACTIVO:-false}
+      SIESA_ENVIO_DESDE: ${SIESA_ENVIO_DESDE:-}
+      SIESA_ENVIO_INTERVALO_MIN: ${SIESA_ENVIO_INTERVALO_MIN:-60}
       SIESA_WS_URL: ${SIESA_WS_URL:-https://wscarnesantacruz.siesacloud.com:8043/wsUNOEE/wsUNOEE.asmx}
       SIESA_WS_CONEXION: ${SIESA_WS_CONEXION:-UnoEE_Carnesantacruz_Real}
       SIESA_WS_CIA: ${SIESA_WS_CIA:-4}

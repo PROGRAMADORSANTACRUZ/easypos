@@ -70,6 +70,7 @@ import { resolverTenant } from './middleware/tenant.js';
 import { mayusculas } from './middleware/mayusculas.js';
 import { requireAuth, permisoPorMetodo, permisoAccesoPedidos, permisoModuloFacturacion, permisoSegunFactura, puedeLeerCatalogoParaPedidos } from './middleware/auth.js';
 import { restringirModuloRestaurante } from './modulosRestaurante.js';
+import { iniciarProgramadorSiesa } from './siesaProgramador.js';
 
 const app = express();
 const corsOrigins = new Set([
@@ -188,4 +189,5 @@ app.listen(PORT, () => {
   console.log(`POS API escuchando en http://localhost:${PORT}`);
   // Precalienta la conexion a la DB para que la primera consulta no pague el costo de conexion.
   prisma.$connect().catch((e) => console.error('No se pudo precalentar la DB:', e.message));
+  iniciarProgramadorSiesa();
 });
