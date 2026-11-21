@@ -1,17 +1,17 @@
-// Programador del envio de ventas a Siesa: cada SIESA_ENVIO_INTERVALO_MIN minutos (60 por defecto) envia las
-// facturas pendientes de cada restaurante activo. Solo toma facturas creadas desde SIESA_ENVIO_DESDE, para no
-// reenviar el historial; sin esa fecha el programador no arranca.
+// Programador del envio a Siesa: cada SIESA_ENVIO_INTERVALO_MIN minutos (60 por defecto) envia, por cada restaurante
+// activo y en este orden, los clientes de las facturas pendientes, los recibos de caja (abonos) y las ventas.
+// Solo toma documentos creados desde SIESA_ENVIO_DESDE, para no reenviar el historial; sin esa fecha no arranca.
 import { prisma, tenantStorage } from './prisma.js';
 import { platformPrisma } from './platformPrisma.js';
 import { getTenantPrisma } from './tenantManager.js';
 import { configSiesa, intentarEnvioVentaSiesa } from './siesaVentas.js';
+import { intentarEnvioClienteSiesa } from './siesaClientes.js';
+import { intentarEnvioReciboSiesa } from './siesaRecibos.js';
 
 const MAX_ERRORES = 5;
 const LIMITE_POR_CORRIDA = 200;
 
-// Pendiente = sin envio aceptado ni omitido y con menos de MAX_ERRORES rechazos de Siesa.
-// Las fallas de red/servidor (estado REINTENTAR) no cuentan: se reintentan en cada corrida.
-export function seleccionarPendientes(facturas, logs, limite = LIMITE_POR_CORRIDA) {
+function resumirLogs(logs) {
   const porTipo = new Map();
   for (const { tipo, estado } of logs) {
     const resumen = porTipo.get(tipo) || { cerrada: false, errores: 0 };
@@ -19,31 +19,76 @@ export function seleccionarPendientes(facturas, logs, limite = LIMITE_POR_CORRID
     if (estado === 'ERROR') resumen.errores += 1;
     porTipo.set(tipo, resumen);
   }
-  return facturas
+  return porTipo;
+}
+
+// Pendiente = sin envio aceptado ni omitido y con menos de MAX_ERRORES rechazos de Siesa.
+// Las fallas de red/servidor (estado REINTENTAR) no cuentan: se reintentan en cada corrida.
+export function seleccionarPendientes(items, logs, limite = LIMITE_POR_CORRIDA, prefijo = 'VENTA') {
+  const porTipo = resumirLogs(logs);
+  return items
     .filter(({ id }) => {
-      const resumen = porTipo.get(`VENTA:${id}`);
+      const resumen = porTipo.get(`${prefijo}:${id}`);
       return !resumen || (!resumen.cerrada && resumen.errores < MAX_ERRORES);
     })
     .slice(0, limite);
 }
 
+const logsDe = (prefijo, ids) => (ids.length
+  ? prisma.logIntegracion.findMany({
+    where: { sistema: 'SIESA', tipo: { in: ids.map((id) => `${prefijo}:${id}`) } },
+    select: { tipo: true, estado: true },
+  })
+  : []);
+
 // Envia las pendientes de la base activa (la del restaurante dentro de tenantStorage o la base por defecto).
-export async function enviarPendientesSiesa({ desde, limite = LIMITE_POR_CORRIDA, intentar = intentarEnvioVentaSiesa } = {}) {
+export async function enviarPendientesSiesa({
+  desde,
+  limite = LIMITE_POR_CORRIDA,
+  intentar = intentarEnvioVentaSiesa,
+  intentarCliente = intentarEnvioClienteSiesa,
+  intentarRecibo = intentarEnvioReciboSiesa,
+} = {}) {
   const resumen = { OK: 0, ERROR: 0, REINTENTAR: 0, OMITIDO: 0 };
+  const contar = ({ estado }) => { if (estado in resumen) resumen[estado] += 1; };
+
+  const abonos = await prisma.abono.findMany({
+    where: { createdAt: { gte: desde } }, select: { id: true }, orderBy: { createdAt: 'asc' },
+  });
+  const logsAbonos = await logsDe('RECIBO', abonos.map(({ id }) => id));
+
+  const facturasPorModelo = [];
   for (const modelo of ['factura', 'facturaVenta']) {
     const facturas = await prisma[modelo].findMany({
       where: { createdAt: { gte: desde } },
-      select: { id: true },
+      select: { id: true, clienteId: true, numeroDocumentoCliente: true },
       orderBy: { createdAt: 'asc' },
     });
-    if (!facturas.length) continue;
-    const logs = await prisma.logIntegracion.findMany({
-      where: { sistema: 'SIESA', tipo: { in: facturas.map(({ id }) => `VENTA:${id}`) } },
-      select: { tipo: true, estado: true },
-    });
-    for (const { id } of seleccionarPendientes(facturas, logs, limite)) {
-      const { estado } = await intentar(modelo, id);
-      if (estado in resumen) resumen[estado] += 1;
+    const logs = await logsDe('VENTA', facturas.map(({ id }) => id));
+    facturasPorModelo.push([modelo, seleccionarPendientes(facturas, logs, limite)]);
+  }
+
+  // Un cliente con documento debe existir en Siesa antes que sus facturas; se intenta una vez por corrida.
+  const clientes = new Map();
+  const clienteListo = async (clienteId) => {
+    if (!clientes.has(clienteId)) {
+      const logs = await logsDe('CLIENTE', [clienteId]);
+      const { errores = 0, cerrada = false } = resumirLogs(logs).get(`CLIENTE:${clienteId}`) || {};
+      if (!cerrada && errores >= MAX_ERRORES) clientes.set(clienteId, false);
+      else {
+        const resultado = await intentarCliente(clienteId);
+        if (resultado.estado !== 'OK') contar(resultado);
+        clientes.set(clienteId, resultado.estado === 'OK');
+      }
+    }
+    return clientes.get(clienteId);
+  };
+
+  for (const { id } of seleccionarPendientes(abonos, logsAbonos, limite, 'RECIBO')) contar(await intentarRecibo(id));
+  for (const [modelo, pendientes] of facturasPorModelo) {
+    for (const factura of pendientes) {
+      if (factura.clienteId && factura.numeroDocumentoCliente && !await clienteListo(factura.clienteId)) continue;
+      contar(await intentar(modelo, factura.id));
     }
   }
   return resumen;
@@ -87,7 +132,7 @@ export function iniciarProgramadorSiesa(env = process.env) {
     return null;
   }
   const minutos = Number(env.SIESA_ENVIO_INTERVALO_MIN) > 0 ? Number(env.SIESA_ENVIO_INTERVALO_MIN) : 60;
-  console.log(`Siesa: envio programado cada ${minutos} min de facturas desde ${desde.toISOString()}`);
+  console.log(`Siesa: envio programado cada ${minutos} min de documentos desde ${desde.toISOString()}`);
   const temporizador = setInterval(() => correrProgramadorSiesa(desde), minutos * 60_000);
   temporizador.unref();
   return temporizador;

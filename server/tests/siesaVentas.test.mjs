@@ -5,6 +5,8 @@ import {
 } from '../src/siesaVentas.js';
 import { tenantStorage } from '../src/prisma.js';
 import { enviarPendientesSiesa, iniciarProgramadorSiesa, seleccionarPendientes } from '../src/siesaProgramador.js';
+import { construirPlanoCliente } from '../src/siesaClientes.js';
+import { construirPlanoRecibo } from '../src/siesaRecibos.js';
 
 const factura = (extra = {}) => ({
   companiaCodigo: '004',
@@ -116,22 +118,98 @@ test('el programador salta lo ya enviado u omitido y limita los rechazos de Sies
   assert.deepEqual(seleccionarPendientes(facturas, logs, 2).map(({ id }) => id), ['c', 'e']);
 });
 
-test('enviarPendientesSiesa consulta desde la fecha indicada y cuenta los resultados', async () => {
+test('enviarPendientesSiesa envia cliente, recibos y ventas en orden y salta lo ya enviado', async () => {
   const consultas = [];
   const cliente = {
-    factura: { findMany: async (args) => { consultas.push(args); return [{ id: 'f1' }, { id: 'f2' }]; } },
-    facturaVenta: { findMany: async () => [{ id: 'v1' }] },
-    logIntegracion: { findMany: async () => [{ tipo: 'VENTA:f1', estado: 'OK' }] },
+    abono: { findMany: async () => [{ id: 7 }, { id: 8 }] },
+    factura: {
+      findMany: async (args) => {
+        consultas.push(args);
+        return [{ id: 'f1', clienteId: 'c1', numeroDocumentoCliente: '900' }, { id: 'f2', clienteId: 'c1', numeroDocumentoCliente: '900' }];
+      },
+    },
+    facturaVenta: { findMany: async () => [{ id: 'v1', clienteId: null, numeroDocumentoCliente: null }] },
+    logIntegracion: {
+      findMany: async ({ where }) => [{ tipo: 'VENTA:f1', estado: 'OK' }, { tipo: 'RECIBO:7', estado: 'OK' }]
+        .filter(({ tipo }) => where.tipo.in.includes(tipo)),
+    },
   };
-  const enviados = [];
+  const orden = [];
   const desde = new Date('2026-11-21T00:00:00-05:00');
   const resumen = await tenantStorage.run(cliente, () => enviarPendientesSiesa({
     desde,
-    intentar: async (modelo, id) => { enviados.push(`${modelo}:${id}`); return { estado: id === 'v1' ? 'ERROR' : 'OK' }; },
+    intentarCliente: async (id) => { orden.push(`cliente:${id}`); return { estado: 'OK' }; },
+    intentarRecibo: async (id) => { orden.push(`recibo:${id}`); return { estado: 'OK' }; },
+    intentar: async (modelo, id) => { orden.push(`${modelo}:${id}`); return { estado: id === 'v1' ? 'ERROR' : 'OK' }; },
   }));
-  assert.deepEqual(enviados, ['factura:f2', 'facturaVenta:v1']);
-  assert.deepEqual(resumen, { OK: 1, ERROR: 1, REINTENTAR: 0, OMITIDO: 0 });
+  assert.deepEqual(orden, ['recibo:8', 'cliente:c1', 'factura:f2', 'facturaVenta:v1']);
+  assert.deepEqual(resumen, { OK: 2, ERROR: 1, REINTENTAR: 0, OMITIDO: 0 });
   assert.deepEqual(consultas[0].where.AND, [{ cabecera: { is: { createdAt: { gte: desde } } } }]);
+});
+
+test('si el cliente no se acepta en Siesa, sus facturas esperan a la siguiente corrida', async () => {
+  const cliente = {
+    abono: { findMany: async () => [] },
+    factura: { findMany: async () => [{ id: 'f1', clienteId: 'c1', numeroDocumentoCliente: '900' }] },
+    facturaVenta: { findMany: async () => [] },
+    logIntegracion: { findMany: async () => [] },
+  };
+  const enviadas = [];
+  const resumen = await tenantStorage.run(cliente, () => enviarPendientesSiesa({
+    desde: new Date(),
+    intentarCliente: async () => ({ estado: 'ERROR' }),
+    intentar: async (modelo, id) => { enviadas.push(id); return { estado: 'OK' }; },
+  }));
+  assert.deepEqual(enviadas, []);
+  assert.equal(resumen.ERROR, 1);
+});
+
+const clienteSiesa = (extra = {}) => ({
+  nombre: 'Maria Perez', razonSocial: 'Restaurante Ñandú & Cía SAS', numeroDocumento: '900.123.456-7', documento: null,
+  direccion: 'Cra 5 # 6-7', barrio: 'Centro', telefono: '3001234567', email: 'a@b.co', condicionPago: 'CONTADO',
+  creditoDias: null, creditoCupo: null, municipioSiesaCodigo: '16908001', createdAt: new Date('2026-11-20T03:30:00Z'), ...extra,
+});
+
+test('cliente: registro 201 con ancho 1117, ubicacion del catalogo y valores del POS', () => {
+  const lineas = construirPlanoCliente(clienteSiesa(), '4');
+  assert.equal(lineas[0], '000000100000001004');
+  assert.equal(lineas[1].length, 1117);
+  assert.equal(lineas[2], '000000399990001004');
+  const r = lineas[1];
+  assert.equal(r.slice(7, 11), '0201');
+  assert.equal(r.slice(19, 34), '900123456      ');
+  assert.equal(r.slice(38, 78).trim(), 'Restaurante Nandu & Cia SAS');
+  assert.equal(r.slice(142, 143), '5');
+  assert.equal(r.slice(168, 171), '420');
+  assert.equal(r.slice(142 - 3, 142), '021');
+  assert.equal(r.slice(599, 601), '08');
+  assert.equal(r.slice(601, 604), '001');
+  assert.equal(r.slice(949, 957), '20261119');
+});
+
+test('cliente: a credito usa dias y cupo; sin documento no se puede enviar', () => {
+  const r = construirPlanoCliente(clienteSiesa({ condicionPago: 'CREDITO', creditoDias: 30, creditoCupo: 500000 }), 4)[1];
+  assert.equal(r.slice(86, 89), '30D');
+  assert.equal(r.slice(92, 113), '500000.0000'.padStart(21, '0'));
+  assert.throws(() => construirPlanoCliente(clienteSiesa({ numeroDocumento: null }), 4), /NIT/);
+});
+
+test('recibo de caja: 350 y dos 351 con los anchos esperados y el cruce al propio documento', () => {
+  const lineas = construirPlanoRecibo({ id: 12, monto: 25000, createdAt: new Date('2026-11-20T15:00:00Z'), nota: 'Abono mesa' }, '900.123.456-7', '4');
+  assert.deepEqual(lineas.map((linea) => linea.length), [18, 318, 788, 1036, 18]);
+  assert.deepEqual(lineas.slice(1, 4).map((linea) => linea.slice(7, 11)), ['0350', '0351', '0351']);
+  assert.equal(lineas[1].slice(25, 33), '00000012');
+  assert.equal(lineas[1].slice(41, 56), '900123456      ');
+  assert.equal(lineas[2].slice(32, 52).trim(), '1110050401');
+  assert.equal(lineas[3].slice(32, 52).trim(), '2805050501');
+  assert.equal(lineas[3].slice(52, 67), '900123456      ');
+  assert.equal(lineas[2].slice(115, 136), `+${'25000.0000'.padStart(20, '0')}`);
+  assert.equal(lineas[4], '000000599990001004');
+});
+
+test('recibo de caja: sin NIT usa el cliente generico', () => {
+  const lineas = construirPlanoRecibo({ id: 1, monto: 100, createdAt: new Date(), nota: null }, null, 4);
+  assert.equal(lineas[1].slice(41, 56), '222222222      ');
 });
 
 test('el programador no arranca sin SIESA_ENVIO_DESDE valida', () => {

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
+import { intentarEnvioClienteSiesa } from '../siesaClientes.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -213,6 +214,14 @@ router.put('/:id', wrap(async (req, res) => {
     if (e.code === 'P2025') return res.status(404).json({ error: 'Cliente no encontrado' });
     throw e;
   }
+}));
+
+// Envia (o actualiza, si ya existe) el cliente en Siesa; util tras editar sus datos.
+router.post('/:id/enviar-siesa', wrap(async (req, res) => {
+  const id = String(req.params.id);
+  const resultado = await intentarEnvioClienteSiesa(id, { forzar: true });
+  await auditar({ req, accion: 'EDITAR', entidad: 'cliente', entidadId: id, detalle: `Envio a Siesa • ${resultado.estado}` });
+  res.json(resultado);
 }));
 
 router.delete('/:id', wrap(async (req, res) => {

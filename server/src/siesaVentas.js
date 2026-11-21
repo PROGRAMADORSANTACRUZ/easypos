@@ -42,14 +42,14 @@ export function configSiesa(env = process.env) {
   };
 }
 
-function limpiarTexto(valor) {
+export function limpiarTexto(valor) {
   return String(valor ?? '').normalize('NFD').replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 // Texto de ancho fijo: se recorta si sobra y se completa con espacios a la derecha.
-const texto = (valor, ancho) => limpiarTexto(valor).slice(0, ancho).padEnd(ancho, ' ');
+export const texto = (valor, ancho) => limpiarTexto(valor).slice(0, ancho).padEnd(ancho, ' ');
 
-function numero(valor, ancho, decimales = 0) {
+export function numero(valor, ancho, decimales = 0) {
   const n = Number(valor);
   if (!Number.isFinite(n) || n < 0) throw new Error(`Valor numerico invalido para Siesa: ${valor}`);
   const cifras = n.toFixed(decimales);
@@ -57,12 +57,16 @@ function numero(valor, ancho, decimales = 0) {
   return cifras.padStart(ancho, '0');
 }
 
-const consecutivo = (n) => String(n).padStart(7, '0');
+export const consecutivo = (n) => String(n).padStart(7, '0');
+
+// NIT sin puntos ni digito de verificacion; vacio si no hay documento.
+export function nitSiesa(documento) {
+  const bruto = String(documento ?? '').replace(/[.\s]/g, '');
+  return limpiarTexto(bruto.replace(/-\d$/, ''));
+}
 
 function documentoCliente(factura) {
-  const bruto = String(factura.numeroDocumentoCliente ?? '').replace(/[.\s]/g, '');
-  const sinDigitoVerificacion = bruto.replace(/-\d$/, '');
-  return limpiarTexto(sinDigitoVerificacion) || SIESA_FIJOS.clienteGenerico;
+  return nitSiesa(factura.numeroDocumentoCliente) || SIESA_FIJOS.clienteGenerico;
 }
 
 export function medioSiesa(codigo) {
@@ -198,7 +202,7 @@ export function interpretarRespuestaSiesa(status, cuerpo = '') {
   return { ok: true, transitorio: false, mensaje: 'Importado en Siesa' };
 }
 
-async function postSiesa(cfg, xml) {
+export async function postSiesa(cfg, xml) {
   try {
     const resp = await fetch(cfg.url, {
       method: 'POST',
@@ -212,12 +216,12 @@ async function postSiesa(cfg, xml) {
   }
 }
 
-async function registrar(id, estado, { request, response, mensaje } = {}) {
+async function registrar(clave, estado, { request, response, mensaje } = {}) {
   try {
     await prisma.logIntegracion.create({
       data: {
         sistema: LOG_SISTEMA,
-        tipo: `VENTA:${id}`,
+        tipo: clave,
         estado,
         request: request ?? null,
         response: response == null ? null : String(response).slice(0, 20000),
@@ -225,52 +229,63 @@ async function registrar(id, estado, { request, response, mensaje } = {}) {
       },
     });
   } catch (error) {
-    console.error('Siesa: no se pudo registrar el log de la venta', id, error.message);
+    console.error('Siesa: no se pudo registrar el log', clave, error.message);
   }
 }
 
 const enCurso = new Set();
 
-// Un intento de envio. modelo: 'factura' | 'facturaVenta'. Nunca lanza: devuelve { estado, mensaje, transitorio }.
-export async function intentarEnvioVentaSiesa(modelo, id, { env = process.env, enviar = postSiesa } = {}) {
+// Un intento de envio de cualquier documento. `clave` es el tipo del log (VENTA:<id>, CLIENTE:<id>, RECIBO:<id>).
+// `preparar(cfg)` devuelve { lineas } | { omitido } | { noEncontrado }; si lanza, el error queda registrado.
+// Nunca lanza: devuelve { estado, mensaje }. Con `forzar` ignora un envio previo ya aceptado.
+export async function intentarEnvioSiesa(clave, preparar, { env = process.env, enviar = postSiesa, forzar = false } = {}) {
   const cfg = configSiesa(env);
   if (!cfg.activo) return { estado: 'INACTIVO', mensaje: 'El envio a Siesa no esta activo' };
   if (!cfg.url || !cfg.conexion || !cfg.idCia || !cfg.usuario || !cfg.clave) {
     return { estado: 'ERROR', mensaje: 'Faltan variables SIESA_WS_* en el servidor' };
   }
-  if (enCurso.has(id)) return { estado: 'EN_CURSO', mensaje: 'Ya hay un envio en curso para esta factura' };
-  enCurso.add(id);
+  if (enCurso.has(clave)) return { estado: 'EN_CURSO', mensaje: 'Ya hay un envio en curso' };
+  enCurso.add(clave);
   try {
-    const previo = await prisma.logIntegracion.findFirst({ where: { sistema: LOG_SISTEMA, tipo: `VENTA:${id}`, estado: 'OK' } });
-    if (previo) return { estado: 'OK', mensaje: 'La factura ya fue enviada a Siesa' };
+    if (!forzar) {
+      const previo = await prisma.logIntegracion.findFirst({ where: { sistema: LOG_SISTEMA, tipo: clave, estado: 'OK' } });
+      if (previo) return { estado: 'OK', mensaje: 'Ya fue enviado a Siesa' };
+    }
 
+    let preparado;
+    try {
+      preparado = await preparar(cfg);
+    } catch (error) {
+      await registrar(clave, 'ERROR', { mensaje: error.message });
+      return { estado: 'ERROR', mensaje: error.message };
+    }
+    if (preparado.noEncontrado) return { estado: 'ERROR', mensaje: 'Documento no encontrado' };
+    if (preparado.omitido) {
+      await registrar(clave, 'OMITIDO', { mensaje: preparado.omitido });
+      return { estado: 'OMITIDO', mensaje: preparado.omitido };
+    }
+    const { status, cuerpo } = await enviar(cfg, construirXmlImportar(preparado.lineas, cfg));
+    const resultado = interpretarRespuestaSiesa(status, cuerpo);
+    const estado = resultado.ok ? 'OK' : resultado.transitorio ? 'REINTENTAR' : 'ERROR';
+    await registrar(clave, estado, { request: preparado.lineas.join('\n'), response: cuerpo, mensaje: resultado.mensaje });
+    return { estado, mensaje: resultado.mensaje };
+  } catch (error) {
+    console.error('Siesa: fallo inesperado al enviar', clave, error.message);
+    return { estado: 'ERROR', mensaje: error.message };
+  } finally {
+    enCurso.delete(clave);
+  }
+}
+
+// Venta. modelo: 'factura' | 'facturaVenta'.
+export function intentarEnvioVentaSiesa(modelo, id, opciones) {
+  return intentarEnvioSiesa(`VENTA:${id}`, async () => {
     const doc = await prisma[modelo].findUnique({
       where: { id },
       include: { detalle: { include: { producto: true } } },
     });
-    if (!doc) return { estado: 'ERROR', mensaje: 'Factura no encontrada' };
-    if (doc.credito) {
-      const mensaje = 'Factura a credito: no se envia automaticamente a Siesa';
-      await registrar(id, 'OMITIDO', { mensaje });
-      return { estado: 'OMITIDO', mensaje };
-    }
-
-    let lineas;
-    try {
-      lineas = construirPlanoVenta(doc);
-    } catch (error) {
-      await registrar(id, 'ERROR', { mensaje: error.message });
-      return { estado: 'ERROR', mensaje: error.message };
-    }
-    const { status, cuerpo } = await enviar(cfg, construirXmlImportar(lineas, cfg));
-    const resultado = interpretarRespuestaSiesa(status, cuerpo);
-    const estado = resultado.ok ? 'OK' : resultado.transitorio ? 'REINTENTAR' : 'ERROR';
-    await registrar(id, estado, { request: lineas.join('\n'), response: cuerpo, mensaje: resultado.mensaje });
-    return { estado, mensaje: resultado.mensaje };
-  } catch (error) {
-    console.error('Siesa: fallo inesperado al enviar la venta', id, error.message);
-    return { estado: 'ERROR', mensaje: error.message };
-  } finally {
-    enCurso.delete(id);
-  }
+    if (!doc) return { noEncontrado: true };
+    if (doc.credito) return { omitido: 'Factura a credito: no se envia automaticamente a Siesa' };
+    return { lineas: construirPlanoVenta(doc) };
+  }, opciones);
 }

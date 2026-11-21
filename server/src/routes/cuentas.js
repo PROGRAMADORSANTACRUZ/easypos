@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
+import { intentarEnvioReciboSiesa } from '../siesaRecibos.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -109,6 +110,13 @@ router.post('/abonos', wrap(async (req, res) => {
     ? await prisma.facturaVenta.findUnique({ where: { id: facturaId }, include: { abonos: true } })
     : await prisma.factura.findUnique({ where: { id: facturaId }, include: { abonos: true } });
   res.status(201).json(resumenFactura(actualizada));
+}));
+
+// Reintenta el envio a Siesa del recibo de caja de un abono.
+router.post('/abonos/:id/enviar-siesa', wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Abono invalido' });
+  res.json(await intentarEnvioReciboSiesa(id));
 }));
 
 export default router;
