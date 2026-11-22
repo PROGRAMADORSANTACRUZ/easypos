@@ -127,8 +127,8 @@ function registro358(orden, doc, cia, { medio, valor }) {
 function unidadSiesa(detalle) {
   const deItem = limpiarTexto(detalle.producto?.siesaIdUnidadInventario);
   if (deItem) return deItem;
-  const local = limpiarTexto(detalle.unidad);
-  return local.length > 1 ? local : SIESA_FIJOS.unidadDefecto;
+  // Sin dato de Siesa se envia la unidad del POS tal cual, como el script original (ya aceptada por Siesa).
+  return limpiarTexto(detalle.unidad) || SIESA_FIJOS.unidadDefecto;
 }
 
 // El item de Siesa se resuelve por la referencia (Producto.codigo); si el producto ya trae el id de Siesa tambien se envia.
