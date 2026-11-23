@@ -205,6 +205,35 @@ export function mapearPagosFactus(factura, pagosFactura, formas) {
   });
 }
 
+// Envia un documento a Factus y deja el payload y la respuesta en LogIntegracion (sistema FACTUS), para poder
+// revisar o compartir con soporte de Factus exactamente lo que se envio. El registro nunca bloquea la emision.
+async function enviarYRegistrar(ruta, payload, tipo) {
+  const registrar = async (estado, response, mensaje) => {
+    try {
+      await prisma.logIntegracion.create({
+        data: {
+          sistema: 'FACTUS',
+          tipo: String(tipo).slice(0, 50),
+          estado,
+          request: JSON.stringify(payload, null, 2),
+          response: response == null ? null : JSON.stringify(response, null, 2).slice(0, 20000),
+          mensaje: mensaje == null ? null : String(mensaje).slice(0, 500),
+        },
+      });
+    } catch (error) {
+      console.error('Factus: no se pudo registrar el log', tipo, error.message);
+    }
+  };
+  try {
+    const respuesta = await factusFetch(ruta, { method: 'POST', body: payload });
+    await registrar('OK', respuesta, 'Aceptado por Factus');
+    return respuesta;
+  } catch (error) {
+    await registrar('ERROR', error.detalle ?? null, motivoRechazoFactus(error));
+    throw error;
+  }
+}
+
 // Emite (crea y valida) una factura en Factus a partir de la Factura local ya creada
 // (con cliente y detalle.producto incluidos). Lanza si la llamada falla.
 export async function crearFacturaFactus(factura) {
@@ -219,7 +248,7 @@ export async function crearFacturaFactus(factura) {
     customer: mapearClienteFactus(factura.cliente),
     items: mapearItemsFactus(factura.detalle || []),
   };
-  return factusFetch('/v2/bills/validate', { method: 'POST', body: payload });
+  return enviarYRegistrar('/v2/bills/validate', payload, `FACTURA:${referenceCode}`);
 }
 
 // Emite una nota credito en Factus asociada a la factura ya reportada (factura.numeroFactus).
@@ -236,6 +265,6 @@ export async function crearNotaCreditoFactus({ nota, factura }) {
     customer: mapearClienteFactus(factura.cliente),
     items: mapearItemsFactus(factura.detalle || []),
   };
-  return factusFetch('/v2/credit-notes/validate', { method: 'POST', body: payload });
+  return enviarYRegistrar('/v2/credit-notes/validate', payload, `NOTA_CREDITO:${referenceCode}`);
 }
 
