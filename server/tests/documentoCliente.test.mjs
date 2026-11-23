@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { errorDocumento, MENSAJE_DOCUMENTO } from '../src/documentoCliente.js';
-import { digitoVerificacion as digitoVerificacionCliente, soloDigitos } from '../../client/src/documento.js';
-import { digitoVerificacion } from '../src/siesaClientes.js';
+import { soloDigitos } from '../../client/src/documento.js';
 
 test('el documento del cliente acepta solo numeros (hasta 15) o vacio', () => {
   for (const valido of ['1048324072', '900123456', '1', '123456789012345', '', '  ', null, undefined]) {
@@ -14,8 +13,6 @@ test('el documento del cliente acepta solo numeros (hasta 15) o vacio', () => {
 });
 
 test('el campo del cliente descarta lo que no es numero y recorta a 15 digitos', () => {
-  assert.equal(digitoVerificacionCliente('900383385'), digitoVerificacion('900383385'));
-  assert.equal(digitoVerificacionCliente('800197268'), '4');
   assert.equal(soloDigitos('1048324072---inijijj'), '1048324072');
   assert.equal(soloDigitos('900.123.456-7'), '9001234567');
   assert.equal(soloDigitos('abc'), '');

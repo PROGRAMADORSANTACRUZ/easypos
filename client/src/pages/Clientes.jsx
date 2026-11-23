@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, money } from '../api.js';
-import { DOCUMENTOS_GENERICOS, MAX_DOCUMENTO, digitoVerificacion, soloDigitos } from '../documento.js';
+import { DOCUMENTOS_GENERICOS, MAX_DOCUMENTO, soloDigitos } from '../documento.js';
 import { Icon } from '../icons.jsx';
 import { useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, TableSkeleton, EmptyState } from '../components/ui/index.jsx';
@@ -480,13 +480,9 @@ export default function Clientes() {
                   <option value="JURIDICA">Persona jurídica (NIT)</option>
                 </select>
               </div>
-              <div className="field">
+              <div className="field" style={{ gridColumn: 'span 2' }}>
                 <label>{form.tipoCliente === 'JURIDICA' ? 'NIT *' : 'Número de cédula *'}</label>
-                <input value={form.numeroDocumento} onChange={(e) => setForm({ ...form, numeroDocumento: soloDigitos(e.target.value) })} inputMode="numeric" maxLength={MAX_DOCUMENTO} placeholder="Solo números, sin puntos ni guion" />
-              </div>
-              <div className="field">
-                <label>Dígito de verificación</label>
-                <input value={form.tipoCliente === 'JURIDICA' ? (form.numeroDocumento ? digitoVerificacion(form.numeroDocumento) : '') : 'No aplica'} readOnly disabled placeholder="Se calcula del NIT" />
+                <input value={form.numeroDocumento} onChange={(e) => setForm({ ...form, numeroDocumento: soloDigitos(e.target.value) })} inputMode="numeric" maxLength={MAX_DOCUMENTO} placeholder={form.tipoCliente === 'JURIDICA' ? 'Solo números, sin dígito de verificación' : 'Solo números, sin puntos'} />
               </div>
               {form.tipoCliente === 'JURIDICA' ? (
                 <div className="field" style={{ gridColumn: '1 / -1' }}>
