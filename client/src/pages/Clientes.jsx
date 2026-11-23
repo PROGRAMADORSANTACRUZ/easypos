@@ -388,16 +388,20 @@ export default function Clientes() {
     const datos = datosCliente();
     if (editando) await api.put(`/clientes/${editando}`, datos);
     else await api.post('/clientes', datos);
-    const accion = editando ? 'Cliente actualizado' : 'Cliente agregado';
+    const accion = editando ? 'actualizado' : 'agregado';
     if (enviarSiesa) {
       try {
         const r = await api.post('/clientes/siesa/tercero', { ...datos, actualizar });
-        notify(`${accion} y tercero ${r.accion} en Siesa`);
+        setAvisoSiesa({
+          ok: true,
+          titulo: r.accion === 'actualizado' ? 'Cliente actualizado con éxito' : 'Cliente creado con éxito',
+          mensaje: `El documento ${r.nit} quedó en Siesa como tercero y como cliente (sucursal 001).`,
+        });
       } catch (err) {
-        notify(`${accion} en el POS, pero Siesa: ${err.message}`, 'err');
+        setAvisoSiesa({ titulo: 'Siesa no confirmó el cliente', mensaje: `El cliente se ${accion === 'agregado' ? 'guardó' : 'actualizó'} en el POS, pero en Siesa: ${err.message}` });
       }
     } else {
-      notify(accion);
+      notify(`Cliente ${accion}`);
     }
     cancelar();
     cargar(busqueda.trim());
@@ -653,7 +657,7 @@ export default function Clientes() {
           footer={<Button variant="primary" onClick={() => setAvisoSiesa(null)} autoFocus>Entendido</Button>}
         >
           <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
-            <span style={{ color: 'var(--red)', flexShrink: 0 }}><Icon name="close" size={28} /></span>
+            <span style={{ color: avisoSiesa.ok ? 'var(--green)' : 'var(--red)', flexShrink: 0 }}><Icon name={avisoSiesa.ok ? 'check' : 'close'} size={28} /></span>
             <p style={{ margin: 0 }}>{avisoSiesa.mensaje}</p>
           </div>
         </Modal>

@@ -1,6 +1,7 @@
-// Terceros de Siesa desde la pantalla de Clientes, usando la API de consulta (apiconsulta.grupo-santacruz.com):
-// /verificar-cliente (0 no existe, 1 solo tercero, 2 tercero y cliente), /clientes (datos actuales) y
-// /crear/terceros (crea o reemplaza el tercero). Cada creacion/actualizacion queda en LogIntegracion (TERCERO:<nit>).
+// Terceros y clientes de Siesa desde la pantalla de Clientes, usando la API de consulta (apiconsulta.grupo-santacruz.com):
+// /verificar-cliente (0 no existe, 1 solo tercero, 2 tercero y cliente), /clientes (datos actuales),
+// /crear/terceros (crea o reemplaza el tercero) y /crear/clientes (crea o reemplaza el cliente sucursal 001).
+// Cada envio queda en LogIntegracion (TERCERO:<nit> y CLIENTEAPI:<nit>).
 import { construirTerceroApi } from './siesaClientes.js';
 import { registrar } from './siesaVentas.js';
 
@@ -107,29 +108,63 @@ export async function consultarTerceroCliente(cliente, opciones = {}) {
 }
 
 // Crea el tercero (o reemplaza sus datos si ya existe) y lo confirma con una nueva verificacion.
+// Cuerpo del cliente (sucursal 001) para POST /crear/clientes, con los mismos datos del tercero.
+export function construirClienteApi(tercero) {
+  return {
+    nit: tercero.nit,
+    sucursal: '001',
+    razon_social: String(tercero.razon_social || '').slice(0, 40),
+    direccion: tercero.direccion,
+    departamento: tercero.departamento,
+    ciudad: tercero.ciudad,
+    telefono: tercero.telefono,
+    correo_electronico: tercero.correo_electronico,
+  };
+}
+
+// Envia un registro a un endpoint /crear/* y lanza con el motivo de Siesa si lo rechaza.
+async function crearEnSiesa(cfg, ruta, cuerpo, clave, etiqueta, solicitar) {
+  const respuesta = await llamar(cfg, ruta, { metodo: 'POST', cuerpo: [cuerpo] }, solicitar);
+  const errores = erroresSiesa(respuesta.respuesta_siesa);
+  const request = JSON.stringify(cuerpo);
+  if (respuesta.estado !== 'ok' || errores.length) {
+    const mensaje = `Siesa rechazo el ${etiqueta}: ${errores.join(' | ') || respuesta.estado || 'sin detalle'}`.slice(0, 500);
+    await registrar(clave, 'ERROR', { request, response: respuesta.respuesta_siesa, mensaje });
+    throw errorConsulta(mensaje, 422);
+  }
+  return { request, response: respuesta.respuesta_siesa };
+}
+
+// Crea (o, confirmado, actualiza) el tercero y luego su cliente sucursal 001 en Siesa. Solo responde con exito
+// cuando /verificar-cliente confirma que el documento existe como tercero y como cliente (resultado 2).
 export async function guardarTerceroCliente(cliente, { actualizar = false, ...opciones } = {}) {
   const cfg = configConsulta(opciones.env);
   const tercero = construirTerceroApi({ sucursales: [], ...cliente });
-  const clave = `TERCERO:${tercero.nit}`;
+  const claveTercero = `TERCERO:${tercero.nit}`;
+  const claveCliente = `CLIENTEAPI:${tercero.nit}`;
   const antes = await verificarTercero(tercero.nit, opciones);
   if (antes > 0 && !actualizar) {
     throw errorConsulta('El tercero ya existe en Siesa; confirma si deseas actualizar sus datos', 409);
   }
-  const respuesta = await llamar(cfg, `/crear/terceros?cia=${cfg.cia}`, { metodo: 'POST', cuerpo: [tercero] }, opciones.solicitar);
-  const errores = erroresSiesa(respuesta.respuesta_siesa);
-  const request = JSON.stringify(tercero);
-  if (respuesta.estado !== 'ok' || errores.length) {
-    const mensaje = `Siesa rechazo el tercero: ${errores.join(' | ') || respuesta.estado || 'sin detalle'}`.slice(0, 500);
-    await registrar(clave, 'ERROR', { request, response: respuesta.respuesta_siesa, mensaje });
-    throw errorConsulta(mensaje, 422);
-  }
-  const despues = await verificarTercero(tercero.nit, opciones);
-  if (despues === 0) {
+
+  const envioTercero = await crearEnSiesa(cfg, `/crear/terceros?cia=${cfg.cia}`, tercero, claveTercero, 'tercero', opciones.solicitar);
+  if (await verificarTercero(tercero.nit, opciones) === 0) {
     const mensaje = `Siesa no confirmo el tercero ${tercero.nit} despues de enviarlo`;
-    await registrar(clave, 'ERROR', { request, response: respuesta.respuesta_siesa, mensaje });
+    await registrar(claveTercero, 'ERROR', { ...envioTercero, mensaje });
     throw errorConsulta(mensaje, 422);
   }
-  const accion = antes > 0 ? 'actualizado' : 'creado';
-  await registrar(clave, 'OK', { request, response: respuesta.respuesta_siesa, mensaje: `Tercero ${accion} en Siesa` });
+  await registrar(claveTercero, 'OK', { ...envioTercero, mensaje: `Tercero ${antes > 0 ? 'actualizado' : 'creado'} en Siesa` });
+
+  const sinCondiciones = String(opciones.env?.CONSULTA_CLIENTES_SIN_CONDICIONES ?? process.env.CONSULTA_CLIENTES_SIN_CONDICIONES ?? '').toLowerCase() === 'true';
+  const rutaCliente = `/crear/clientes?cia=${cfg.cia}${sinCondiciones ? '&sin_condiciones=true' : ''}`;
+  const envioCliente = await crearEnSiesa(cfg, rutaCliente, construirClienteApi(tercero), claveCliente, 'cliente', opciones.solicitar);
+  const despues = await verificarTercero(tercero.nit, opciones);
+  if (despues !== 2) {
+    const mensaje = `El tercero ${tercero.nit} quedo en Siesa, pero Siesa no confirmo el cliente despues de enviarlo`;
+    await registrar(claveCliente, 'ERROR', { ...envioCliente, mensaje });
+    throw errorConsulta(mensaje, 422);
+  }
+  const accion = antes === 2 ? 'actualizado' : 'creado';
+  await registrar(claveCliente, 'OK', { ...envioCliente, mensaje: `Cliente ${accion} en Siesa` });
   return { accion, nit: tercero.nit, resultado: despues };
 }

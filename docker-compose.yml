@@ -49,6 +49,7 @@ services:
       # API de consulta de Siesa (crea/actualiza terceros desde la pantalla de Clientes). Sin la clave, no se consulta Siesa.
       CONSULTA_API_URL: ${CONSULTA_API_URL:-https://apiconsulta.grupo-santacruz.com}
       CONSULTA_API_KEY: ${CONSULTA_API_KEY:-}
+      CONSULTA_CLIENTES_SIN_CONDICIONES: ${CONSULTA_CLIENTES_SIN_CONDICIONES:-false}
       # La inicializacion y el seed se ejecutan manualmente al crear una
       # instalacion; nunca al reiniciar un servicio con datos reales.
       RUN_DB_INIT: "false"

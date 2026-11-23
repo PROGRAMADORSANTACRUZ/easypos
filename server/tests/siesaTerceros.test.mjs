@@ -13,7 +13,10 @@ const cliente = {
 const SIN_ERRORES = '<soap:Envelope><diffgr:diffgram /></soap:Envelope>';
 
 // API simulada: estado de los NIT en Siesa y registro de llamadas.
-function apiSimulada({ existentes = new Map(), crear = { estado: 'ok', respuesta_siesa: SIN_ERRORES }, efecto = true, datos = [] } = {}) {
+function apiSimulada({
+  existentes = new Map(), crear = { estado: 'ok', respuesta_siesa: SIN_ERRORES }, crearCliente = { estado: 'ok', respuesta_siesa: SIN_ERRORES },
+  efecto = true, efectoCliente = true, datos = [],
+} = {}) {
   const llamadas = [];
   const solicitar = async (url, opciones) => {
     const ruta = url.replace('https://api.prueba', '');
@@ -25,6 +28,10 @@ function apiSimulada({ existentes = new Map(), crear = { estado: 'ok', respuesta
     if (ruta.startsWith('/crear/terceros')) {
       if (efecto && crear.estado === 'ok') existentes.set(cuerpo[0].nit, Math.max(existentes.get(cuerpo[0].nit) ?? 0, 1));
       return responder(crear);
+    }
+    if (ruta.startsWith('/crear/clientes')) {
+      if (efectoCliente && crearCliente.estado === 'ok' && (existentes.get(cuerpo[0].nit) ?? 0) > 0) existentes.set(cuerpo[0].nit, 2);
+      return responder(crearCliente);
     }
     throw new Error(`ruta inesperada ${ruta}`);
   };
@@ -64,14 +71,24 @@ test('consultar: tercero nuevo no trae datos; uno existente devuelve lo que hoy 
   assert.equal(existente.llamadas[1].ruta, '/clientes?cia=4&nit=1044616409');
 });
 
-test('guardar: crea un tercero nuevo, lo confirma y lo deja en el log', async () => {
+test('guardar: crea el tercero, luego el cliente 001, y solo responde cuando Siesa confirma ambos', async () => {
   logs.length = 0;
   const api = apiSimulada();
   const r = await enBase(() => guardarTerceroCliente(cliente, { env, solicitar: api.solicitar }));
-  assert.deepEqual(r, { accion: 'creado', nit: '1044616409', resultado: 1 });
-  assert.deepEqual(api.llamadas.map((l) => l.ruta), ['/verificar-cliente', '/crear/terceros?cia=4', '/verificar-cliente']);
+  assert.deepEqual(r, { accion: 'creado', nit: '1044616409', resultado: 2 });
+  assert.deepEqual(api.llamadas.map((l) => l.ruta), [
+    '/verificar-cliente', '/crear/terceros?cia=4', '/verificar-cliente', '/crear/clientes?cia=4', '/verificar-cliente',
+  ]);
   assert.equal(api.llamadas[1].cuerpo[0].primer_apellido, 'HERNANDEZ');
-  assert.deepEqual(logs, ['TERCERO:1044616409:OK:Tercero creado en Siesa']);
+  assert.deepEqual(api.llamadas[3].cuerpo, [{
+    nit: '1044616409', sucursal: '001', razon_social: 'HERNANDEZ GUZMAN OSCAR DAVID', direccion: 'CRA 15A # 68-15',
+    departamento: '08', ciudad: '001', telefono: '3001234567', correo_electronico: 'a@b.co',
+  }]);
+  assert.deepEqual(logs, ['TERCERO:1044616409:OK:Tercero creado en Siesa', 'CLIENTEAPI:1044616409:OK:Cliente creado en Siesa']);
+
+  const sinCondiciones = apiSimulada();
+  await enBase(() => guardarTerceroCliente(cliente, { env: { ...env, CONSULTA_CLIENTES_SIN_CONDICIONES: 'true' }, solicitar: sinCondiciones.solicitar }));
+  assert.equal(sinCondiciones.llamadas[3].ruta, '/crear/clientes?cia=4&sin_condiciones=true');
 });
 
 test('guardar: un tercero existente solo se reemplaza si se confirma la actualizacion', async () => {
@@ -81,6 +98,10 @@ test('guardar: un tercero existente solo se reemplaza si se confirma la actualiz
 
   const r = await enBase(() => guardarTerceroCliente(cliente, { env, solicitar: api.solicitar, actualizar: true }));
   assert.equal(r.accion, 'actualizado');
+  // Solo tercero: se crea el cliente sobre el tercero existente.
+  const soloTercero = apiSimulada({ existentes: new Map([['1044616409', 1]]) });
+  const r2 = await enBase(() => guardarTerceroCliente(cliente, { env, solicitar: soloTercero.solicitar, actualizar: true }));
+  assert.deepEqual([r2.accion, r2.resultado], ['creado', 2]);
 });
 
 test('guardar: los rechazos de Siesa (f_detalle) y las cargas sin efecto quedan como error', async () => {
@@ -89,10 +110,23 @@ test('guardar: los rechazos de Siesa (f_detalle) y las cargas sin efecto quedan 
     crear: { estado: 'ok', respuesta_siesa: '<NewDataSet><Table><f_detalle>Ciudad no existe</f_detalle></Table></NewDataSet>' },
   });
   await assert.rejects(enBase(() => guardarTerceroCliente(cliente, { env, solicitar: rechazo.solicitar })), /Ciudad no existe/);
+  assert.equal(rechazo.llamadas.some((l) => l.ruta.startsWith('/crear/clientes')), false);
 
   const sinEfecto = apiSimulada({ efecto: false });
-  await assert.rejects(enBase(() => guardarTerceroCliente(cliente, { env, solicitar: sinEfecto.solicitar })), /no confirmo/);
-  assert.deepEqual(logs.map((l) => l.split(':').slice(0, 3).join(':')), ['TERCERO:1044616409:ERROR', 'TERCERO:1044616409:ERROR']);
+  await assert.rejects(enBase(() => guardarTerceroCliente(cliente, { env, solicitar: sinEfecto.solicitar })), /no confirmo el tercero/);
+
+  const clienteRechazado = apiSimulada({
+    crearCliente: { estado: 'ok', respuesta_siesa: '<f_detalle>El tercero no existe.</f_detalle>' },
+  });
+  await assert.rejects(enBase(() => guardarTerceroCliente(cliente, { env, solicitar: clienteRechazado.solicitar })), /rechazo el cliente: El tercero no existe/);
+
+  const clienteSinEfecto = apiSimulada({ efectoCliente: false });
+  await assert.rejects(enBase(() => guardarTerceroCliente(cliente, { env, solicitar: clienteSinEfecto.solicitar })), /no confirmo el cliente/);
+  assert.deepEqual(logs.map((l) => l.split(':').slice(0, 3).join(':')), [
+    'TERCERO:1044616409:ERROR', 'TERCERO:1044616409:ERROR',
+    'TERCERO:1044616409:OK', 'CLIENTEAPI:1044616409:ERROR',
+    'TERCERO:1044616409:OK', 'CLIENTEAPI:1044616409:ERROR',
+  ]);
 });
 
 test('errores de la API y de la red se informan con status 502', async () => {
