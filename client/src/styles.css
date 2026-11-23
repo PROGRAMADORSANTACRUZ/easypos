@@ -1045,7 +1045,7 @@ tbody tr:last-child td { border-bottom: none; }
 
 .cobro-dividir-toggle { width: 100%; margin: 2px 0 12px; }
 /* Cocina: paleta vinotinto / rojo / naranja / negro con semaforo por tiempo de espera */
-.cocina-semaforo { display: grid; grid-template-columns: repeat(4, minmax(0, 170px)); gap: 8px; margin: 0 0 12px; }
+.cocina-semaforo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
 .cocina-semaforo__nivel { --sem: var(--green); display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius-md); background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--sem); }
 .cocina-semaforo__nivel strong { font-size: 18px; color: var(--sem); margin-right: 4px; }
 .cocina-semaforo__nivel span { font-weight: 600; font-size: 13px; }
