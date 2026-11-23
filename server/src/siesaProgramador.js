@@ -14,7 +14,8 @@ const LIMITE_POR_CORRIDA = 200;
 function resumirLogs(logs) {
   const porTipo = new Map();
   for (const { tipo, estado } of logs) {
-    const resumen = porTipo.get(tipo) || { cerrada: false, errores: 0 };
+    const resumen = porTipo.get(tipo) || { cerrada: false, errores: 0, reiniciado: false };
+    resumen.reiniciado = estado === 'REINICIADO';
     if (estado === 'OK' || estado === 'OMITIDO') resumen.cerrada = true;
     if (estado === 'ERROR') resumen.errores += 1;
     // Un reenvio pedido a mano reabre el documento y borra el conteo de rechazos.
@@ -102,6 +103,20 @@ export async function listarPendientesSiesa({ desde, cfg, limite = LIMITE_POR_CO
     }
   }
   const clientesAEnviar = [...clientes.values()].filter(({ item }) => item).map(({ item }) => item);
+
+  // Clientes pedidos a mano (boton Enviar a Siesa) o editados, aunque todavia no tengan facturas pendientes.
+  const pedidos = await prisma.logIntegracion.findMany({
+    where: { sistema: 'SIESA', tipo: { startsWith: 'CLIENTE:' }, estado: 'REINICIADO', fecha: { gte: desde } },
+    select: { tipo: true },
+  });
+  const idsPedidos = [...new Set(pedidos.map(({ tipo }) => tipo.slice('CLIENTE:'.length)))].filter((id) => !clientes.has(id));
+  const resumenPedidos = resumirLogs(await logsDe('CLIENTE', idsPedidos));
+  for (const id of idsPedidos) {
+    const resumen = resumenPedidos.get(`CLIENTE:${id}`);
+    if (!resumen?.reiniciado || resumen.cerrada || resumen.errores >= MAX_ERRORES) continue;
+    const item = await armar('CLIENTE', id, () => prepararClienteFn(id, cfg));
+    if (item) clientesAEnviar.push(item);
+  }
 
   for (const item of clientesAEnviar) items.push(item);
   for (const { id } of recibos) {

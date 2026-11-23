@@ -296,6 +296,16 @@ export default function Clientes() {
     }
   };
 
+  const enviarASiesa = async (c) => {
+    try {
+      const resultado = await api.post(`/clientes/${c.id}/enviar-siesa`, {});
+      const bien = ['OK', 'PROGRAMADO'].includes(resultado.estado);
+      notify(bien ? resultado.mensaje : `Siesa: ${resultado.mensaje || resultado.estado}`, bien ? 'ok' : 'err');
+    } catch (err) {
+      notify(err.message, 'err');
+    }
+  };
+
   const eliminar = async (c) => {
     if (!confirm(`¿Eliminar al cliente "${c.nombre}"?`)) return;
     try {
@@ -367,6 +377,7 @@ export default function Clientes() {
                   </td>
                   <td>
                     <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
+                      <button className="btn btn-sm" title="Enviar o actualizar en Siesa" onClick={() => enviarASiesa(c)}>Siesa</button>
                       <button className="btn btn-sm" title="Editar" onClick={() => empezarEdicion(c)}><Icon name="edit" size={16} /></button>
                       <button className="btn btn-red btn-sm" title="Eliminar" onClick={() => eliminar(c)}><Icon name="delete" size={16} /></button>
                     </div>

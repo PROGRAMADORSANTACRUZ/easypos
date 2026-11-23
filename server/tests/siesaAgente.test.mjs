@@ -80,10 +80,10 @@ test('listarPendientesSiesa: clientes primero, la venta depende del cliente y se
     factura: { findMany: async () => [{ id: 'f1' }, { id: 'f2' }, { id: 'f3' }] },
     facturaVenta: { findMany: async () => [] },
     logIntegracion: {
-      findMany: async ({ where }) => [
+      findMany: async ({ where }) => (where.tipo.startsWith ? [] : [
         { tipo: 'CLIENTE:cOk', estado: 'OK' },
         ...Array.from({ length: 5 }, () => ({ tipo: 'CLIENTE:cMalo', estado: 'ERROR' })),
-      ].filter(({ tipo }) => where.tipo.in.includes(tipo)),
+      ].filter(({ tipo }) => where.tipo.in.includes(tipo))),
       create: async ({ data }) => { creados.push(`${data.tipo}:${data.estado}`); return data; },
     },
   };
@@ -104,6 +104,32 @@ test('listarPendientesSiesa: clientes primero, la venta depende del cliente y se
   assert.equal(items[2].depende, 'CLIENTE:cNuevo');
   assert.equal(items[3].depende, null);
   assert.deepEqual(creados, []);
+});
+
+test('listarPendientesSiesa: un cliente pedido a mano se envia solo, sin facturas, y uno ya aceptado no', async () => {
+  const logs = [
+    { tipo: 'CLIENTE:cPedido', estado: 'REINICIADO' },
+    { tipo: 'CLIENTE:cViejo', estado: 'OK' }, { tipo: 'CLIENTE:cViejo', estado: 'REINICIADO' }, { tipo: 'CLIENTE:cViejo', estado: 'OK' },
+    { tipo: 'CLIENTE:cMalo', estado: 'REINICIADO' }, ...Array.from({ length: 5 }, () => ({ tipo: 'CLIENTE:cMalo', estado: 'ERROR' })),
+  ];
+  const cliente = {
+    abono: { findMany: async () => [] },
+    factura: { findMany: async () => [] },
+    facturaVenta: { findMany: async () => [] },
+    logIntegracion: {
+      findMany: async ({ where }) => (where.tipo.startsWith
+        ? [...new Set(logs.filter((l) => l.estado === 'REINICIADO').map((l) => l.tipo))].map((tipo) => ({ tipo }))
+        : logs.filter(({ tipo }) => where.tipo.in.includes(tipo))),
+      create: async () => ({}),
+    },
+  };
+  const items = await tenantStorage.run(cliente, () => listarPendientesSiesa({
+    desde: new Date('2026-11-21T00:00:00-05:00'),
+    cfg,
+    preparar: { cliente: async (id) => ({ lineas: [`c:${id}`] }) },
+  }));
+  assert.deepEqual(items.map((i) => i.clave), ['CLIENTE:cPedido']);
+  assert.equal(items[0].depende, undefined);
 });
 
 test('listarPendientesSiesa: lo que no se puede armar queda registrado y no se envia', async () => {

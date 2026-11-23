@@ -6,6 +6,7 @@
 //   copiar siesa-agente.env.example a siesa-agente.env, completarlo y ejecutar
 //   node scripts/siesa-agente.mjs          (queda corriendo, un ciclo cada SIESA_AGENTE_INTERVALO_MIN)
 //   node scripts/siesa-agente.mjs --una-vez (un solo ciclo y termina; util con el Programador de tareas)
+//   node scripts/siesa-agente.mjs --simular (muestra lo que enviaria, sin enviar ni informar al POS; no necesita VPN)
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -22,7 +23,9 @@ const API = String(env.POS_API_URL || '').replace(/\/+$/, '');
 const TOKEN = env.SIESA_AGENTE_TOKEN || '';
 const TENANTS = String(env.POS_TENANTS || '').split(',').map((t) => t.trim()).filter(Boolean);
 const INTERVALO_MIN = Number(env.SIESA_AGENTE_INTERVALO_MIN ?? 60);
-const UNA_VEZ = process.argv.includes('--una-vez') || INTERVALO_MIN === 0;
+const UNA_VEZ = process.argv.includes('--una-vez') || INTERVALO_MIN === 0 || process.argv.includes('--simular');
+// --simular: muestra lo que enviaria (sin llamar a Siesa ni informar al POS, no cambia nada). Un solo ciclo.
+const SIMULAR = process.argv.includes('--simular');
 const CA_BUNDLE_URL = 'https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem';
 
 const cfg = configSiesa(env);
@@ -88,6 +91,13 @@ async function ciclo(tenant) {
   const { items } = await posFetch('/pendientes?limite=100', { tenant });
   if (!items.length) return log(`[${nombre}] sin pendientes`);
   log(`[${nombre}] ${items.length} documento(s) pendientes`);
+  if (SIMULAR) {
+    for (const item of items) {
+      log(`  ${item.clave}${item.depende ? ` (depende de ${item.depende})` : ''}${item.verificar ? ` [t350: ${item.verificar.tipo}-${item.verificar.numero}]` : ''}`);
+      item.lineas.forEach((linea) => console.log(`    ${linea.length} car. | ${linea.slice(0, 120).trimEnd()}`));
+    }
+    return;
+  }
   const resumen = await procesarPendientes(items, {
     cfg,
     existeEnSiesa: hayBaseSql ? existeEnSiesa : null,
@@ -108,8 +118,12 @@ async function correr() {
 }
 
 function validar() {
-  const faltan = [['POS_API_URL', API], ['SIESA_AGENTE_TOKEN', TOKEN], ['SIESA_WS_URL', cfg.url], ['SIESA_WS_CONEXION', cfg.conexion],
-    ['SIESA_WS_CIA', cfg.idCia], ['SIESA_WS_USER', cfg.usuario], ['SIESA_WS_PASSWORD', cfg.clave]].filter(([, v]) => !v).map(([k]) => k);
+  const obligatorias = [['POS_API_URL', API], ['SIESA_AGENTE_TOKEN', TOKEN]];
+  if (!SIMULAR) {
+    obligatorias.push(['SIESA_WS_URL', cfg.url], ['SIESA_WS_CONEXION', cfg.conexion], ['SIESA_WS_CIA', cfg.idCia],
+      ['SIESA_WS_USER', cfg.usuario], ['SIESA_WS_PASSWORD', cfg.clave]);
+  }
+  const faltan = obligatorias.filter(([, v]) => !v).map(([k]) => k);
   if (faltan.length) {
     console.error(`Faltan variables en siesa-agente.env: ${faltan.join(', ')}`);
     process.exit(1);
