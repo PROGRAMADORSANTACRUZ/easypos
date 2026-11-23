@@ -273,6 +273,7 @@ export default function ReservaPublica() {
             podrás hacer uso de tu reserva solo si tenemos disponibilidad.</p>
           <p className="rsv-exito__cierre">¡Te esperamos!</p>
           <button type="button" className="rsv-btn rsv-btn--negro" onClick={reiniciar}>Finalizar</button>
+          {info?.telefono && <p className="rsv-exito__contacto">Si tienes alguna consulta, comunícate al <b>{info.telefono}</b></p>}
         </div>
       </div>
     );
