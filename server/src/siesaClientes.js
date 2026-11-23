@@ -1,9 +1,10 @@
-// Cliente de Siesa UNO EE: registro 201 (version 14), portado de sc_clientes.py. Se envia por el mismo servicio
-// web que las ventas (ver siesaVentas.js). El tercero (registro 200) debe existir antes en Siesa.
+// Cliente de Siesa UNO EE: registro 201 (version 14), portado de sc_clientes.py. En Siesa el registro 201 es
+// "cliente + sucursal": cada sucursal del cliente del POS se envia como un 201 con su codigo (001, 002...).
+// Se envia por el mismo servicio web que las ventas (ver siesaVentas.js). El tercero (registro 200) debe existir antes.
 import { prisma } from './prisma.js';
 import { diaColombia } from './fechaColombia.js';
 import {
-  SIESA_FIJOS, consecutivo, intentarEnvioSiesa, nitSiesa, numero, texto,
+  SIESA_FIJOS, codigoSucursalSiesa, consecutivo, intentarEnvioSiesa, nitSiesa, numero, registrar, texto,
 } from './siesaVentas.js';
 
 // Valores fijos del POS para clientes.
@@ -15,8 +16,8 @@ export const SIESA_CLIENTE = Object.freeze({
   condicionCredito: (dias) => `${String(dias).padStart(2, '0')}D`,
 });
 
-function ubicacion(cliente) {
-  const codigo = String(cliente.municipioSiesaCodigo ?? '');
+function ubicacion(codigoMunicipio) {
+  const codigo = String(codigoMunicipio ?? '');
   if (/^\d{8}$/.test(codigo)) return { pais: codigo.slice(0, 3), departamento: codigo.slice(3, 5), ciudad: codigo.slice(5, 8) };
   return { pais: SIESA_FIJOS.pais, departamento: SIESA_FIJOS.departamento, ciudad: SIESA_FIJOS.ciudad };
 }
@@ -27,39 +28,85 @@ function condicionPago(cliente) {
   return Number.isInteger(dias) && dias > 0 && dias < 100 ? SIESA_CLIENTE.condicionCredito(dias) : SIESA_FIJOS.condicionPago;
 }
 
-function registro201(cliente, cia, orden) {
-  const nit = nitSiesa(cliente.numeroDocumento || cliente.documento);
-  if (!nit) throw new Error('El cliente no tiene NIT o documento para enviar a Siesa');
+// Sedes a enviar: cada sucursal activa con su codigo (por posicion entre todas las del cliente) o, si no hay,
+// los datos del propio cliente como sucursal 001.
+function sedesDeCliente(cliente) {
+  const todas = cliente.sucursales || [];
+  const activas = todas.filter((sucursal) => sucursal.activo !== false);
   const razon = cliente.razonSocial || cliente.nombre;
-  const u = ubicacion(cliente);
+  if (!activas.length) {
+    return [{
+      codigo: SIESA_FIJOS.sucursal, razon, direccion: cliente.direccion, barrio: cliente.barrio,
+      telefono: cliente.telefono, email: cliente.email, municipio: cliente.municipioSiesaCodigo,
+    }];
+  }
+  return [...activas].sort((a, b) => String(a.id).localeCompare(String(b.id))).map((sucursal) => ({
+    codigo: codigoSucursalSiesa(todas, { id: sucursal.id }),
+    razon: sucursal.nombre || razon,
+    direccion: sucursal.direccion || cliente.direccion,
+    barrio: sucursal.barrio || cliente.barrio,
+    telefono: sucursal.telefono || cliente.telefono,
+    email: sucursal.email || cliente.email,
+    municipio: sucursal.municipioSiesaCodigo || cliente.municipioSiesaCodigo,
+  }));
+}
+
+function registro201(cliente, sede, nit, cia, orden) {
+  const u = ubicacion(sede.municipio);
   const esCredito = String(cliente.condicionPago).toUpperCase() === 'CREDITO';
+  const contacto = cliente.razonSocial || cliente.nombre;
   const F = SIESA_FIJOS;
   const C = SIESA_CLIENTE;
   return [
-    consecutivo(orden), '0201', '00', '14', cia, '1', texto(nit, 15), texto(F.sucursal, 3), '1',
-    texto(razon, 40), texto(F.moneda, 3), texto(C.vendedor, 4), texto(C.calificacion, 1), texto(condicionPago(cliente), 3),
+    consecutivo(orden), '0201', '00', '14', cia, '1', texto(nit, 15), texto(sede.codigo, 3), '1',
+    texto(sede.razon, 40), texto(F.moneda, 3), texto(C.vendedor, 4), texto(C.calificacion, 1), texto(condicionPago(cliente), 3),
     '001', numero(esCredito ? cliente.creditoCupo || 0 : 0, 21, 4), texto('', 15), texto('', 3), texto(F.tipoCliente, 4),
     texto('', 4), texto(C.listaPrecio, 3), '5', numero(50, 7, 2), numero(10, 7, 2), numero(99, 7, 2),
-    '0', '0', '0', '0', texto(C.centroOperacion, 3), texto('', 255), texto(razon, 50),
-    texto(cliente.direccion || F.direccionDefecto, 40), texto('', 40), texto('', 40), texto(u.pais, 3),
-    texto(u.departamento, 2), texto(u.ciudad, 3), texto(cliente.barrio, 40), texto(cliente.telefono, 20), texto('', 20),
-    texto('', 10), texto(cliente.email, 255), diaColombia(new Date(cliente.createdAt)).replaceAll('-', ''),
+    '0', '0', '0', '0', texto(C.centroOperacion, 3), texto('', 255), texto(contacto, 50),
+    texto(sede.direccion || F.direccionDefecto, 40), texto('', 40), texto('', 40), texto(u.pais, 3),
+    texto(u.departamento, 2), texto(u.ciudad, 3), texto(sede.barrio, 40), texto(sede.telefono, 20), texto('', 20),
+    texto('', 10), texto(sede.email, 255), diaColombia(new Date(cliente.createdAt)).replaceAll('-', ''),
     texto('', 3), texto('', 20), texto('', 4), texto('', 35), '20301231', numero(0, 7, 2), '31', texto('', 3),
-    texto(C.vendedor, 4), '0', '0', texto(cliente.telefono, 50), '0', texto('', 10), numero(0, 7), numero(0, 3), '2',
+    texto(C.vendedor, 4), '0', '0', texto(sede.telefono, 50), '0', texto('', 10), numero(0, 7), numero(0, 3), '2',
   ].join('');
 }
 
 export function construirPlanoCliente(cliente, idCia) {
+  const nit = nitSiesa(cliente.numeroDocumento || cliente.documento);
+  if (!nit) throw new Error('El cliente no tiene NIT o documento para enviar a Siesa');
   const cia = numero(Number(idCia), 3);
-  return [`${consecutivo(1)}00000001${cia}`, registro201(cliente, cia, 2), `${consecutivo(3)}99990001${cia}`];
+  const sedes = sedesDeCliente(cliente);
+  return [
+    `${consecutivo(1)}00000001${cia}`,
+    ...sedes.map((sede, indice) => registro201(cliente, sede, nit, cia, indice + 2)),
+    `${consecutivo(sedes.length + 2)}99990001${cia}`,
+  ];
+}
+
+export async function prepararCliente(id, cfg) {
+  const cliente = await prisma.cliente.findUnique({ where: { id }, include: { sucursales: true } });
+  if (!cliente) return { noEncontrado: true };
+  return { lineas: construirPlanoCliente(cliente, cfg.idCia) };
 }
 
 export function intentarEnvioClienteSiesa(id, opciones) {
   return intentarEnvioSiesa(`CLIENTE:${id}`, (cfg) => prepararCliente(id, cfg), opciones);
 }
 
-export async function prepararCliente(id, cfg) {
-  const cliente = await prisma.cliente.findUnique({ where: { id } });
-  if (!cliente) return { noEncontrado: true };
-  return { lineas: construirPlanoCliente(cliente, cfg.idCia) };
+// Si el cliente ya se habia enviado a Siesa y se edita, se vuelve a enviar (el 201 con indicador 1 actualiza).
+export async function marcarClienteParaReenvio(id) {
+  const clave = `CLIENTE:${id}`;
+  const previo = await prisma.logIntegracion.findFirst({ where: { sistema: 'SIESA', tipo: clave } });
+  if (previo) await registrar(clave, 'REINICIADO', { mensaje: 'Datos del cliente editados; se reenvia a Siesa' });
+}
+
+// Sucursales del cliente que ya estaban cargadas en Siesa en el ultimo envio aceptado: no se pueden borrar,
+// porque los codigos por posicion de las demas se correrian.
+export async function sucursalesYaEnviadas(tx, clienteId, sucursales) {
+  const ultimo = await tx.logIntegracion.findFirst({
+    where: { sistema: 'SIESA', tipo: `CLIENTE:${clienteId}`, estado: 'OK' },
+    orderBy: { fecha: 'desc' },
+  });
+  if (!ultimo) return [];
+  return sucursales.filter((sucursal) => new Date(sucursal.createdAt) <= new Date(ultimo.fecha));
 }

@@ -4,7 +4,7 @@
 import { prisma } from './prisma.js';
 import { diaColombia } from './fechaColombia.js';
 import {
-  configSiesa, consecutivo, construirSobreSoap, construirXmlImportar, interpretarRespuestaSiesa,
+  codigoSucursalSiesa, configSiesa, consecutivo, construirSobreSoap, construirXmlImportar, interpretarRespuestaSiesa,
   limpiarTexto, nitSiesa, numero, postSiesa, texto,
 } from './siesaProtocolo.js';
 
@@ -35,7 +35,7 @@ export const SIESA_FIJOS = Object.freeze({
 });
 
 export {
-  configSiesa, consecutivo, construirSobreSoap, construirXmlImportar, interpretarRespuestaSiesa,
+  codigoSucursalSiesa, configSiesa, consecutivo, construirSobreSoap, construirXmlImportar, interpretarRespuestaSiesa,
   limpiarTexto, nitSiesa, numero, postSiesa, texto,
 };
 
@@ -71,11 +71,13 @@ const DATOS_MEDIO = {
 function registro461(fecha, doc, cia, orden) {
   const cliente = documentoCliente(doc);
   const F = SIESA_FIJOS;
+  // Sucursal del cliente en Siesa; el consumidor final y los clientes sin sucursales usan la 001.
+  const sucursal = doc.sucursalSiesa || F.sucursal;
   return [
     consecutivo(orden), '0461', '00', '02', cia, '1', '1', '0',
     texto(doc.centroOperacionCodigo, 3), texto(doc.tipoDocumentoCodigo, 3), numero(doc.numeroFactura, 8), fecha,
-    texto(cliente, 15), numero(F.claseDocumento, 3), '0', '0', texto(F.sucursal, 3), texto(F.tipoCliente, 4),
-    texto(doc.centroOperacionCodigo, 3), texto('', 15), texto(cliente, 15), texto(F.sucursal, 3), texto(F.vendedor, 15),
+    texto(cliente, 15), numero(F.claseDocumento, 3), '0', '0', texto(sucursal, 3), texto(F.tipoCliente, 4),
+    texto(doc.centroOperacionCodigo, 3), texto('', 15), texto(cliente, 15), texto(sucursal, 3), texto(F.vendedor, 15),
     texto('', 10), texto('', 12), texto('', 10), texto(F.condicionPago, 3), texto(F.moneda, 3), texto(F.moneda, 3),
     numero(1, 13, 4), texto(F.moneda, 3), numero(1, 13, 4),
     texto(`POS ${doc.prefijo || ''}${doc.numeroFactura}`, 2000), texto(F.puntoEnvio, 3), '1',
@@ -225,10 +227,11 @@ export async function intentarEnvioSiesa(clave, preparar, { env = process.env, e
 export async function prepararVenta(modelo, id) {
   const doc = await prisma[modelo].findUnique({
     where: { id },
-    include: { detalle: { include: { producto: true } } },
+    include: { detalle: { include: { producto: true } }, cliente: { include: { sucursales: true } } },
   });
   if (!doc) return { noEncontrado: true };
   if (doc.credito) return { omitido: 'Factura a credito: no se envia automaticamente a Siesa' };
+  if (doc.cliente) doc.sucursalSiesa = codigoSucursalSiesa(doc.cliente.sucursales, { nombre: doc.sucursalCliente });
   return {
     lineas: construirPlanoVenta(doc),
     verificar: {

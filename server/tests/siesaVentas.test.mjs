@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  configSiesa, construirPlanoVenta, construirSobreSoap, construirXmlImportar, interpretarRespuestaSiesa, mediosDePago,
+  codigoSucursalSiesa, configSiesa, construirPlanoVenta, construirSobreSoap, construirXmlImportar, interpretarRespuestaSiesa, mediosDePago,
 } from '../src/siesaVentas.js';
 import { tenantStorage } from '../src/prisma.js';
 import { enviarPendientesSiesa, iniciarProgramadorSiesa, seleccionarPendientes } from '../src/siesaProgramador.js';
-import { construirPlanoCliente } from '../src/siesaClientes.js';
+import { construirPlanoCliente, marcarClienteParaReenvio, sucursalesYaEnviadas } from '../src/siesaClientes.js';
 import { construirPlanoRecibo } from '../src/siesaRecibos.js';
 
 const factura = (extra = {}) => ({
@@ -210,6 +210,80 @@ test('recibo de caja: 350 y dos 351 con los anchos esperados y el cruce al propi
 test('recibo de caja: sin NIT usa el cliente generico', () => {
   const lineas = construirPlanoRecibo({ id: 1, monto: 100, createdAt: new Date(), nota: null }, null, 4);
   assert.equal(lineas[1].slice(41, 56), '222222222      ');
+});
+
+const sucursal = (n, extra = {}) => ({ id: `001${String(n).padStart(6, '0')}`, nombre: `SEDE ${n}`, activo: true, createdAt: new Date('2026-11-01'), ...extra });
+
+test('sucursales: el codigo de Siesa es la posicion entre todas las del cliente, por id', () => {
+  const todas = [sucursal(30), sucursal(10), sucursal(20)];
+  assert.equal(codigoSucursalSiesa(todas, { id: todas[1].id }), '001');
+  assert.equal(codigoSucursalSiesa(todas, { id: todas[2].id }), '002');
+  assert.equal(codigoSucursalSiesa(todas, { nombre: 'sede 30' }), '003');
+  assert.equal(codigoSucursalSiesa(todas, { nombre: 'no existe' }), '001');
+  assert.equal(codigoSucursalSiesa([], { nombre: 'x' }), '001');
+  assert.equal(codigoSucursalSiesa(null), '001');
+});
+
+test('cliente con sucursales: un 201 por sucursal activa, con su codigo, datos y cierre correcto', () => {
+  const sucursales = [
+    sucursal(1, { direccion: 'CRA 1 # 2-3', telefono: '3111111111', municipioSiesaCodigo: '16911001' }),
+    sucursal(2, { activo: false }),
+    sucursal(3, { direccion: null, telefono: null }),
+  ];
+  const lineas = construirPlanoCliente(clienteSiesa({ sucursales }), 4);
+  assert.equal(lineas.length, 4);
+  assert.deepEqual(lineas.slice(1, 3).map((l) => l.length), [1117, 1117]);
+  assert.deepEqual(lineas.slice(1, 3).map((l) => l.slice(34, 37)), ['001', '003']);
+  assert.equal(lineas[1].slice(38, 78).trim(), 'SEDE 1');
+  assert.equal(lineas[1].slice(516 - 40, 516).trim(), 'CRA 1 # 2-3');
+  assert.equal(lineas[1].slice(596, 604), '16911001');
+  // La sucursal 3 hereda la direccion y el telefono del cliente.
+  assert.equal(lineas[2].slice(516 - 40, 516).trim(), 'Cra 5 # 6-7');
+  assert.equal(lineas[2].slice(644, 664).trim(), '3001234567');
+  assert.equal(lineas[3], '000000499990001004');
+  assert.deepEqual(lineas.slice(0, 3).map((l) => l.slice(0, 7)), ['0000001', '0000002', '0000003']);
+});
+
+test('venta y recibo llevan la sucursal del cliente elegida al facturar', () => {
+  const base = {
+    companiaCodigo: '004', centroOperacionCodigo: '420', tipoDocumentoCodigo: 'FEV', prefijo: 'RM1C', numeroFactura: 20,
+    createdAt: new Date('2026-11-20T20:00:00Z'), numeroDocumentoCliente: '900123456', nombreCliente: 'ACME', credito: false,
+    metodoPago1: 'EFE', valor1: 1000, valor2: 0, valor3: 0, valor4: 0,
+    detalle: [{ productoCodigo: '1', cantidad: 1, total: 1000, unidad: 'U', producto: null }],
+  };
+  const sinSucursal = construirPlanoVenta(base)[1];
+  assert.equal(sinSucursal.slice(63, 66), '001');
+  const conSucursal = construirPlanoVenta({ ...base, sucursalSiesa: '003' })[1];
+  assert.equal(conSucursal.slice(63, 66), '003');
+  assert.equal(conSucursal.slice(103, 106), '003');
+  const recibo = construirPlanoRecibo({ id: 4, monto: 500, createdAt: new Date(), nota: null }, '900123456', 4, '002');
+  assert.equal(recibo[3].slice(570, 573), '002');
+});
+
+test('sucursales ya enviadas a Siesa no se pueden borrar; las creadas despues si', async () => {
+  const tx = { logIntegracion: { findFirst: async () => ({ fecha: new Date('2026-11-10') }) } };
+  const enviadas = await sucursalesYaEnviadas(tx, 'c1', [
+    { id: 'a', nombre: 'VIEJA', createdAt: new Date('2026-11-01') },
+    { id: 'b', nombre: 'NUEVA', createdAt: new Date('2026-11-15') },
+  ]);
+  assert.deepEqual(enviadas.map(({ id }) => id), ['a']);
+  const sinEnvio = await sucursalesYaEnviadas({ logIntegracion: { findFirst: async () => null } }, 'c1', [{ id: 'a', createdAt: new Date('2026-01-01') }]);
+  assert.deepEqual(sinEnvio, []);
+});
+
+test('editar un cliente ya enviado lo marca para reenvio; uno nunca enviado no', async () => {
+  const creados = [];
+  let hayLog = true;
+  const cliente = {
+    logIntegracion: {
+      findFirst: async () => (hayLog ? { id: 1 } : null),
+      create: async ({ data }) => { creados.push(`${data.tipo}:${data.estado}`); return data; },
+    },
+  };
+  await tenantStorage.run(cliente, () => marcarClienteParaReenvio('c1'));
+  hayLog = false;
+  await tenantStorage.run(cliente, () => marcarClienteParaReenvio('c2'));
+  assert.deepEqual(creados, ['CLIENTE:c1:REINICIADO']);
 });
 
 test('el programador no arranca sin SIESA_ENVIO_DESDE valida', () => {

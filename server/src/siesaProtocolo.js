@@ -30,6 +30,16 @@ export function numero(valor, ancho, decimales = 0) {
 
 export const consecutivo = (n) => String(n).padStart(7, '0');
 
+// Codigo de sucursal de Siesa (3 digitos) de un cliente del POS: la posicion de la sucursal entre todas las del
+// cliente, ordenadas por id (el id sigue la secuencia de creacion). Sin sucursales, o si no se encuentra, es 001.
+export function codigoSucursalSiesa(sucursales, { id, nombre } = {}) {
+  const todas = [...(sucursales || [])].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  const normal = (v) => limpiarTexto(v).toLowerCase();
+  let indice = id ? todas.findIndex((s) => s.id === id) : -1;
+  if (indice < 0 && nombre) indice = todas.findIndex((s) => normal(s.nombre) === normal(nombre));
+  return String(indice < 0 ? 1 : indice + 1).padStart(3, '0');
+}
+
 // NIT sin puntos ni digito de verificacion; vacio si no hay documento.
 export function nitSiesa(documento) {
   const bruto = String(documento ?? '').replace(/[.\s]/g, '');

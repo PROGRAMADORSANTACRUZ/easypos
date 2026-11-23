@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
-import { intentarEnvioClienteSiesa } from '../siesaClientes.js';
+import { intentarEnvioClienteSiesa, marcarClienteParaReenvio, sucursalesYaEnviadas } from '../siesaClientes.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -47,6 +47,7 @@ function datosSucursal(sucursal) {
     ciudad: limpiar(sucursal.ciudad),
     email: limpiar(sucursal.email),
     municipioSiesaCodigo: limpiar(sucursal.municipioSiesaCodigo),
+    ...(sucursal.activo !== undefined && { activo: aBool(sucursal.activo) }),
   };
 }
 
@@ -188,7 +189,7 @@ router.put('/:id', wrap(async (req, res) => {
         },
       });
       if (sucursales !== undefined) {
-        const existentes = await tx.clienteSucursal.findMany({ where: { clienteId }, select: { id: true } });
+        const existentes = await tx.clienteSucursal.findMany({ where: { clienteId }, select: { id: true, nombre: true, createdAt: true } });
         const idsExistentes = new Set(existentes.map(({ id }) => id));
         const idsConservados = [];
         for (const sucursal of sucursales) {
@@ -201,6 +202,13 @@ router.put('/:id', wrap(async (req, res) => {
             idsConservados.push(creada.id);
           }
         }
+        const aEliminar = existentes.filter(({ id }) => !idsConservados.includes(id));
+        const enviadas = await sucursalesYaEnviadas(tx, clienteId, aEliminar);
+        if (enviadas.length) {
+          throw Object.assign(new Error(
+            `No se puede eliminar la sucursal ${enviadas.map(({ nombre }) => nombre).join(', ')}: ya se envió a Siesa. Desactívala en lugar de eliminarla.`,
+          ), { status: 409 });
+        }
         await tx.clienteSucursal.deleteMany({
           where: { clienteId, ...(idsConservados.length ? { id: { notIn: idsConservados } } : {}) },
         });
@@ -208,6 +216,7 @@ router.put('/:id', wrap(async (req, res) => {
       return tx.cliente.findUnique({ where: { id: clienteId }, include: incluirUbicacionSiesa });
     });
     await auditar({ req, accion: 'EDITAR', entidad: 'cliente', entidadId: cliente.id, detalle: cliente.nombre });
+    await marcarClienteParaReenvio(cliente.id).catch((error) => console.error('Siesa: no se pudo marcar el cliente para reenvio', error.message));
     res.json(cliente);
   } catch (e) {
     if (e.code === 'P2002') return res.status(409).json({ error: 'Ya existe un cliente con ese NIT o cédula' });

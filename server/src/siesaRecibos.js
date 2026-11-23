@@ -3,7 +3,7 @@
 import { prisma } from './prisma.js';
 import { diaColombia } from './fechaColombia.js';
 import {
-  SIESA_FIJOS, consecutivo, intentarEnvioSiesa, nitSiesa, numero, texto,
+  SIESA_FIJOS, codigoSucursalSiesa, consecutivo, intentarEnvioSiesa, nitSiesa, numero, texto,
 } from './siesaVentas.js';
 
 // Valores fijos del POS para recibos de caja.
@@ -47,19 +47,20 @@ function credito351(a, cia, orden) {
     numero(a.numero, 8), texto(R.cuentaAnticipo, 20), texto(a.tercero, 15), texto(R.centroOperacion, 3),
     texto(SIESA_FIJOS.unidadNegocio, 20), texto('', 15),
     valor(0), valor(a.valor), valor(0), valor(0), valor(0), valor(a.valor), ceros(4),
-    texto(a.nota, 255), texto(SIESA_FIJOS.sucursal, 3), texto(R.tipoDocumento, 3), numero(a.numero, 8), '001',
+    texto(a.nota, 255), texto(a.sucursal, 3), texto(R.tipoDocumento, 3), numero(a.numero, 8), '001',
     a.fecha, a.fecha, ceros(7), texto(SIESA_FIJOS.vendedor, 15), a.fecha, a.fecha, texto('', 255),
   ].join('');
 }
 
-// abono: { id, monto, createdAt, nota }; tercero: NIT del cliente de la factura.
-export function construirPlanoRecibo(abono, tercero, idCia) {
+// abono: { id, monto, createdAt, nota }; tercero: NIT del cliente de la factura; sucursal: codigo en Siesa.
+export function construirPlanoRecibo(abono, tercero, idCia, sucursal = SIESA_FIJOS.sucursal) {
   const cia = numero(Number(idCia), 3);
   const datos = {
     numero: abono.id,
     valor: abono.monto,
     fecha: diaColombia(new Date(abono.createdAt)).replaceAll('-', ''),
     tercero: nitSiesa(tercero) || SIESA_FIJOS.clienteGenerico,
+    sucursal,
     nota: abono.nota || `Abono POS ${abono.id}`,
   };
   return [
@@ -72,13 +73,16 @@ export function construirPlanoRecibo(abono, tercero, idCia) {
 }
 
 export async function prepararRecibo(id, cfg) {
+  const conCliente = { include: { cliente: { include: { sucursales: true } } } };
   const abono = await prisma.abono.findUnique({
     where: { id: Number(id) },
-    include: { factura: true, facturaVenta: true },
+    include: { factura: conCliente, facturaVenta: conCliente },
   });
   if (!abono) return { noEncontrado: true };
   const documento = abono.factura || abono.facturaVenta;
-  return { lineas: construirPlanoRecibo(abono, documento?.numeroDocumentoCliente, cfg.idCia) };
+  const sucursal = documento?.cliente
+    ? codigoSucursalSiesa(documento.cliente.sucursales, { nombre: documento.sucursalCliente }) : undefined;
+  return { lineas: construirPlanoRecibo(abono, documento?.numeroDocumentoCliente, cfg.idCia, sucursal) };
 }
 
 export function intentarEnvioReciboSiesa(id, opciones) {

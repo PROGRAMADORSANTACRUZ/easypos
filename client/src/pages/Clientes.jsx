@@ -89,7 +89,12 @@ function EditorSucursalCliente({ sucursal, paises, onChange, onRemove }) {
     <div className="field" style={{ gridColumn: '1 / -1', border: '1px solid var(--border)', padding: 12, gap: 10 }}>
       <div className="row between" style={{ alignItems: 'center' }}>
         <strong>{sucursal.nombre || 'Nueva sucursal'}</strong>
-        <button type="button" className="btn btn-red btn-sm" onClick={onRemove} title="Quitar sucursal"><Icon name="delete" size={16} /></button>
+        <div className="row" style={{ alignItems: 'center', gap: 10 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0 }} title="Una sucursal inactiva no se usa al facturar pero conserva su código en Siesa">
+            <input type="checkbox" checked={sucursal.activo !== false} onChange={(e) => onChange('activo', e.target.checked)} /> Activa
+          </label>
+          <button type="button" className="btn btn-red btn-sm" onClick={onRemove} title="Quitar sucursal"><Icon name="delete" size={16} /></button>
+        </div>
       </div>
       <div className="grid form-3col" style={{ gap: 10 }}>
         <div className="field"><label>Nombre de la sede</label><input value={sucursal.nombre} onChange={(e) => onChange('nombre', e.target.value)} placeholder="Ej. Sede norte" /></div>
