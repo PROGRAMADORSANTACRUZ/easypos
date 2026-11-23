@@ -202,6 +202,7 @@ export default function Clientes() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [confirmacionSiesa, setConfirmacionSiesa] = useState(null);
   const [buscandoSiesa, setBuscandoSiesa] = useState(false);
+  const [avisoSiesa, setAvisoSiesa] = useState(null);
   const notify = useToast();
 
   const cargar = async (q = '') => {
@@ -324,8 +325,8 @@ export default function Clientes() {
     setBuscandoSiesa(true);
     try {
       const r = await api.get(`/clientes/siesa/tercero/${documento}`);
-      if (!r.existe) return notify(`El tercero ${documento} no existe en Siesa`, 'err');
-      if (!r.datos) return notify(`El tercero ${documento} existe en Siesa, pero no como cliente: no se pudieron traer sus datos`, 'err');
+      if (!r.existe) return setAvisoSiesa({ titulo: 'El tercero no existe en Siesa', mensaje: `No se encontró ningún tercero con el documento ${documento} en Siesa. Puedes completar el formulario para crearlo.` });
+      if (!r.datos) return setAvisoSiesa({ titulo: 'Tercero sin datos de cliente', mensaje: `El documento ${documento} existe como tercero en Siesa, pero no como cliente, así que no se pudieron traer sus datos.` });
       // Si el cliente ya esta en el POS se abre en modo edicion para no duplicarlo.
       if (!editando) {
         const locales = await api.get(`/clientes?q=${encodeURIComponent(documento)}`);
@@ -356,7 +357,7 @@ export default function Clientes() {
       if (d.departamentoCodigo) setDepartamentoSiesaCodigo(d.departamentoCodigo);
       notify('Datos traídos de Siesa: revísalos y guarda para actualizarlos');
     } catch (err) {
-      notify(err.message, 'err');
+      setAvisoSiesa({ titulo: 'No se pudo consultar Siesa', mensaje: err.message });
     } finally {
       setBuscandoSiesa(false);
     }
@@ -543,7 +544,7 @@ export default function Clientes() {
       {modalAbierto && (
         <Modal
           title={editando ? 'Editar cliente' : 'Nuevo cliente'}
-          onClose={confirmacionSiesa ? undefined : cancelar}
+          onClose={confirmacionSiesa || avisoSiesa ? undefined : cancelar}
           size="lg"
           footer={(
             <>
@@ -641,6 +642,20 @@ export default function Clientes() {
               </div>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {avisoSiesa && (
+        <Modal
+          title={avisoSiesa.titulo}
+          onClose={() => setAvisoSiesa(null)}
+          size="sm"
+          footer={<Button variant="primary" onClick={() => setAvisoSiesa(null)} autoFocus>Entendido</Button>}
+        >
+          <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
+            <span style={{ color: 'var(--red)', flexShrink: 0 }}><Icon name="close" size={28} /></span>
+            <p style={{ margin: 0 }}>{avisoSiesa.mensaje}</p>
+          </div>
         </Modal>
       )}
 
