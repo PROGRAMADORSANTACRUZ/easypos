@@ -71,24 +71,24 @@ async function imprimirComandaAsync(pedido, { reimpresion = false, cambios = '' 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${titulo}</title>
   <style>
     ${estiloPagina(await formatoDe('formatoComanda'))}
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; font-size: 12px; padding: 3mm 4mm; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; font-size: 16px; padding: 3mm 4mm; }
     .logo { display: block; width: 28mm; max-width: 55%; margin: 0 auto 4px; }
-    .titulo { text-align: center; font-weight: 800; font-size: 13px; text-transform: uppercase; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 6px; line-height: 1.2; }
+    .titulo { text-align: center; font-weight: 800; font-size: 16px; text-transform: uppercase; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 6px; line-height: 1.2; }
     .marca { text-align: center; font-size: 16px; font-weight: 800; letter-spacing: 1px; margin-top: 0; }
-    .meta { font-size: 11px; margin-bottom: 6px; }
+    .meta { font-size: 16px; margin-bottom: 6px; }
     .meta div { margin: 1px 0; }
     table { width: 100%; border-collapse: collapse; }
-    td { padding: 2px 0; vertical-align: top; font-size: 12px; }
-    td.c { width: 22px; font-weight: 700; }
+    td { padding: 2px 0; vertical-align: top; font-size: 16px; }
+    td.c { width: 30px; font-weight: 700; }
     td.n { text-transform: uppercase; }
     td.p { text-align: right; white-space: nowrap; font-weight: 700; }
-    .tot { border-top: 1px dashed #000; margin-top: 6px; padding-top: 4px; display: flex; justify-content: space-between; font-weight: 800; font-size: 13px; }
+    .tot { border-top: 1px dashed #000; margin-top: 6px; padding-top: 4px; display: flex; justify-content: space-between; font-weight: 800; font-size: 16px; }
     .sec { margin-top: 6px; border-top: 1px dashed #000; padding-top: 4px; }
     .obs { margin-top: 6px; border: 1px solid #000; border-radius: 3px; padding: 4px 6px; }
-    .obs .lbl { font-weight: 800; font-size: 11px; text-transform: uppercase; }
-    .lbl { font-weight: 700; font-size: 11px; }
-    .cambios { white-space: pre-wrap; font-size: 11px; }
-    .pie { text-align: center; margin-top: 8px; font-size: 10px; }
+    .obs .lbl { font-weight: 800; font-size: 16px; text-transform: uppercase; }
+    .lbl { font-weight: 700; font-size: 16px; }
+    .cambios { white-space: pre-wrap; font-size: 16px; }
+    .pie { text-align: center; margin-top: 8px; font-size: 16px; }
   </style></head><body>
     <div class="titulo">${titulo}</div>
     <div class="meta">
