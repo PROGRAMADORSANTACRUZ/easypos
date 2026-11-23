@@ -39,6 +39,9 @@ export {
   limpiarTexto, nitSiesa, numero, postSiesa, texto,
 };
 
+// Documentos del consumidor final: no se crean como cliente en Siesa, solo se usan en la factura.
+const DOCUMENTOS_GENERICOS = new Set(['222222222', '222222222222']);
+
 function documentoCliente(factura) {
   return nitSiesa(factura.numeroDocumentoCliente) || SIESA_FIJOS.clienteGenerico;
 }
@@ -238,7 +241,8 @@ export async function prepararVenta(modelo, id) {
       compania: Number(doc.companiaCodigo), centro: doc.centroOperacionCodigo,
       tipo: doc.tipoDocumentoCodigo, numero: Number(doc.numeroFactura),
     },
-    clienteId: doc.clienteId && doc.numeroDocumentoCliente ? doc.clienteId : null,
+    clienteId: doc.clienteId && doc.numeroDocumentoCliente && !DOCUMENTOS_GENERICOS.has(nitSiesa(doc.numeroDocumentoCliente))
+      ? doc.clienteId : null,
   };
 }
 

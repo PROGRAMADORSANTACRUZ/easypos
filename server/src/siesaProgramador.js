@@ -98,6 +98,8 @@ export async function listarPendientesSiesa({ desde, cfg, limite = LIMITE_POR_CO
       else if ((resumen?.errores || 0) >= MAX_ERRORES) clientes.set(clienteId, { listo: false });
       else {
         const item = await armar('CLIENTE', clienteId, () => prepararClienteFn(clienteId, cfg));
+        // Solo un reenvio pedido o una edicion actualiza un cliente que ya exista en Siesa.
+        if (item) item.actualizar = Boolean(resumen?.reiniciado);
         clientes.set(clienteId, item ? { listo: true, item } : { listo: false });
       }
     }
@@ -115,7 +117,7 @@ export async function listarPendientesSiesa({ desde, cfg, limite = LIMITE_POR_CO
     const resumen = resumenPedidos.get(`CLIENTE:${id}`);
     if (!resumen?.reiniciado || resumen.cerrada || resumen.errores >= MAX_ERRORES) continue;
     const item = await armar('CLIENTE', id, () => prepararClienteFn(id, cfg));
-    if (item) clientesAEnviar.push(item);
+    if (item) clientesAEnviar.push({ ...item, actualizar: true });
   }
 
   for (const item of clientesAEnviar) items.push(item);

@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import dotenv from 'dotenv';
 import sql from 'mssql';
 import { configSiesa, postSiesa } from '../src/siesaProtocolo.js';
-import { procesarPendientes } from '../src/siesaAgenteNucleo.js';
+import { asegurarTerceroConApi, procesarPendientes } from '../src/siesaAgenteNucleo.js';
 
 const aqui = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(aqui, '..', 'siesa-agente.env') });
@@ -30,10 +30,34 @@ const CA_BUNDLE_URL = 'https://truststore.pki.rds.amazonaws.com/us-east-1/us-eas
 
 const cfg = configSiesa(env);
 const hayBaseSql = Boolean(env.SIESA_SQL_USER && env.SIESA_SQL_PASSWORD);
+// API de consulta (apiconsulta.grupo-santacruz.com): verifica y crea terceros en Siesa. Opcional.
+const CONSULTA_URL = String(env.CONSULTA_API_URL || '').replace(/\/+$/, '');
+const CONSULTA_KEY = env.CONSULTA_API_KEY || '';
+const hayApiTerceros = Boolean(CONSULTA_URL && CONSULTA_KEY);
 let pool = null;
 
 const marca = () => new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
 const log = (...args) => console.log(`[${marca()}]`, ...args);
+
+async function consultaFetch(ruta, cuerpo) {
+  const resp = await fetch(`${CONSULTA_URL}${ruta}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': CONSULTA_KEY },
+    body: JSON.stringify(cuerpo),
+    signal: AbortSignal.timeout(60_000),
+  });
+  return { status: resp.status, cuerpo: await resp.text() };
+}
+
+const apiTerceros = {
+  async verificar(nit) {
+    const { status, cuerpo } = await consultaFetch('/verificar-cliente', { nit, compania: Number(cfg.idCia) });
+    const datos = JSON.parse(cuerpo || '{}');
+    if (status !== 200 || !Number.isInteger(datos.resultado)) throw new Error(`verificar-cliente respondio HTTP ${status}: ${cuerpo.slice(0, 200)}`);
+    return datos.resultado;
+  },
+  crearTercero: (payload) => consultaFetch(`/crear/terceros?cia=${encodeURIComponent(cfg.idCia)}`, [payload]),
+};
 
 async function posFetch(ruta, { metodo = 'GET', cuerpo, tenant } = {}) {
   const resp = await fetch(`${API}/api/siesa-agente${ruta}`, {
@@ -95,12 +119,14 @@ async function ciclo(tenant) {
     for (const item of items) {
       log(`  ${item.clave}${item.depende ? ` (depende de ${item.depende})` : ''}${item.verificar ? ` [t350: ${item.verificar.tipo}-${item.verificar.numero}]` : ''}`);
       item.lineas.forEach((linea) => console.log(`    ${linea.length} car. | ${linea.slice(0, 120).trimEnd()}`));
+      if (item.tercero) console.log(`    tercero (API /crear/terceros): ${JSON.stringify(item.tercero)}`);
     }
     return;
   }
   const resumen = await procesarPendientes(items, {
     cfg,
     existeEnSiesa: hayBaseSql ? existeEnSiesa : null,
+    asegurarTercero: hayApiTerceros ? (item) => asegurarTerceroConApi(item, apiTerceros) : null,
     enviar: postSiesa,
     informar: (resultado) => posFetch('/resultado', { metodo: 'POST', cuerpo: resultado, tenant }),
   });
@@ -131,7 +157,7 @@ function validar() {
 }
 
 validar();
-log(`Agente de Siesa -> ${API}${hayBaseSql ? ' (con verificacion en t350)' : ' (sin verificacion en t350: falta SIESA_SQL_USER/PASSWORD)'}`);
+log(`Agente de Siesa -> ${API}${hayBaseSql ? ' (con verificacion en t350)' : ' (sin verificacion en t350: falta SIESA_SQL_USER/PASSWORD)'}${hayApiTerceros ? ' (creando terceros con la API de consulta)' : ' (sin creacion de terceros: falta CONSULTA_API_URL/KEY)'}`);
 await correr();
 if (!UNA_VEZ) {
   log(`Proximo ciclo en ${INTERVALO_MIN} min. Ctrl+C para salir.`);

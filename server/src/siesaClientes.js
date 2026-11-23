@@ -4,7 +4,7 @@
 import { prisma } from './prisma.js';
 import { diaColombia } from './fechaColombia.js';
 import {
-  SIESA_FIJOS, codigoSucursalSiesa, consecutivo, intentarEnvioSiesa, nitSiesa, numero, registrar, texto,
+  SIESA_FIJOS, codigoSucursalSiesa, consecutivo, intentarEnvioSiesa, limpiarTexto, nitSiesa, numero, registrar, texto,
 } from './siesaVentas.js';
 
 // Valores fijos del POS para clientes.
@@ -86,7 +86,52 @@ export function construirPlanoCliente(cliente, idCia) {
 export async function prepararCliente(id, cfg) {
   const cliente = await prisma.cliente.findUnique({ where: { id }, include: { sucursales: true } });
   if (!cliente) return { noEncontrado: true };
-  return { lineas: construirPlanoCliente(cliente, cfg.idCia) };
+  return { lineas: construirPlanoCliente(cliente, cfg.idCia), tercero: construirTerceroApi(cliente) };
+}
+
+const PESOS_DV = [3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71];
+
+// Digito de verificacion del NIT (algoritmo modulo 11 de la DIAN).
+export function digitoVerificacion(nit) {
+  const digitos = String(nit).replace(/\D/g, '').split('').reverse();
+  const suma = digitos.reduce((total, digito, indice) => total + Number(digito) * PESOS_DV[indice], 0);
+  const residuo = suma % 11;
+  return String(residuo > 1 ? 11 - residuo : residuo);
+}
+
+const TIPO_IDENTIFICACION = { NIT: 'N', CC: 'C', CE: 'E', PAS: 'P', PP: 'P', TI: 'T' };
+
+const recortar = (valor, largo) => limpiarTexto(valor).toUpperCase().slice(0, largo);
+
+// Cuerpo de un tercero para POST /crear/terceros de la API de consulta (que lo sube a Siesa).
+export function construirTerceroApi(cliente) {
+  const nit = nitSiesa(cliente.numeroDocumento || cliente.documento);
+  if (!nit) throw new Error('El cliente no tiene NIT o documento para crear el tercero en Siesa');
+  const esJuridica = String(cliente.tipoCliente).toUpperCase() === 'JURIDICA' || String(cliente.tipoDocumento).toUpperCase() === 'NIT';
+  const sede = sedesDeCliente(cliente)[0];
+  const u = ubicacion(sede.municipio);
+  const apellidos = limpiarTexto(cliente.apellidos).split(/\s+/).filter(Boolean);
+  const nombres = limpiarTexto(cliente.nombres);
+  const razon = esJuridica
+    ? limpiarTexto(cliente.razonSocial || cliente.nombre)
+    : limpiarTexto([cliente.apellidos, cliente.nombres].filter(Boolean).join(' ') || cliente.nombre);
+  return {
+    nit,
+    digito_verificacion: esJuridica ? digitoVerificacion(nit) : '',
+    tipo_identificacion: esJuridica ? 'N' : (TIPO_IDENTIFICACION[String(cliente.tipoDocumento).toUpperCase()] || 'C'),
+    sucursal: SIESA_FIJOS.sucursal,
+    razon_social: recortar(razon, 50),
+    ...(esJuridica ? {} : {
+      primer_apellido: recortar(apellidos[0], 15),
+      segundo_apellido: recortar(apellidos.slice(1).join(' '), 15),
+      nombres: recortar(nombres, 20),
+    }),
+    direccion: recortar(sede.direccion || SIESA_FIJOS.direccionDefecto, 40),
+    departamento: u.departamento,
+    ciudad: u.ciudad,
+    telefono: limpiarTexto(sede.telefono).slice(0, 20),
+    correo_electronico: limpiarTexto(sede.email).slice(0, 100),
+  };
 }
 
 export function intentarEnvioClienteSiesa(id, opciones) {

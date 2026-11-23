@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { tenantStorage } from '../src/prisma.js';
-import { procesarPendientes } from '../src/siesaAgenteNucleo.js';
+import { asegurarTerceroConApi, procesarPendientes } from '../src/siesaAgenteNucleo.js';
 import { listarPendientesSiesa, seleccionarPendientes } from '../src/siesaProgramador.js';
 import { autenticarAgente } from '../src/routes/siesaAgente.js';
 import { intentarEnvioSiesa, modoAgenteSiesa } from '../src/siesaVentas.js';
+import { construirTerceroApi, digitoVerificacion } from '../src/siesaClientes.js';
 
 const respuestaOk = { status: 200, cuerpo: '<ImportarXMLResult><NewDataSet/></ImportarXMLResult>' };
 const respuestaError = { status: 200, cuerpo: '<NewDataSet><Resultado><f_detalle>Cliente no existe</f_detalle></Resultado></NewDataSet>' };
@@ -183,6 +184,93 @@ test('API del agente: exige SIESA_AGENTE_TOKEN y lo compara en el encabezado', (
     if (original === undefined) delete process.env.SIESA_AGENTE_TOKEN;
     else process.env.SIESA_AGENTE_TOKEN = original;
   }
+});
+
+test('tercero: digito de verificacion DIAN y cuerpo de la API para persona natural y juridica', () => {
+  assert.equal(digitoVerificacion('800197268'), '4'); // NIT de la DIAN
+  assert.equal(digitoVerificacion('900383385'), '8');
+
+  const natural = construirTerceroApi({
+    tipoCliente: 'NATURAL', tipoDocumento: 'CC', numeroDocumento: '1044616409', nombres: 'Óscar David', apellidos: 'Hernández Guzmán',
+    direccion: 'CL 45 # 20-10', telefono: '3001234567', email: 'cliente@correo.com', municipioSiesaCodigo: '16908001', sucursales: [],
+  });
+  assert.deepEqual(natural, {
+    nit: '1044616409', digito_verificacion: '', tipo_identificacion: 'C', sucursal: '001',
+    razon_social: 'HERNANDEZ GUZMAN OSCAR DAVID', primer_apellido: 'HERNANDEZ', segundo_apellido: 'GUZMAN', nombres: 'OSCAR DAVID',
+    direccion: 'CL 45 # 20-10', departamento: '08', ciudad: '001', telefono: '3001234567', correo_electronico: 'cliente@correo.com',
+  });
+
+  const juridica = construirTerceroApi({
+    tipoCliente: 'JURIDICA', tipoDocumento: 'NIT', numeroDocumento: '900.383.385-1', razonSocial: 'Empresa Ejemplo S.A.S.', nombre: 'x',
+    direccion: 'CR 50 # 80-20', telefono: '6053000000', email: 'facturacion@empresa.com', sucursales: [],
+  });
+  assert.equal(juridica.nit, '900383385');
+  assert.equal(juridica.digito_verificacion, '8');
+  assert.equal(juridica.tipo_identificacion, 'N');
+  assert.equal(juridica.razon_social, 'EMPRESA EJEMPLO S.A.S.');
+  assert.equal('primer_apellido' in juridica, false);
+  assert.equal(juridica.departamento, '08');
+  assert.throws(() => construirTerceroApi({ nombre: 'x', sucursales: [] }), /no tiene NIT/);
+  assert.throws(() => construirTerceroApi({ nombre: 'x', numeroDocumento: 'ABC', sucursales: [] }), /no es numerico/);
+});
+
+const apiFalsa = (existentes, { creacion = { status: 200, cuerpo: '{"ok":true}' }, crea = true } = {}) => {
+  const llamadas = [];
+  return {
+    llamadas,
+    verificar: async (nit) => { llamadas.push(`verificar:${nit}`); return existentes.get(nit) ?? 0; },
+    crearTercero: async (payload) => { llamadas.push(`crear:${payload.nit}`); if (crea && creacion.status < 300) existentes.set(payload.nit, 1); return creacion; },
+  };
+};
+
+test('terceros: se crea solo si no existe, se confirma con verificar y se distingue el cliente ya existente', async () => {
+  const nuevo = apiFalsa(new Map());
+  assert.deepEqual(await asegurarTerceroConApi({ tercero: { nit: '1' } }, nuevo), { ok: true, clienteExiste: false });
+  assert.deepEqual(nuevo.llamadas, ['verificar:1', 'crear:1', 'verificar:1']);
+
+  const soloTercero = apiFalsa(new Map([['2', 1]]));
+  assert.deepEqual(await asegurarTerceroConApi({ tercero: { nit: '2' } }, soloTercero), { ok: true, clienteExiste: false });
+  assert.deepEqual(soloTercero.llamadas, ['verificar:2']);
+
+  const completo = apiFalsa(new Map([['3', 2]]));
+  assert.deepEqual(await asegurarTerceroConApi({ tercero: { nit: '3' } }, completo), { ok: true, clienteExiste: true });
+
+  const rechazo = await asegurarTerceroConApi({ tercero: { nit: '4' } }, apiFalsa(new Map(), { creacion: { status: 422, cuerpo: '{"detail":"nit invalido"}' } }));
+  assert.equal(rechazo.ok, false);
+  assert.equal(rechazo.transitorio, false);
+  assert.match(rechazo.mensaje, /HTTP 422.*nit invalido/);
+
+  const caido = await asegurarTerceroConApi({ tercero: { nit: '5' } }, apiFalsa(new Map(), { creacion: { status: 503, cuerpo: 'x' } }));
+  assert.equal(caido.transitorio, true);
+
+  const sinEfecto = await asegurarTerceroConApi({ tercero: { nit: '6' } }, apiFalsa(new Map(), { crea: false }));
+  assert.equal(sinEfecto.ok, false);
+  assert.match(sinEfecto.mensaje, /sigue sin existir/);
+
+  const sinRed = await asegurarTerceroConApi({ tercero: { nit: '7' } }, { verificar: async () => { throw new Error('ECONNREFUSED'); } });
+  assert.deepEqual([sinRed.ok, sinRed.transitorio], [false, true]);
+});
+
+test('agente: crea el tercero antes del 201, no pisa un cliente existente y detiene el ciclo si la API cae', async () => {
+  const informados = [];
+  const enviados = [];
+  const terceros = { 'CLIENTE:nuevo': { ok: true, clienteExiste: false }, 'CLIENTE:existente': { ok: true, clienteExiste: true },
+    'CLIENTE:editado': { ok: true, clienteExiste: true }, 'CLIENTE:rechazado': { ok: false, mensaje: 'API: nit invalido' },
+    'CLIENTE:caida': { ok: false, transitorio: true, mensaje: 'sin red' } };
+  const items = ['nuevo', 'existente', 'editado', 'rechazado', 'caida', 'despues'].map((id) => item(`CLIENTE:${id}`, {
+    tercero: { nit: id }, actualizar: id === 'editado',
+  }));
+  const resumen = await procesarPendientes(items, {
+    cfg,
+    asegurarTercero: async (it) => terceros[it.clave] || { ok: true, clienteExiste: false },
+    enviar: async () => { enviados.push(1); return respuestaOk; },
+    informar: async (r) => { informados.push(`${r.clave}:${r.estado}`); },
+  });
+  assert.deepEqual(informados, [
+    'CLIENTE:nuevo:OK', 'CLIENTE:existente:OK', 'CLIENTE:editado:OK', 'CLIENTE:rechazado:ERROR', 'CLIENTE:caida:REINTENTAR',
+  ]);
+  assert.equal(enviados.length, 2); // nuevo y editado; el existente no se sobrescribe
+  assert.deepEqual(resumen, { OK: 2, ERROR: 1, REINTENTAR: 1, SALTADOS: 0, YA_EN_SIESA: 1 });
 });
 
 test('modo agente: el reenvio manual solo programa el envio y respeta lo ya aceptado', async () => {
