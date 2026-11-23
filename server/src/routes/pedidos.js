@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
+import { errorDocumento } from '../documentoCliente.js';
 import { calcularInsumosRequeridos, validarStockSuficiente, descontarInsumos, revertirInsumos } from '../inventarioKits.js';
 import { imprimirComandaPorEstacion } from '../impresionCocina.js';
 import { conEventoPedido, registrarEventoPedido, estadoAntesDeReenvio, validarMotivoCancelacion, itemsCanceladosDeEventos } from '../historialPedidos.js';
@@ -432,6 +433,8 @@ router.post('/online', exigirPermiso('domicilios.crear'), wrap(async (req, res) 
 
   const nombreCompleto = [nombres, apellidos].filter(Boolean).join(' ');
   const documento = limpiar(cliente.documento);
+  const errorDocumentoCliente = errorDocumento(documento);
+  if (errorDocumentoCliente) return res.status(400).json({ error: errorDocumentoCliente });
 
   let pedido;
   try {

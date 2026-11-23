@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import ExcelJS from 'exceljs';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
+import { MAX_DOCUMENTO, soloDigitos } from '../documento.js';
 import { categoriasOrdenadas } from '../categoriasMenu.js';
 import { Icon } from '../icons.jsx';
 import { Logo, overlayCierre } from '../components/ui/index.jsx';
@@ -397,7 +398,7 @@ function ClientePicker({ clientes, value, onChange, onCreated }) {
 
   // Abre la ventana flotante tomando como documento lo escrito en la búsqueda.
   const abrirCrear = () => {
-    setNuevo({ ...nuevoVacio, numeroDocumento: q.trim().toUpperCase() });
+    setNuevo({ ...nuevoVacio, numeroDocumento: soloDigitos(q) });
     setCreando(true);
   };
 
@@ -496,9 +497,10 @@ function ClientePicker({ clientes, value, onChange, onCreated }) {
                   <label>NIT o Cédula</label>
                   <input
                     value={nuevo.numeroDocumento}
-                    onChange={(e) => setNuevo({ ...nuevo, numeroDocumento: e.target.value.toUpperCase() })}
-                    style={{ textTransform: 'uppercase' }}
-                    placeholder="Documento"
+                    onChange={(e) => setNuevo({ ...nuevo, numeroDocumento: soloDigitos(e.target.value) })}
+                    inputMode="numeric"
+                    maxLength={MAX_DOCUMENTO}
+                    placeholder="Solo números"
                   />
                 </div>
                 <div className="field">

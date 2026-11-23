@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, money } from '../api.js';
+import { MAX_DOCUMENTO, soloDigitos } from '../documento.js';
 import { categoriasOrdenadas } from '../categoriasMenu.js';
 import { Icon } from '../icons.jsx';
 import { useAuth, useToast } from '../App.jsx';
@@ -260,8 +261,8 @@ export default function TomarPedido() {
           setDatosReserva({
             ...CLIENTE_RESERVA_VACIO,
             ...clienteReserva,
-            documento: clienteReserva.documento || clienteReserva.numeroDocumento || '',
-            numeroDocumento: clienteReserva.numeroDocumento || '',
+            documento: soloDigitos(clienteReserva.documento || clienteReserva.numeroDocumento),
+            numeroDocumento: soloDigitos(clienteReserva.numeroDocumento),
           });
           setDepartamentoReserva(municipiosColombia.find((d) => d.ciudades.some((ciudad) => ciudad.nombre === clienteReserva.ciudad))?.departamento || '');
           setFechaReserva(fechaHoraLocalInput(m.reservaFechaHora));
@@ -961,7 +962,7 @@ export default function TomarPedido() {
               </div>
               <div className="field">
                 <label>Número de documento</label>
-                <input value={datosReserva.numeroDocumento} onChange={(e) => setDatosReserva({ ...datosReserva, numeroDocumento: e.target.value })} placeholder="Número / NIT" />
+                <input value={datosReserva.numeroDocumento} onChange={(e) => setDatosReserva({ ...datosReserva, numeroDocumento: soloDigitos(e.target.value) })} inputMode="numeric" maxLength={MAX_DOCUMENTO} placeholder="Solo números (NIT o cédula)" />
               </div>
               <div className="field">
                 <label>Razón social</label>

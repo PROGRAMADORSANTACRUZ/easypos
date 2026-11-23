@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, money } from '../api.js';
+import { MAX_DOCUMENTO, soloDigitos } from '../documento.js';
 import { categoriasOrdenadas } from '../categoriasMenu.js';
 import { Icon } from '../icons.jsx';
 import { useToast, useAuth } from '../App.jsx';
@@ -213,7 +214,7 @@ export default function Pedidos() {
     setCliente({
       tipoId: c.tipoDocumento || 'CC',
       tipoPersona: c.razonSocial ? 'JURIDICA' : 'NATURAL',
-      documento: c.documento || c.numeroDocumento || '',
+      documento: soloDigitos(c.documento || c.numeroDocumento || ''),
       primerNombre: nombres[0] || c.razonSocial || '',
       segundoNombre: nombres.slice(1).join(' '),
       primerApellido: apellidos[0] || '',
@@ -437,7 +438,7 @@ export default function Pedidos() {
             <div className="grid grid-2" style={{ gap: 12 }}>
               <div className="field">
                 <label>NIT o Cédula</label>
-                <input value={cliente.documento} onChange={setCampo('documento')} placeholder="NIT o Cédula" />
+                <input value={cliente.documento} onChange={(e) => setCliente((actual) => ({ ...actual, documento: soloDigitos(e.target.value) }))} inputMode="numeric" maxLength={MAX_DOCUMENTO} placeholder="NIT o cédula (solo números)" />
               </div>
               <div className="field">
                 <label>Tipo de ID</label>

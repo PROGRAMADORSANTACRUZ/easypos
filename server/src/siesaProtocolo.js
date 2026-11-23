@@ -40,10 +40,15 @@ export function codigoSucursalSiesa(sucursales, { id, nombre } = {}) {
   return String(indice < 0 ? 1 : indice + 1).padStart(3, '0');
 }
 
-// NIT sin puntos ni digito de verificacion; vacio si no hay documento.
+// NIT sin puntos ni digito de verificacion; vacio si no hay documento. El codigo del tercero en Siesa es solo
+// numerico, asi que un documento con letras u otros simbolos se rechaza en vez de enviarse.
 export function nitSiesa(documento) {
   const bruto = String(documento ?? '').replace(/[.\s]/g, '');
-  return limpiarTexto(bruto.replace(/-\d$/, ''));
+  const nit = limpiarTexto(bruto.replace(/-\d$/, ''));
+  if (nit && !/^\d{1,15}$/.test(nit)) {
+    throw new Error(`El documento "${nit.slice(0, 20)}" no es numerico: corrigelo en el cliente (solo numeros, maximo 15)`);
+  }
+  return nit;
 }
 
 const escaparXml = (valor) => String(valor).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

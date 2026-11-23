@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, money } from '../api.js';
+import { MAX_DOCUMENTO, soloDigitos } from '../documento.js';
 import { Icon } from '../icons.jsx';
 import { useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, TableSkeleton, EmptyState } from '../components/ui/index.jsx';
@@ -217,9 +218,9 @@ export default function Clientes() {
     setForm({
       tipoCliente: c.tipoCliente || 'NATURAL',
       tipoDocumento: c.tipoDocumento || 'CC',
-      numeroDocumento: c.numeroDocumento || '',
+      numeroDocumento: soloDigitos(c.numeroDocumento),
       razonSocial: c.razonSocial || '',
-      documento: c.documento || '',
+      documento: soloDigitos(c.documento),
       nombres: c.nombres || '',
       apellidos: c.apellidos || '',
       sucursales: (c.sucursales || []).map((sucursal) => ({
@@ -417,7 +418,7 @@ export default function Clientes() {
               </div>
               <div className="field">
                 <label>Número de documento</label>
-                <input value={form.numeroDocumento} onChange={(e) => setForm({ ...form, numeroDocumento: e.target.value })} placeholder="Número / NIT" />
+                <input value={form.numeroDocumento} onChange={(e) => setForm({ ...form, numeroDocumento: soloDigitos(e.target.value) })} inputMode="numeric" maxLength={MAX_DOCUMENTO} placeholder="Solo números (NIT o cédula, sin guiones)" />
               </div>
               <div className="field">
                 <label>Razón social</label>

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
+import { errorDocumento } from '../documentoCliente.js';
 import { intentarEnvioClienteSiesa, marcarClienteParaReenvio, sucursalesYaEnviadas } from '../siesaClientes.js';
 
 const router = Router();
@@ -109,6 +110,8 @@ router.post('/', wrap(async (req, res) => {
   if (!nombreFull) {
     return res.status(400).json({ error: 'El nombre o razón social es obligatorio' });
   }
+  const errorDocumentoCliente = errorDocumento(req.body.numeroDocumento) || errorDocumento(req.body.documento);
+  if (errorDocumentoCliente) return res.status(400).json({ error: errorDocumentoCliente });
   const errorMunicipioSiesa = await validarMunicipioSiesa(req.body.municipioSiesaCodigo);
   if (errorMunicipioSiesa) return res.status(400).json({ error: errorMunicipioSiesa });
   const sucursales = req.body.sucursales ?? [];
@@ -152,6 +155,8 @@ router.put('/:id', wrap(async (req, res) => {
   const { nombres, apellidos, nombre, razonSocial, documento, tipoCliente, tipoDocumento, numeroDocumento, telefono, direccion, barrio, ciudad, email, municipioCodigo, municipioSiesaCodigo, responsableIVA, porcentajeEmpleado, porcentajeCliente, activo, sucursales } = req.body;
   const tieneNombre = nombres !== undefined || apellidos !== undefined || nombre !== undefined || razonSocial !== undefined;
   const nombreFull = tieneNombre ? nombreCompleto(nombres, apellidos, nombre, razonSocial) : undefined;
+  const errorDocumentoCliente = errorDocumento(numeroDocumento) || errorDocumento(documento);
+  if (errorDocumentoCliente) return res.status(400).json({ error: errorDocumentoCliente });
   if (municipioSiesaCodigo !== undefined) {
     const errorMunicipioSiesa = await validarMunicipioSiesa(municipioSiesaCodigo);
     if (errorMunicipioSiesa) return res.status(400).json({ error: errorMunicipioSiesa });

@@ -207,6 +207,14 @@ test('recibo de caja: 350 y dos 351 con los anchos esperados y el cruce al propi
   assert.equal(lineas[4], '000000599990001004');
 });
 
+test('siesa: un documento con letras o simbolos no se envia (el tercero es solo numerico)', () => {
+  assert.throws(() => construirPlanoCliente(clienteSiesa({ numeroDocumento: '1048324072---inijijj' }), 4), /no es numerico/);
+  assert.throws(() => construirPlanoVenta(factura({ numeroDocumentoCliente: 'ABC123' })), /no es numerico/);
+  assert.throws(() => construirPlanoRecibo({ id: 1, monto: 1, createdAt: new Date() }, 'X9', 4), /no es numerico/);
+  // El digito de verificacion con guion se descarta y sigue siendo numerico.
+  assert.equal(construirPlanoVenta(factura({ numeroDocumentoCliente: '900.123.456-7' }))[1].slice(43, 58), '900123456      ');
+});
+
 test('recibo de caja: sin NIT usa el cliente generico', () => {
   const lineas = construirPlanoRecibo({ id: 1, monto: 100, createdAt: new Date(), nota: null }, null, 4);
   assert.equal(lineas[1].slice(41, 56), '222222222      ');
