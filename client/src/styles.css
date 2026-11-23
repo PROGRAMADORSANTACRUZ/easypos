@@ -1045,9 +1045,9 @@ tbody tr:last-child td { border-bottom: none; }
 
 .cobro-dividir-toggle { width: 100%; margin: 2px 0 12px; }
 /* Cocina: paleta vinotinto / rojo / naranja / negro con semaforo por tiempo de espera */
-.cocina-semaforo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 4px 0 16px; }
-.cocina-semaforo__nivel { --sem: var(--green); display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--radius-md); background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--sem); }
-.cocina-semaforo__nivel strong { font-size: 20px; color: var(--sem); margin-right: 4px; }
+.cocina-semaforo { display: grid; grid-template-columns: repeat(4, minmax(0, 170px)); gap: 8px; margin: 0 0 12px; }
+.cocina-semaforo__nivel { --sem: var(--green); display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius-md); background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--sem); }
+.cocina-semaforo__nivel strong { font-size: 18px; color: var(--sem); margin-right: 4px; }
 .cocina-semaforo__nivel span { font-weight: 600; font-size: 13px; }
 .cocina-semaforo__nivel small { display: block; font-size: 11px; color: var(--muted); }
 .cocina-semaforo__luz { width: 14px; height: 14px; border-radius: 50%; background: var(--sem); box-shadow: 0 0 0 4px color-mix(in srgb, var(--sem) 22%, transparent), 0 0 10px var(--sem); flex: 0 0 14px; }
@@ -1088,7 +1088,7 @@ tbody tr:last-child td { border-bottom: none; }
 .cocina-historial-filtros .field { min-width: 0; margin: 0; }
 .cocina-historial-filtros__busqueda { grid-column: 1 / -1; }
 .cocina-historial-filtros input, .cocina-historial-filtros select { width: 100%; min-width: 0; }
-.cocina-historial__lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: calc(100vh - 340px); min-height: 200px; overflow-y: auto; }
+.cocina-historial__lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: calc(100vh - 300px); min-height: 200px; overflow-y: auto; }
 .cocina-hist { --est: var(--brand-orange); padding: 8px 10px; border: 1px solid var(--border); border-left: 4px solid var(--est); border-radius: var(--radius-md); background: var(--panel-2); display: grid; gap: 4px; }
 .cocina-hist--entregado { --est: #1A1614; }
 [data-theme="dark"] .cocina-hist--entregado { --est: #F2EEE8; }

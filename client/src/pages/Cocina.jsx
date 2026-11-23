@@ -166,17 +166,16 @@ export default function Cocina() {
         </div>
       </div>
 
-      <div className="cocina-semaforo" aria-label="Semáforo de comandas">
-        {SEMAFORO.map((nivel) => (
-          <div key={nivel.clase} className={`cocina-semaforo__nivel cocina-semaforo__nivel--${nivel.clase}`}>
-            <span className="cocina-semaforo__luz" aria-hidden="true" />
-            <div><strong>{conteoSemaforo[nivel.clase]}</strong> <span>{nivel.etiqueta}</span><small>{nivel.rango}</small></div>
-          </div>
-        ))}
-      </div>
-
       <div className="cocina-layout">
         <div className="cocina-comandas">
+          <div className="cocina-semaforo" aria-label="Semáforo de comandas">
+            {SEMAFORO.map((nivel) => (
+              <div key={nivel.clase} className={`cocina-semaforo__nivel cocina-semaforo__nivel--${nivel.clase}`}>
+                <span className="cocina-semaforo__luz" aria-hidden="true" />
+                <div><strong>{conteoSemaforo[nivel.clase]}</strong> <span>{nivel.etiqueta}</span><small>{nivel.rango}</small></div>
+              </div>
+            ))}
+          </div>
           {pendientes.length === 0 ? (
             <EmptyState icon="mesas" title="Sin comandas pendientes" description="No hay comandas por preparar." />
           ) : (
@@ -240,7 +239,7 @@ export default function Cocina() {
         <section className="cocina-historial" aria-labelledby="historial-cocina-titulo">
           <div className="cocina-historial__cabecera">
             <h2 id="historial-cocina-titulo">Historial de cocina</h2>
-            <Button icon="reload" title="Actualizar historial" aria-label="Actualizar historial" style={{ width: 36, flex: '0 0 36px' }} onClick={cargarHistorial} />
+            <Button icon="reload" title="Actualizar historial" aria-label="Actualizar historial" style={{ width: 36, flex: '0 0 36px', padding: 0, justifyContent: 'center' }} onClick={cargarHistorial} />
           </div>
           <div className="cocina-historial-filtros">
             <div className="field"><label htmlFor="cocina-desde">Desde</label>
