@@ -98,6 +98,8 @@ export default function ReservaPublica() {
   const [segundos, setSegundos] = useState(MINUTOS_PARA_CONFIRMAR * 60);
   const [enviando, setEnviando] = useState(false);
   const [reserva, setReserva] = useState(null);
+  const [tocados, setTocados] = useState({});
+  const [documento, setDocumento] = useState(''); // terminos | privacidad
 
   useEffect(() => {
     document.title = 'Reservas';
@@ -140,8 +142,6 @@ export default function ReservaPublica() {
     } catch (e) { setError(e.message); }
   };
 
-  const datosValidos = cliente.nombre.trim().length >= 3 && cliente.celular.replace(/\D/g, '').length >= 7
-    && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cliente.email.trim()) && acepta.terminos && acepta.datos;
 
   const confirmar = async () => {
     setEnviando(true); setError('');
@@ -166,22 +166,91 @@ export default function ReservaPublica() {
     setEtapa('seleccion'); setReserva(null); setHora(''); setMesa(null); setZona(''); setError('');
     setCliente({ nombre: '', celular: '', email: '', comentarios: '' });
     setAcepta({ terminos: false, datos: false, marketing: false });
+    setTocados({});
     elegirFecha(fecha);
   };
 
   const mesasOrdenadas = useMemo(() => [...mesas].sort((a, b) => a.numero - b.numero), [mesas]);
   const nombreRestaurante = info?.restaurante || '';
 
+  const erroresCliente = {
+    nombre: cliente.nombre.trim().length < 3 ? 'Escribe tu nombre completo' : '',
+    celular: cliente.celular.replace(/\D/g, '').length < 7 ? 'El celular no es válido' : '',
+    email: !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cliente.email.trim()) ? 'El correo electrónico no es válido' : '',
+  };
+  const datosValidos = !erroresCliente.nombre && !erroresCliente.celular && !erroresCliente.email && acepta.terminos && acepta.datos;
+  const tocar = (campo) => setTocados((t) => ({ ...t, [campo]: true }));
+  const campoCliente = (campo, props) => (
+    <div className="rsv-campo">
+      <input className={`rsv-input${tocados[campo] && erroresCliente[campo] ? ' is-error' : ''}`} value={cliente[campo]}
+        onChange={(e) => setCliente({ ...cliente, [campo]: e.target.value })} onBlur={() => tocar(campo)}
+        aria-invalid={Boolean(tocados[campo] && erroresCliente[campo])} {...props} />
+      {tocados[campo] && erroresCliente[campo] && <small className="rsv-campo__error">{erroresCliente[campo]}</small>}
+    </div>
+  );
+  const camposCliente = (
+    <>
+      {campoCliente('nombre', { placeholder: 'Nombre completo', autoComplete: 'name' })}
+      <div className="rsv-tel"><span>🇨🇴 +57</span>{campoCliente('celular', { placeholder: 'Celular', inputMode: 'tel', autoComplete: 'tel' })}</div>
+      {campoCliente('email', { type: 'email', placeholder: 'Email', autoComplete: 'email' })}
+    </>
+  );
+
+  const enlaceDocumento = (tipo, texto) => (
+    <button type="button" className="rsv-enlace" onClick={(e) => { e.preventDefault(); setDocumento(tipo); }}>{texto}</button>
+  );
+
   const casillas = (
     <div className="rsv-politicas">
       <label><input type="checkbox" checked={acepta.terminos} onChange={(e) => setAcepta({ ...acepta, terminos: e.target.checked })} />
-        Conozco y acepto los <b>términos y condiciones</b> y la <b>política de privacidad</b> de las reservas.</label>
+        <span>Al ingresar los datos y continuar declaro que conozco y acepto el tratamiento de datos personales previamente informado
+          y acepto los {enlaceDocumento('terminos', 'Términos y condiciones')} y la {enlaceDocumento('privacidad', 'Política de privacidad')} de <b>{nombreRestaurante}</b>.</span></label>
       <label><input type="checkbox" checked={acepta.datos} onChange={(e) => setAcepta({ ...acepta, datos: e.target.checked })} />
-        Autorizo el tratamiento de mis datos personales a <b>{nombreRestaurante}</b> para gestionar esta reserva.</label>
+        <span>Autorizo a <b>{nombreRestaurante}</b> a usar mis datos (nombre, celular y correo) para gestionar esta reserva y contactarme
+          sobre ella, conforme a la Ley 1581 de 2012.</span></label>
       {etapa === 'confirmar' && (
         <label><input type="checkbox" checked={acepta.marketing} onChange={(e) => setAcepta({ ...acepta, marketing: e.target.checked })} />
-          Autorizo el uso de mis datos para recibir novedades, eventos y beneficios del restaurante.</label>
+          <span>Autorizo el uso de mis datos personales para recibir novedades, invitaciones a eventos, experiencias y beneficios especiales del restaurante.</span></label>
       )}
+    </div>
+  );
+
+  const ventanaDocumento = documento && (
+    <div className="rsv-modal" role="dialog" aria-modal="true" aria-labelledby="rsv-doc-titulo" style={{ zIndex: 60 }}>
+      <div className="rsv-modal__caja rsv-documento">
+        <button type="button" className="rsv-modal__cerrar" aria-label="Cerrar" onClick={() => setDocumento('')}>×</button>
+        {documento === 'terminos' ? (
+          <>
+            <h2 id="rsv-doc-titulo">Términos y condiciones de reserva</h2>
+            <ol>
+              <li>La reserva es gratuita y queda confirmada al finalizar el proceso en esta página.</li>
+              <li>Cada reserva corresponde a una mesa, una fecha y una hora. La mesa se asigna a quien confirme primero.</li>
+              <li>La mesa se guarda hasta <b>{TOLERANCIA_MIN} minutos</b> después de la hora reservada. Pasado ese tiempo la reserva puede liberarse
+                y la mesa se asignará según disponibilidad.</li>
+              <li>La reserva tiene una duración de {info?.duracionMin || 60} minutos para el uso de la mesa.</li>
+              <li>Si no puedes asistir o necesitas cambiar tu reserva, comunícate con el restaurante con anticipación.</li>
+              <li>El restaurante puede cancelar o modificar reservas por causas de fuerza mayor y lo informará a los datos de contacto registrados.</li>
+              <li>Los datos ingresados deben ser veraces; las reservas con datos falsos podrán cancelarse.</li>
+            </ol>
+          </>
+        ) : (
+          <>
+            <h2 id="rsv-doc-titulo">Política de privacidad y tratamiento de datos</h2>
+            <p><b>{nombreRestaurante}</b> es responsable del tratamiento de los datos personales que entregas al hacer una reserva, de acuerdo con la
+              Ley 1581 de 2012 y el Decreto 1377 de 2013.</p>
+            <ul>
+              <li><b>Datos que recogemos:</b> nombre, celular, correo electrónico, número de personas, fecha, hora y comentarios de la reserva.</li>
+              <li><b>Para qué los usamos:</b> registrar y gestionar tu reserva, contactarte sobre ella y, solo si lo autorizas, enviarte novedades,
+                eventos y beneficios del restaurante.</li>
+              <li><b>Tus derechos:</b> conocer, actualizar, rectificar y suprimir tus datos, revocar la autorización y presentar quejas ante la
+                Superintendencia de Industria y Comercio.</li>
+              <li><b>Cómo ejercerlos:</b> comunícate directamente con el restaurante por sus canales de atención.</li>
+              <li>Tus datos no se venden ni se comparten con terceros ajenos a la gestión de tu reserva.</li>
+            </ul>
+          </>
+        )}
+        <button type="button" className="rsv-btn rsv-btn--negro" onClick={() => setDocumento('')}>Entendido</button>
+      </div>
     </div>
   );
 
@@ -225,9 +294,7 @@ export default function ReservaPublica() {
           <div className="rsv-confirmar__cols">
             <section>
               <h2>Datos del cliente</h2>
-              <input className="rsv-input" placeholder="Nombre completo" value={cliente.nombre} onChange={(e) => setCliente({ ...cliente, nombre: e.target.value })} />
-              <div className="rsv-tel"><span>🇨🇴 +57</span><input className="rsv-input" inputMode="tel" placeholder="Celular" value={cliente.celular} onChange={(e) => setCliente({ ...cliente, celular: e.target.value })} /></div>
-              <input className="rsv-input" type="email" placeholder="Email" value={cliente.email} onChange={(e) => setCliente({ ...cliente, email: e.target.value })} />
+              {camposCliente}
               <textarea className="rsv-input" rows={3} maxLength={500} placeholder="Comentarios (opcional)" value={cliente.comentarios} onChange={(e) => setCliente({ ...cliente, comentarios: e.target.value })} />
             </section>
             <section>
@@ -247,6 +314,7 @@ export default function ReservaPublica() {
             {enviando ? 'Confirmando…' : 'CONFIRMAR RESERVA'}
           </button>
         </main>
+        {ventanaDocumento}
       </div>
     );
   }
@@ -333,14 +401,13 @@ export default function ReservaPublica() {
           <div className="rsv-modal__caja">
             <button type="button" className="rsv-modal__cerrar" aria-label="Cerrar" onClick={() => setModal('')}>×</button>
             <h2 id="rsv-datos-titulo">Ingresa tus datos</h2>
-            <input className="rsv-input" placeholder="Nombre completo" autoComplete="name" value={cliente.nombre} onChange={(e) => setCliente({ ...cliente, nombre: e.target.value })} />
-            <div className="rsv-tel"><span>🇨🇴 +57</span><input className="rsv-input" inputMode="tel" autoComplete="tel" placeholder="Celular" value={cliente.celular} onChange={(e) => setCliente({ ...cliente, celular: e.target.value })} /></div>
-            <input className="rsv-input" type="email" autoComplete="email" placeholder="Email" value={cliente.email} onChange={(e) => setCliente({ ...cliente, email: e.target.value })} />
+            {camposCliente}
             {casillas}
             <button type="button" className="rsv-btn rsv-btn--negro" disabled={!datosValidos} onClick={() => { setModal(''); setEtapa('confirmar'); }}>Continuar</button>
           </div>
         </div>
       )}
+      {ventanaDocumento}
     </div>
   );
 }

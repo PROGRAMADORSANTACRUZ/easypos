@@ -1924,6 +1924,17 @@ input.sin-flechas { -moz-appearance: textfield; appearance: textfield; }
 .rsv-mesas button.is-activo { background: #E13626; border-color: #E13626; color: #fff; }
 .rsv-mesas button.is-activo small { color: #fff; }
 .rsv-tel { display: flex; gap: 8px; align-items: flex-start; }
+.rsv-tel .rsv-campo { flex: 1; }
+.rsv-campo { text-align: left; margin-bottom: 10px; }
+.rsv-campo .rsv-input { margin-bottom: 0; }
+.rsv-input.is-error { border-color: #E13626; background: #FFF6F5; }
+.rsv-campo__error { display: block; margin-top: 4px; color: #C22A1C; font-size: 12px; }
+.rsv-enlace { border: 0; padding: 0; background: none; font: inherit; font-weight: 700; color: #1A1614; text-decoration: underline; cursor: pointer; }
+.rsv-documento { text-align: left; width: min(680px, 100%); }
+.rsv-documento h2 { text-align: center; padding-right: 24px; }
+.rsv-documento li { margin-bottom: 8px; line-height: 1.45; font-size: 14px; }
+.rsv-documento p { line-height: 1.5; font-size: 14px; }
+.rsv-documento > .rsv-btn { display: block; margin: 16px auto 0; }
 .rsv-tel span { padding: 11px 10px; border: 1px solid #D2CEC6; border-radius: 8px; white-space: nowrap; color: #6B655E; }
 .rsv-politicas { display: grid; gap: 8px; margin: 8px 0 4px; text-align: left; font-size: 12.5px; color: #3A3430; }
 .rsv-politicas label { display: flex; gap: 8px; align-items: flex-start; }
