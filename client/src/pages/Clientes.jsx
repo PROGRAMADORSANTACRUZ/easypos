@@ -1,64 +1,103 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api, money } from '../api.js';
 import { DOCUMENTOS_GENERICOS, MAX_DOCUMENTO, soloDigitos } from '../documento.js';
 import { Icon } from '../icons.jsx';
 import { useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, TableSkeleton, EmptyState } from '../components/ui/index.jsx';
 
+// Combo con busqueda para catalogos de Siesa: se escribe directamente en el campo y la lista se dibuja fija sobre
+// la pantalla (no queda cortada por el scroll del modal) y se abre hacia arriba si abajo no hay espacio.
 function BuscadorUbicacionSiesa({ items, value, onChange, placeholder, placeholderBusqueda, deshabilitado }) {
   const [busqueda, setBusqueda] = useState('');
   const [abierto, setAbierto] = useState(false);
+  const [posicion, setPosicion] = useState(null);
+  const [activo, setActivo] = useState(0);
+  const campo = useRef(null);
   const seleccionado = items.find((item) => item.codigo === value);
-  const consulta = busqueda.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const resultados = consulta
-    ? items.filter((item) => `${item.codigo} ${item.nombre}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(consulta))
-    : items;
+  const normalizar = (texto) => String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const consulta = normalizar(busqueda.trim());
+  const resultados = (consulta ? items.filter((item) => normalizar(`${item.codigo} ${item.nombre}`).includes(consulta)) : items).slice(0, 200);
+
+  const ubicar = () => {
+    const rect = campo.current?.getBoundingClientRect();
+    if (!rect) return;
+    const alto = 260;
+    const arriba = window.innerHeight - rect.bottom < alto + 8 && rect.top > window.innerHeight - rect.bottom;
+    setPosicion({
+      left: rect.left,
+      width: rect.width,
+      ...(arriba ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
+      maxHeight: Math.max(140, Math.min(alto, arriba ? rect.top - 12 : window.innerHeight - rect.bottom - 12)),
+    });
+  };
+
+  useEffect(() => {
+    if (!abierto) return undefined;
+    ubicar();
+    const mover = () => ubicar();
+    window.addEventListener('resize', mover);
+    window.addEventListener('scroll', mover, true);
+    return () => {
+      window.removeEventListener('resize', mover);
+      window.removeEventListener('scroll', mover, true);
+    };
+  }, [abierto]);
+
+  const abrir = () => {
+    if (deshabilitado) return;
+    setBusqueda('');
+    setActivo(0);
+    setAbierto(true);
+  };
+  const cerrar = () => { setAbierto(false); setBusqueda(''); };
+  const elegir = (codigo) => { onChange(codigo); cerrar(); campo.current?.blur(); };
+
+  const teclas = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (!abierto) abrir(); else setActivo((i) => Math.min(i + 1, resultados.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActivo((i) => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (abierto && resultados[activo]) elegir(resultados[activo].codigo); }
+    else if (e.key === 'Escape' && abierto) { e.preventDefault(); e.stopPropagation(); cerrar(); }
+    else if (e.key === 'Tab') cerrar();
+  };
 
   return (
     <div className="cliente-picker">
-      <button
-        type="button"
-        className="cliente-picker-btn"
+      <input
+        ref={campo}
+        className="cliente-picker-input"
         disabled={deshabilitado}
+        value={abierto ? busqueda : (seleccionado ? `${seleccionado.codigo} · ${seleccionado.nombre}` : '')}
+        placeholder={abierto ? placeholderBusqueda : placeholder}
+        onFocus={abrir}
+        onClick={() => { if (!abierto) abrir(); }}
+        onChange={(e) => { setBusqueda(e.target.value); setActivo(0); if (!abierto) setAbierto(true); }}
+        onKeyDown={teclas}
+        role="combobox"
         aria-expanded={abierto}
-        onClick={() => !deshabilitado && setAbierto((estado) => !estado)}
-      >
-        <span className="cliente-picker-txt">{seleccionado ? `${seleccionado.codigo} · ${seleccionado.nombre}` : placeholder}</span>
-        <span className="nav-caret" aria-hidden>▾</span>
-      </button>
-      {abierto && !deshabilitado && (
+        autoComplete="off"
+      />
+      {abierto && !deshabilitado && posicion && createPortal(
         <>
-          <div className="cliente-picker-backdrop" onClick={() => { setAbierto(false); setBusqueda(''); }} />
-          <div className="cliente-picker-pop">
-            <input
-              autoFocus
-              className="cliente-picker-search"
-              placeholder={placeholderBusqueda}
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-            />
-            <div className="cliente-picker-list">
-              <button
-                type="button"
-                className={`cliente-picker-item ${!value ? 'activo' : ''}`}
-                onClick={() => { onChange(''); setAbierto(false); setBusqueda(''); }}
-              >
-                <span>{placeholder}</span>
-              </button>
-              {resultados.map((item) => (
+          <div className="cliente-picker-backdrop cliente-picker-backdrop--fijo" onMouseDown={cerrar} />
+          <div className="cliente-picker-pop cliente-picker-pop--fijo" style={{ left: posicion.left, width: posicion.width, top: posicion.top, bottom: posicion.bottom }}>
+            <div className="cliente-picker-list" style={{ maxHeight: posicion.maxHeight }} role="listbox">
+              {resultados.map((item, indice) => (
                 <button
                   type="button"
                   key={item.codigo}
-                  className={`cliente-picker-item ${item.codigo === value ? 'activo' : ''}`}
-                  onClick={() => { onChange(item.codigo); setAbierto(false); setBusqueda(''); }}
+                  className={`cliente-picker-item ${item.codigo === value || indice === activo ? 'activo' : ''}`}
+                  onMouseDown={(e) => { e.preventDefault(); elegir(item.codigo); }}
+                  onMouseEnter={() => setActivo(indice)}
                 >
                   <span style={{ fontWeight: 600 }}>{item.codigo} · {item.nombre}</span>
                 </button>
               ))}
-              {resultados.length === 0 && <div className="empty" style={{ padding: 10 }}>Sin resultados</div>}
+              {resultados.length === 0 && <div className="empty" style={{ padding: 10 }}>{items.length ? 'Sin resultados' : 'Cargando…'}</div>}
             </div>
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );

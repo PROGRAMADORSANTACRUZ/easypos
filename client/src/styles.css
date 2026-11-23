@@ -977,6 +977,19 @@ tbody tr:last-child td { border-bottom: none; }
   margin-bottom: 6px;
 }
 .cliente-picker-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+/* Combo escribible de catalogos Siesa: lista fija sobre la pantalla (fuera del scroll del modal) */
+.cliente-picker-input {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+}
+.cliente-picker-input:disabled { opacity: .55; cursor: not-allowed; }
+.cliente-picker-backdrop--fijo { z-index: 190; }
+.cliente-picker-pop--fijo { position: fixed; top: auto; right: auto; bottom: auto; z-index: 200; }
 .cliente-picker-item {
   text-align: left;
   background: transparent;
