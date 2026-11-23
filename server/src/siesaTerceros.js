@@ -58,16 +58,43 @@ export async function verificarTercero(nit, { env, solicitar } = {}) {
 export async function datosEnSiesa(nit, { env, solicitar } = {}) {
   const cfg = configConsulta(env);
   const datos = await llamar(cfg, `/clientes?cia=${cfg.cia}&nit=${encodeURIComponent(nit)}`, {}, solicitar);
-  const fila = (datos.data || [])[0];
+  const filas = datos.data || [];
+  const fila = filas.find((f) => String(f.SUCURSAL).trim() === '001') || filas[0];
   if (!fila) return null;
   const limpio = (v) => (v == null ? '' : String(v).trim());
+  const departamento = limpio(fila.COD_DEPTO);
+  const ciudad = limpio(fila.COD_CIUDAD);
   return {
     nombre: limpio(fila.TERCERO),
     sucursal: limpio(fila.SUCURSAL),
     direccion: limpio(fila.DIRECCION),
     ciudad: [limpio(fila.CIUDAD_MUNICIPIO), limpio(fila.DEPARTAMENTO)].filter(Boolean).join(', '),
+    ciudadNombre: limpio(fila.CIUDAD_MUNICIPIO),
+    // Codigos del catalogo de ubicaciones del POS: departamento 169+08 y municipio 169+08+001.
+    departamentoCodigo: /^\d{2}$/.test(departamento) ? `169${departamento}` : '',
+    municipioCodigo: /^\d{2}$/.test(departamento) && /^\d{3}$/.test(ciudad) ? `169${departamento}${ciudad}` : '',
     telefono: limpio(fila.CELULAR),
     email: limpio(fila.EMAIL),
+  };
+}
+
+// Siesa guarda el nombre de una persona natural como "APELLIDO1 APELLIDO2 NOMBRES"; se separa para el formulario.
+export function separarNombreSiesa(nombre) {
+  const palabras = String(nombre || '').trim().split(/\s+/).filter(Boolean);
+  if (palabras.length <= 1) return { primerApellido: palabras[0] || '', segundoApellido: '', nombres: '' };
+  if (palabras.length === 2) return { primerApellido: palabras[0], segundoApellido: '', nombres: palabras[1] };
+  return { primerApellido: palabras[0], segundoApellido: palabras[1], nombres: palabras.slice(2).join(' ') };
+}
+
+// Busca un tercero por documento para precargar el formulario de cliente.
+export async function buscarTerceroPorNit(nit, opciones = {}) {
+  const resultado = await verificarTercero(nit, opciones);
+  if (resultado === 0) return { existe: false, resultado };
+  const datos = await datosEnSiesa(nit, opciones);
+  return {
+    existe: true,
+    resultado,
+    datos: datos && { ...datos, ...separarNombreSiesa(datos.nombre) },
   };
 }
 

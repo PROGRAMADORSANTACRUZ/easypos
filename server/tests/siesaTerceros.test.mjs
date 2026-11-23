@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { tenantStorage } from '../src/prisma.js';
 import {
-  consultaDisponible, consultarTerceroCliente, erroresSiesa, guardarTerceroCliente,
+  buscarTerceroPorNit, consultaDisponible, consultarTerceroCliente, erroresSiesa, guardarTerceroCliente, separarNombreSiesa,
 } from '../src/siesaTerceros.js';
 
 const env = { CONSULTA_API_URL: 'https://api.prueba/', CONSULTA_API_KEY: 'clave', SIESA_WS_CIA: '4' };
@@ -58,7 +58,8 @@ test('consultar: tercero nuevo no trae datos; uno existente devuelve lo que hoy 
   assert.equal(r2.existe, true);
   assert.equal(r2.resultado, 2);
   assert.deepEqual(r2.existente, {
-    nombre: 'HERNANDEZ GUZMAN OSCAR DAVID', sucursal: '001', direccion: 'carrera 15A #68-15', ciudad: 'Barranquilla, Atlántico', telefono: '1044616409', email: 'x@y.co',
+    nombre: 'HERNANDEZ GUZMAN OSCAR DAVID', sucursal: '001', direccion: 'carrera 15A #68-15', ciudad: 'Barranquilla, Atlántico', ciudadNombre: 'Barranquilla',
+    departamentoCodigo: '', municipioCodigo: '', telefono: '1044616409', email: 'x@y.co',
   });
   assert.equal(existente.llamadas[1].ruta, '/clientes?cia=4&nit=1044616409');
 });
@@ -99,6 +100,26 @@ test('errores de la API y de la red se informan con status 502', async () => {
   await assert.rejects(consultarTerceroCliente(cliente, { env, solicitar: caida }), { status: 502, message: /HTTP 500/ });
   const sinRed = async () => { throw new Error('ECONNREFUSED'); };
   await assert.rejects(consultarTerceroCliente(cliente, { env, solicitar: sinRed }), { status: 502, message: /No se pudo conectar/ });
+});
+
+test('buscar por NIT: separa el nombre, arma los codigos de ubicacion y avisa si no existe', async () => {
+  const fila = (extra) => ({ TERCERO: 'HERNANDEZ GUZMAN OSCAR DAVID', SUCURSAL: '001', DIRECCION: 'carrera 15A', COD_DEPTO: '08', COD_CIUDAD: '001', CIUDAD_MUNICIPIO: 'Barranquilla', DEPARTAMENTO: 'Atlántico', CELULAR: '300', EMAIL: 'a@b.co', ...extra });
+  const existente = apiSimulada({ existentes: new Map([['1044616409', 2]]), datos: [fila({ SUCURSAL: '002', DIRECCION: 'otra' }), fila()] });
+  const r = await buscarTerceroPorNit('1044616409', { env, solicitar: existente.solicitar });
+  assert.equal(r.existe, true);
+  assert.equal(r.datos.direccion, 'carrera 15A'); // prefiere la sucursal 001
+  assert.deepEqual([r.datos.primerApellido, r.datos.segundoApellido, r.datos.nombres], ['HERNANDEZ', 'GUZMAN', 'OSCAR DAVID']);
+  assert.deepEqual([r.datos.departamentoCodigo, r.datos.municipioCodigo, r.datos.ciudadNombre], ['16908', '16908001', 'Barranquilla']);
+
+  const nuevo = apiSimulada();
+  assert.deepEqual(await buscarTerceroPorNit('1048324073', { env, solicitar: nuevo.solicitar }), { existe: false, resultado: 0 });
+
+  const soloTercero = apiSimulada({ existentes: new Map([['900', 1]]) });
+  const r3 = await buscarTerceroPorNit('900', { env, solicitar: soloTercero.solicitar });
+  assert.deepEqual([r3.existe, r3.datos], [true, null]);
+
+  assert.deepEqual(separarNombreSiesa('PEREZ ANA'), { primerApellido: 'PEREZ', segundoApellido: '', nombres: 'ANA' });
+  assert.deepEqual(separarNombreSiesa(''), { primerApellido: '', segundoApellido: '', nombres: '' });
 });
 
 test('erroresSiesa lee f_detalle crudos o escapados', () => {

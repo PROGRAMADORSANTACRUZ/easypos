@@ -3,7 +3,7 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { errorDocumento } from '../documentoCliente.js';
 import { intentarEnvioClienteSiesa, marcarClienteParaReenvio, sucursalesYaEnviadas } from '../siesaClientes.js';
-import { consultaDisponible, consultarTerceroCliente, guardarTerceroCliente } from '../siesaTerceros.js';
+import { buscarTerceroPorNit, consultaDisponible, consultarTerceroCliente, guardarTerceroCliente } from '../siesaTerceros.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -124,6 +124,15 @@ function terceroDesdeFormulario(body) {
     sucursales: [],
   };
 }
+
+// Busca el tercero en Siesa por documento para precargar el formulario (Enter en el campo de documento).
+router.get('/siesa/tercero/:nit', wrap(async (req, res) => {
+  if (!consultaDisponible()) return res.status(503).json({ error: 'La conexión con Siesa (CONSULTA_API_KEY) no está configurada en el servidor' });
+  const nit = String(req.params.nit || '').trim();
+  const error = errorDocumento(nit);
+  if (!nit || error) return res.status(400).json({ error: error || 'Indica el número de documento' });
+  res.json(await buscarTerceroPorNit(nit));
+}));
 
 // Consulta si el documento ya existe como tercero en Siesa (antes de guardar el cliente).
 router.post('/siesa/consultar', wrap(async (req, res) => {

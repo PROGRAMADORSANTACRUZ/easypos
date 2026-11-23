@@ -201,6 +201,7 @@ export default function Clientes() {
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [confirmacionSiesa, setConfirmacionSiesa] = useState(null);
+  const [buscandoSiesa, setBuscandoSiesa] = useState(false);
   const notify = useToast();
 
   const cargar = async (q = '') => {
@@ -314,6 +315,52 @@ export default function Clientes() {
     ...actual,
     sucursales: [...actual.sucursales, { nombre: '', telefono: '', direccion: '', barrio: '', ciudad: '', email: '', municipioSiesaCodigo: '', paisSiesaCodigo: '169', departamentoSiesaCodigo: '' }],
   }));
+
+  // Enter en el documento: trae los datos del tercero desde Siesa para revisarlos y actualizarlos.
+  const buscarEnSiesa = async () => {
+    const documento = soloDigitos(form.numeroDocumento);
+    if (!documento) return notify('Digita la cédula o el NIT', 'err');
+    if (DOCUMENTOS_GENERICOS.has(documento)) return notify('El consumidor final no se consulta en Siesa', 'err');
+    setBuscandoSiesa(true);
+    try {
+      const r = await api.get(`/clientes/siesa/tercero/${documento}`);
+      if (!r.existe) return notify(`El tercero ${documento} no existe en Siesa`, 'err');
+      if (!r.datos) return notify(`El tercero ${documento} existe en Siesa, pero no como cliente: no se pudieron traer sus datos`, 'err');
+      // Si el cliente ya esta en el POS se abre en modo edicion para no duplicarlo.
+      if (!editando) {
+        const locales = await api.get(`/clientes?q=${encodeURIComponent(documento)}`);
+        const local = locales.find((c) => soloDigitos(c.numeroDocumento || c.documento) === documento);
+        if (local) empezarEdicion(local);
+      }
+      const d = r.datos;
+      // Los NIT de empresa tienen 9 digitos y empiezan por 8 o 9.
+      const juridica = /^[89]\d{8}$/.test(documento);
+      setForm((actual) => ({
+        ...actual,
+        tipoCliente: juridica ? 'JURIDICA' : 'NATURAL',
+        tipoDocumento: juridica ? 'NIT' : 'CC',
+        numeroDocumento: documento,
+        ...(juridica
+          ? { razonSocial: d.nombre.toUpperCase().slice(0, 50) }
+          : {
+            primerApellido: d.primerApellido.toUpperCase().slice(0, 15),
+            segundoApellido: d.segundoApellido.toUpperCase().slice(0, 15),
+            nombres: d.nombres.toUpperCase().slice(0, 20),
+          }),
+        direccion: (d.direccion || actual.direccion).toUpperCase().slice(0, 40),
+        telefono: (d.telefono || actual.telefono).slice(0, 20),
+        email: (d.email || actual.email).slice(0, 50),
+        municipioSiesaCodigo: d.municipioCodigo || actual.municipioSiesaCodigo,
+        ciudad: d.ciudadNombre || actual.ciudad,
+      }));
+      if (d.departamentoCodigo) setDepartamentoSiesaCodigo(d.departamentoCodigo);
+      notify('Datos traídos de Siesa: revísalos y guarda para actualizarlos');
+    } catch (err) {
+      notify(err.message, 'err');
+    } finally {
+      setBuscandoSiesa(false);
+    }
+  };
 
   // Persona natural se identifica con cedula y persona juridica con NIT, como lo pide la creacion de terceros.
   const cambiarTipoPersona = (tipoCliente) => setForm((actual) => ({
@@ -520,8 +567,16 @@ export default function Clientes() {
                 </select>
               </div>
               <div className="field" style={{ gridColumn: 'span 2' }}>
-                <label>{form.tipoCliente === 'JURIDICA' ? 'NIT *' : 'Número de cédula *'}</label>
-                <input value={form.numeroDocumento} onChange={(e) => setForm({ ...form, numeroDocumento: soloDigitos(e.target.value) })} inputMode="numeric" maxLength={MAX_DOCUMENTO} placeholder={form.tipoCliente === 'JURIDICA' ? 'Solo números, sin dígito de verificación' : 'Solo números, sin puntos'} />
+                <label>{form.tipoCliente === 'JURIDICA' ? 'NIT *' : 'Número de cédula *'}{buscandoSiesa ? ' · buscando en Siesa…' : ''}</label>
+                <input
+                  value={form.numeroDocumento}
+                  onChange={(e) => setForm({ ...form, numeroDocumento: soloDigitos(e.target.value) })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarEnSiesa(); } }}
+                  inputMode="numeric"
+                  maxLength={MAX_DOCUMENTO}
+                  disabled={buscandoSiesa}
+                  placeholder="Solo números · Enter para buscar en Siesa"
+                />
               </div>
               {form.tipoCliente === 'JURIDICA' ? (
                 <div className="field" style={{ gridColumn: '1 / -1' }}>
