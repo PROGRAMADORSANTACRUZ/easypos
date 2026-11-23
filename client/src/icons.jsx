@@ -9,7 +9,7 @@ import {
   Landmark, Antenna, Plug, Circle, Calculator, Gift,
   Pencil, Trash2, X, Plus, Minus, DollarSign, Save, Check, Ban, RotateCw, Download,
   ArrowLeft, ArrowRight, Shuffle, Lock, Snowflake, Menu, MapPin, Navigation, LocateFixed, ChefHat,
-  Eye, EyeOff, LayoutDashboard,
+  Eye, EyeOff, LayoutDashboard, Copy,
 } from 'lucide-react';
 
 const MAP = {
@@ -75,6 +75,7 @@ const MAP = {
   ban: Ban,
   reload: RotateCw,
   download: Download,
+  copy: Copy,
   back: ArrowLeft,
   forward: ArrowRight,
   swap: Shuffle,

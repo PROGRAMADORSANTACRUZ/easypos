@@ -127,9 +127,32 @@ export default function CrudPage({ cfg }) {
     return opt[campo.labelKey || 'nombre'] ?? opt.id;
   };
 
+  const copiarTexto = async (texto, etiqueta) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(texto);
+      } else {
+        const area = document.createElement('textarea');
+        area.value = texto;
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand('copy');
+        area.remove();
+      }
+      notify(`${etiqueta} copiado al portapapeles`);
+    } catch {
+      notify(`No se pudo copiar ${etiqueta.toLowerCase()}`, 'err');
+    }
+  };
+
   const celda = (col, row) => {
     const v = col.get(row);
     if (v == null || v === '') return '—';
+    if (col.copiar) {
+      return <Button size="sm" icon="copy" title={`Copiar ${col.label.toLowerCase()}`} onClick={() => copiarTexto(String(v), col.label)}>Copiar</Button>;
+    }
     return col.money ? money(Number(v)) : String(v);
   };
 

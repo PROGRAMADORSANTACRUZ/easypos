@@ -299,6 +299,8 @@ export const CRUD_ENTIDADES = [
         { label: 'Tipo', get: (r) => r.tipo },
         { label: 'Estado', get: (r) => r.estado },
         { label: 'Mensaje', get: (r) => r.mensaje },
+        { label: 'Payload', get: (r) => r.request, copiar: true },
+        { label: 'Respuesta', get: (r) => r.response, copiar: true },
         { label: 'Fecha', get: (r) => fecha(r.fecha) },
       ],
     },
