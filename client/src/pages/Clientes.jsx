@@ -159,6 +159,7 @@ export default function Clientes() {
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [confirmacionSiesa, setConfirmacionSiesa] = useState(null);
   const notify = useToast();
 
   const cargar = async (q = '') => {
@@ -271,6 +272,24 @@ export default function Clientes() {
     sucursales: [...actual.sucursales, { nombre: '', telefono: '', direccion: '', barrio: '', ciudad: '', email: '', municipioSiesaCodigo: '', paisSiesaCodigo: '169', departamentoSiesaCodigo: '' }],
   }));
 
+  const guardarCliente = async ({ enviarSiesa = false, actualizar = false } = {}) => {
+    if (editando) await api.put(`/clientes/${editando}`, form);
+    else await api.post('/clientes', form);
+    const accion = editando ? 'Cliente actualizado' : 'Cliente agregado';
+    if (enviarSiesa) {
+      try {
+        const r = await api.post('/clientes/siesa/tercero', { ...form, actualizar });
+        notify(`${accion} y tercero ${r.accion} en Siesa`);
+      } catch (err) {
+        notify(`${accion} en el POS, pero Siesa: ${err.message}`, 'err');
+      }
+    } else {
+      notify(accion);
+    }
+    cancelar();
+    cargar(busqueda.trim());
+  };
+
   const guardar = async (e) => {
     e.preventDefault();
     if (!form.nombres.trim() && !form.razonSocial.trim()) return notify('Indica los nombres o la razón social', 'err');
@@ -280,15 +299,32 @@ export default function Clientes() {
     if (form.sucursales.some((sucursal) => !sucursal.nombre.trim())) return notify('Indica el nombre de cada sucursal', 'err');
     setGuardando(true);
     try {
-      if (editando) {
-        await api.put(`/clientes/${editando}`, form);
-        notify('Cliente actualizado');
-      } else {
-        await api.post('/clientes', form);
-        notify('Cliente agregado');
+      let siesa = null;
+      if (String(form.numeroDocumento || '').trim()) {
+        try {
+          siesa = await api.post('/clientes/siesa/consultar', form);
+        } catch (err) {
+          if (!confirm(`No se pudo consultar Siesa: ${err.message}\n\n¿Guardar el cliente solo en el POS?`)) return;
+        }
       }
-      cancelar();
-      cargar(busqueda.trim());
+      if (siesa?.disponible && siesa.existe) {
+        setConfirmacionSiesa(siesa);
+        return;
+      }
+      await guardarCliente({ enviarSiesa: Boolean(siesa?.disponible) });
+    } catch (err) {
+      notify(err.message, 'err');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // El tercero ya existe en Siesa: actualizarlo con lo digitado (y guardar el cliente) o volver al formulario.
+  const confirmarActualizacionSiesa = async () => {
+    setGuardando(true);
+    try {
+      await guardarCliente({ enviarSiesa: true, actualizar: true });
+      setConfirmacionSiesa(null);
     } catch (err) {
       notify(err.message, 'err');
     } finally {
@@ -392,7 +428,7 @@ export default function Clientes() {
       {modalAbierto && (
         <Modal
           title={editando ? 'Editar cliente' : 'Nuevo cliente'}
-          onClose={cancelar}
+          onClose={confirmacionSiesa ? undefined : cancelar}
           size="lg"
           footer={(
             <>
@@ -587,6 +623,43 @@ export default function Clientes() {
               )}
             </div>
           </form>
+        </Modal>
+      )}
+
+      {confirmacionSiesa && (
+        <Modal
+          title="El cliente ya existe en Siesa"
+          subtitle={`Documento ${confirmacionSiesa.tercero.nit} · ${confirmacionSiesa.resultado === 2 ? 'existe como tercero y como cliente' : 'existe como tercero'}`}
+          onClose={guardando ? undefined : () => setConfirmacionSiesa(null)}
+          size="md"
+          footer={(
+            <>
+              <Button variant="secondary" onClick={() => setConfirmacionSiesa(null)} disabled={guardando}>Cancelar</Button>
+              <Button variant="primary" onClick={confirmarActualizacionSiesa} loading={guardando}>Actualizar datos en Siesa</Button>
+            </>
+          )}
+        >
+          <p style={{ marginTop: 0 }}>
+            ¿Deseas reemplazar los datos del tercero en Siesa con la información digitada? Si cancelas, vuelves al formulario y no se guarda nada.
+          </p>
+          <table>
+            <thead><tr><th>Campo</th><th>Hoy en Siesa</th><th>Información digitada</th></tr></thead>
+            <tbody>
+              {[
+                ['Nombre', confirmacionSiesa.existente?.nombre, confirmacionSiesa.tercero.razon_social],
+                ['Dirección', confirmacionSiesa.existente?.direccion, confirmacionSiesa.tercero.direccion],
+                ['Teléfono', confirmacionSiesa.existente?.telefono, confirmacionSiesa.tercero.telefono],
+                ['Correo', confirmacionSiesa.existente?.email, confirmacionSiesa.tercero.correo_electronico],
+              ].map(([campo, actual, nuevo]) => (
+                <tr key={campo}>
+                  <td style={{ fontWeight: 600 }}>{campo}</td>
+                  <td className="mini">{actual || '—'}</td>
+                  <td className="mini" style={actual && nuevo && String(actual).toUpperCase() !== String(nuevo).toUpperCase() ? { color: 'var(--red)', fontWeight: 600 } : undefined}>{nuevo || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!confirmacionSiesa.existente && <p className="mini">No se pudieron leer los datos actuales de Siesa; solo se sabe que el tercero existe.</p>}
         </Modal>
       )}
     </div>

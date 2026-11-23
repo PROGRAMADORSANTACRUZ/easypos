@@ -3,6 +3,7 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { errorDocumento } from '../documentoCliente.js';
 import { intentarEnvioClienteSiesa, marcarClienteParaReenvio, sucursalesYaEnviadas } from '../siesaClientes.js';
+import { consultaDisponible, consultarTerceroCliente, guardarTerceroCliente } from '../siesaTerceros.js';
 
 const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -96,6 +97,41 @@ router.get('/', wrap(async (req, res) => {
     : undefined;
   const clientes = await prisma.cliente.findMany({ where, orderBy: { nombre: 'asc' }, include: incluirUbicacionSiesa });
   res.json(clientes);
+}));
+
+// Datos del formulario de cliente para armar el tercero de Siesa.
+function terceroDesdeFormulario(body) {
+  const documento = limpiar(body.numeroDocumento) || limpiar(body.documento);
+  const error = errorDocumento(documento);
+  if (!documento || error) throw Object.assign(new Error(error || 'Indica el número de documento para consultar Siesa'), { status: 400 });
+  return {
+    tipoCliente: body.tipoCliente,
+    tipoDocumento: body.tipoDocumento,
+    numeroDocumento: documento,
+    nombres: body.nombres,
+    apellidos: body.apellidos,
+    razonSocial: body.razonSocial,
+    nombre: nombreCompleto(body.nombres, body.apellidos, body.nombre, body.razonSocial),
+    direccion: body.direccion,
+    telefono: body.telefono,
+    email: body.email,
+    municipioSiesaCodigo: body.municipioSiesaCodigo,
+    sucursales: [],
+  };
+}
+
+// Consulta si el documento ya existe como tercero en Siesa (antes de guardar el cliente).
+router.post('/siesa/consultar', wrap(async (req, res) => {
+  if (!consultaDisponible()) return res.json({ disponible: false });
+  res.json({ disponible: true, ...await consultarTerceroCliente(terceroDesdeFormulario(req.body || {})) });
+}));
+
+// Crea el tercero en Siesa con los datos digitados; si ya existe, solo lo reemplaza con actualizar: true.
+router.post('/siesa/tercero', wrap(async (req, res) => {
+  if (!consultaDisponible()) return res.status(503).json({ error: 'La conexión con Siesa (CONSULTA_API_KEY) no está configurada en el servidor' });
+  const resultado = await guardarTerceroCliente(terceroDesdeFormulario(req.body || {}), { actualizar: req.body?.actualizar === true });
+  await auditar({ req, accion: 'EDITAR', entidad: 'tercero_siesa', entidadId: resultado.nit, detalle: `Tercero ${resultado.accion} en Siesa` });
+  res.json(resultado);
 }));
 
 router.get('/:id', wrap(async (req, res) => {
@@ -230,7 +266,7 @@ router.put('/:id', wrap(async (req, res) => {
   }
 }));
 
-// Envia (o actualiza, si ya existe) el cliente en Siesa; util tras editar sus datos.
+// Envia o actualiza el cliente en Siesa; util tras editar sus datos.
 router.post('/:id/enviar-siesa', wrap(async (req, res) => {
   const id = String(req.params.id);
   const resultado = await intentarEnvioClienteSiesa(id, { forzar: true, manual: true });
