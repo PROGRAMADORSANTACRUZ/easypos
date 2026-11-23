@@ -335,6 +335,19 @@ export default function App() {
     return nuevo;
   });
 
+  // En pantallas anchas, un clic fuera del menu lateral lo contrae (en movil ya se cierra con el fondo oscuro).
+  const sidebarRef = useRef(null);
+  useEffect(() => {
+    if (colapsado) return undefined;
+    const alClicFuera = (evento) => {
+      if (!window.matchMedia('(min-width: 901px)').matches) return;
+      if (sidebarRef.current?.contains(evento.target)) return;
+      setColapsado(true);
+    };
+    document.addEventListener('pointerdown', alClicFuera);
+    return () => document.removeEventListener('pointerdown', alClicFuera);
+  }, [colapsado]);
+
   // Renderiza una categoría colapsable con sus módulos visibles según permisos
   const renderGrupo = (grupo) => {
     if (!moduloHabilitado(user, grupo.id)) return null;
@@ -438,7 +451,7 @@ export default function App() {
             onClick={() => setMenuAbierto(false)}
             aria-hidden
           />
-          <aside className={`sidebar ${menuAbierto ? 'open' : ''} ${colapsado ? 'collapsed' : ''}`}>
+          <aside ref={sidebarRef} className={`sidebar ${menuAbierto ? 'open' : ''} ${colapsado ? 'collapsed' : ''}`}>
             <div className="sidebar-top">
               <Logo height={38} />
               <button
