@@ -55,9 +55,11 @@ export function construirPlanoCliente(cliente, idCia) {
 }
 
 export function intentarEnvioClienteSiesa(id, opciones) {
-  return intentarEnvioSiesa(`CLIENTE:${id}`, async (cfg) => {
-    const cliente = await prisma.cliente.findUnique({ where: { id } });
-    if (!cliente) return { noEncontrado: true };
-    return { lineas: construirPlanoCliente(cliente, cfg.idCia) };
-  }, opciones);
+  return intentarEnvioSiesa(`CLIENTE:${id}`, (cfg) => prepararCliente(id, cfg), opciones);
+}
+
+export async function prepararCliente(id, cfg) {
+  const cliente = await prisma.cliente.findUnique({ where: { id } });
+  if (!cliente) return { noEncontrado: true };
+  return { lineas: construirPlanoCliente(cliente, cfg.idCia) };
 }

@@ -219,7 +219,7 @@ router.put('/:id', wrap(async (req, res) => {
 // Envia (o actualiza, si ya existe) el cliente en Siesa; util tras editar sus datos.
 router.post('/:id/enviar-siesa', wrap(async (req, res) => {
   const id = String(req.params.id);
-  const resultado = await intentarEnvioClienteSiesa(id, { forzar: true });
+  const resultado = await intentarEnvioClienteSiesa(id, { forzar: true, manual: true });
   await auditar({ req, accion: 'EDITAR', entidad: 'cliente', entidadId: id, detalle: `Envio a Siesa • ${resultado.estado}` });
   res.json(resultado);
 }));

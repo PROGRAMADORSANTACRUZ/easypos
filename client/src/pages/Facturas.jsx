@@ -899,7 +899,8 @@ export default function Facturas({ electronica = true }) {
     setReenviandoSiesa(f.id);
     try {
       const resultado = await api.post(`/facturas/${f.id}/reenviar-siesa`, {});
-      notify(resultado.estado === 'OK' ? 'Factura enviada a Siesa' : `Siesa: ${resultado.mensaje || resultado.estado}`, resultado.estado === 'OK' ? 'ok' : 'err');
+      const enviado = ['OK', 'PROGRAMADO'].includes(resultado.estado);
+      notify(resultado.estado === 'OK' ? 'Factura enviada a Siesa' : enviado ? resultado.mensaje : `Siesa: ${resultado.mensaje || resultado.estado}`, enviado ? 'ok' : 'err');
     } catch (e) {
       notify(e.message, 'err');
     } finally {

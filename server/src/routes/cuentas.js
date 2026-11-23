@@ -116,7 +116,7 @@ router.post('/abonos', wrap(async (req, res) => {
 router.post('/abonos/:id/enviar-siesa', wrap(async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Abono invalido' });
-  res.json(await intentarEnvioReciboSiesa(id));
+  res.json(await intentarEnvioReciboSiesa(id, { manual: true }));
 }));
 
 export default router;

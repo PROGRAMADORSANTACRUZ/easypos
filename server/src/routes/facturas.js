@@ -382,7 +382,7 @@ router.post('/:id/reenviar-siesa', wrap(async (req, res) => {
   const modelo = await prisma.factura.findFirst({ where: filtro, select: { id: true } }) ? 'factura'
     : await prisma.facturaVenta.findFirst({ where: filtro, select: { id: true } }) ? 'facturaVenta' : null;
   if (!modelo) return res.status(404).json({ error: 'Factura no encontrada' });
-  const resultado = await intentarEnvioVentaSiesa(modelo, id);
+  const resultado = await intentarEnvioVentaSiesa(modelo, id, { manual: true });
   await auditar({ req, accion: 'EDITAR', entidad: 'factura', entidadId: id, detalle: `Reenvio a Siesa • ${resultado.estado}` });
   res.json(resultado);
 }));

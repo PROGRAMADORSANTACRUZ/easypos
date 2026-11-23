@@ -3,9 +3,12 @@
 // y registra cada intento en LogIntegracion (sistema SIESA, tipo VENTA:<id de la factura>).
 import { prisma } from './prisma.js';
 import { diaColombia } from './fechaColombia.js';
+import {
+  configSiesa, consecutivo, construirSobreSoap, construirXmlImportar, interpretarRespuestaSiesa,
+  limpiarTexto, nitSiesa, numero, postSiesa, texto,
+} from './siesaProtocolo.js';
 
 const LOG_SISTEMA = 'SIESA';
-const TIMEOUT_MS = 30_000;
 
 // Valores iguales para todos los restaurantes.
 export const SIESA_FIJOS = Object.freeze({
@@ -31,39 +34,10 @@ export const SIESA_FIJOS = Object.freeze({
   ciudad: '001',
 });
 
-export function configSiesa(env = process.env) {
-  return {
-    activo: String(env.SIESA_VENTAS_ACTIVO || '').toLowerCase() === 'true',
-    url: env.SIESA_WS_URL || '',
-    conexion: env.SIESA_WS_CONEXION || '',
-    idCia: env.SIESA_WS_CIA || '',
-    usuario: env.SIESA_WS_USER || '',
-    clave: env.SIESA_WS_PASSWORD || '',
-  };
-}
-
-export function limpiarTexto(valor) {
-  return String(valor ?? '').normalize('NFD').replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-// Texto de ancho fijo: se recorta si sobra y se completa con espacios a la derecha.
-export const texto = (valor, ancho) => limpiarTexto(valor).slice(0, ancho).padEnd(ancho, ' ');
-
-export function numero(valor, ancho, decimales = 0) {
-  const n = Number(valor);
-  if (!Number.isFinite(n) || n < 0) throw new Error(`Valor numerico invalido para Siesa: ${valor}`);
-  const cifras = n.toFixed(decimales);
-  if (cifras.length > ancho) throw new Error(`Valor numerico fuera de rango para Siesa: ${valor}`);
-  return cifras.padStart(ancho, '0');
-}
-
-export const consecutivo = (n) => String(n).padStart(7, '0');
-
-// NIT sin puntos ni digito de verificacion; vacio si no hay documento.
-export function nitSiesa(documento) {
-  const bruto = String(documento ?? '').replace(/[.\s]/g, '');
-  return limpiarTexto(bruto.replace(/-\d$/, ''));
-}
+export {
+  configSiesa, consecutivo, construirSobreSoap, construirXmlImportar, interpretarRespuestaSiesa,
+  limpiarTexto, nitSiesa, numero, postSiesa, texto,
+};
 
 function documentoCliente(factura) {
   return nitSiesa(factura.numeroDocumentoCliente) || SIESA_FIJOS.clienteGenerico;
@@ -169,54 +143,7 @@ export function construirPlanoVenta(doc) {
   return lineas;
 }
 
-const escaparXml = (valor) => String(valor).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-export function construirXmlImportar(lineas, cfg) {
-  const datos = lineas.map((linea) => `<Linea>${escaparXml(linea)}\n</Linea>`).join('');
-  return `<Importar><NombreConexion>${escaparXml(cfg.conexion)}</NombreConexion><IdCia>${escaparXml(cfg.idCia)}</IdCia>`
-    + `<Usuario>${escaparXml(cfg.usuario)}</Usuario><Clave>${escaparXml(cfg.clave)}</Clave><Datos>${datos}</Datos></Importar>`;
-}
-
-export function construirSobreSoap(xml) {
-  return '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/">'
-    + '<soapenv:Header/><soapenv:Body><tem:ImportarXML>'
-    + `<tem:pvstrDatos><![CDATA[${xml}]]></tem:pvstrDatos><tem:printTipoError>0</tem:printTipoError>`
-    + '</tem:ImportarXML></soapenv:Body></soapenv:Envelope>';
-}
-
-const decodificarXml = (valor) => valor.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
-  .replace(/&apos;/g, "'").replace(/&amp;/g, '&');
-
-// Siesa responde HTTP 200 aunque rechace el plano: los errores vienen como filas (f_detalle) en el DataSet.
-export function interpretarRespuestaSiesa(status, cuerpo = '') {
-  if (status >= 500 || status === 0) {
-    return { ok: false, transitorio: true, mensaje: `Siesa respondio HTTP ${status || 'sin respuesta'}` };
-  }
-  const falla = cuerpo.match(/<faultstring[^>]*>([\s\S]*?)<\/faultstring>/i);
-  if (falla) return { ok: false, transitorio: false, mensaje: decodificarXml(falla[1]).trim().slice(0, 500) };
-  if (status !== 200) return { ok: false, transitorio: false, mensaje: `Siesa respondio HTTP ${status}` };
-  const detalles = [...cuerpo.matchAll(/<f_detalle>([\s\S]*?)<\/f_detalle>/g)].map((m) => decodificarXml(m[1]).trim()).filter(Boolean);
-  if (detalles.length || /<(?:Resultado|Table)[\s>]/.test(cuerpo)) {
-    return { ok: false, transitorio: false, mensaje: (detalles.join(' | ') || 'Siesa devolvio errores al importar').slice(0, 500) };
-  }
-  return { ok: true, transitorio: false, mensaje: 'Importado en Siesa' };
-}
-
-export async function postSiesa(cfg, xml) {
-  try {
-    const resp = await fetch(cfg.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/xml; charset=utf-8', SOAPAction: 'http://tempuri.org/ImportarXML' },
-      body: construirSobreSoap(xml),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    return { status: resp.status, cuerpo: await resp.text() };
-  } catch (error) {
-    return { status: 0, cuerpo: String(error?.message || error) };
-  }
-}
-
-async function registrar(clave, estado, { request, response, mensaje } = {}) {
+export async function registrar(clave, estado, { request, response, mensaje } = {}) {
   try {
     await prisma.logIntegracion.create({
       data: {
@@ -235,12 +162,29 @@ async function registrar(clave, estado, { request, response, mensaje } = {}) {
 
 const enCurso = new Set();
 
+// Modo agente: el envio lo hace un PC con la VPN de AWS (siesa-agente.mjs) y el servidor solo prepara y registra.
+export const modoAgenteSiesa = (env = process.env) => Boolean(env.SIESA_AGENTE_TOKEN) && !configSiesa(env).activo;
+
+async function programarReenvio(clave, forzar) {
+  if (!forzar) {
+    const previo = await prisma.logIntegracion.findFirst({ where: { sistema: LOG_SISTEMA, tipo: clave, estado: 'OK' } });
+    if (previo) return { estado: 'OK', mensaje: 'Ya fue enviado a Siesa' };
+  }
+  const mensaje = 'Reenvio pedido: lo enviara el agente de Siesa en su proxima corrida';
+  await registrar(clave, 'REINICIADO', { mensaje });
+  return { estado: 'PROGRAMADO', mensaje };
+}
+
 // Un intento de envio de cualquier documento. `clave` es el tipo del log (VENTA:<id>, CLIENTE:<id>, RECIBO:<id>).
 // `preparar(cfg)` devuelve { lineas } | { omitido } | { noEncontrado }; si lanza, el error queda registrado.
-// Nunca lanza: devuelve { estado, mensaje }. Con `forzar` ignora un envio previo ya aceptado.
-export async function intentarEnvioSiesa(clave, preparar, { env = process.env, enviar = postSiesa, forzar = false } = {}) {
+// Nunca lanza: devuelve { estado, mensaje }. Con `forzar` ignora un envio previo ya aceptado; con `manual` y en
+// modo agente solo deja el reenvio programado para el agente.
+export async function intentarEnvioSiesa(clave, preparar, { env = process.env, enviar = postSiesa, forzar = false, manual = false } = {}) {
   const cfg = configSiesa(env);
-  if (!cfg.activo) return { estado: 'INACTIVO', mensaje: 'El envio a Siesa no esta activo' };
+  if (!cfg.activo) {
+    if (manual && modoAgenteSiesa(env)) return programarReenvio(clave, forzar);
+    return { estado: 'INACTIVO', mensaje: 'El envio a Siesa no esta activo' };
+  }
   if (!cfg.url || !cfg.conexion || !cfg.idCia || !cfg.usuario || !cfg.clave) {
     return { estado: 'ERROR', mensaje: 'Faltan variables SIESA_WS_* en el servidor' };
   }
@@ -277,15 +221,25 @@ export async function intentarEnvioSiesa(clave, preparar, { env = process.env, e
   }
 }
 
+// Prepara el plano de una venta. modelo: 'factura' | 'facturaVenta'.
+export async function prepararVenta(modelo, id) {
+  const doc = await prisma[modelo].findUnique({
+    where: { id },
+    include: { detalle: { include: { producto: true } } },
+  });
+  if (!doc) return { noEncontrado: true };
+  if (doc.credito) return { omitido: 'Factura a credito: no se envia automaticamente a Siesa' };
+  return {
+    lineas: construirPlanoVenta(doc),
+    verificar: {
+      compania: Number(doc.companiaCodigo), centro: doc.centroOperacionCodigo,
+      tipo: doc.tipoDocumentoCodigo, numero: Number(doc.numeroFactura),
+    },
+    clienteId: doc.clienteId && doc.numeroDocumentoCliente ? doc.clienteId : null,
+  };
+}
+
 // Venta. modelo: 'factura' | 'facturaVenta'.
 export function intentarEnvioVentaSiesa(modelo, id, opciones) {
-  return intentarEnvioSiesa(`VENTA:${id}`, async () => {
-    const doc = await prisma[modelo].findUnique({
-      where: { id },
-      include: { detalle: { include: { producto: true } } },
-    });
-    if (!doc) return { noEncontrado: true };
-    if (doc.credito) return { omitido: 'Factura a credito: no se envia automaticamente a Siesa' };
-    return { lineas: construirPlanoVenta(doc) };
-  }, opciones);
+  return intentarEnvioSiesa(`VENTA:${id}`, () => prepararVenta(modelo, id), opciones);
 }

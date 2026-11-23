@@ -71,14 +71,16 @@ export function construirPlanoRecibo(abono, tercero, idCia) {
   ];
 }
 
+export async function prepararRecibo(id, cfg) {
+  const abono = await prisma.abono.findUnique({
+    where: { id: Number(id) },
+    include: { factura: true, facturaVenta: true },
+  });
+  if (!abono) return { noEncontrado: true };
+  const documento = abono.factura || abono.facturaVenta;
+  return { lineas: construirPlanoRecibo(abono, documento?.numeroDocumentoCliente, cfg.idCia) };
+}
+
 export function intentarEnvioReciboSiesa(id, opciones) {
-  return intentarEnvioSiesa(`RECIBO:${id}`, async (cfg) => {
-    const abono = await prisma.abono.findUnique({
-      where: { id: Number(id) },
-      include: { factura: true, facturaVenta: true },
-    });
-    if (!abono) return { noEncontrado: true };
-    const documento = abono.factura || abono.facturaVenta;
-    return { lineas: construirPlanoRecibo(abono, documento?.numeroDocumentoCliente, cfg.idCia) };
-  }, opciones);
+  return intentarEnvioSiesa(`RECIBO:${id}`, (cfg) => prepararRecibo(id, cfg), opciones);
 }

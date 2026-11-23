@@ -4,9 +4,9 @@
 import { prisma, tenantStorage } from './prisma.js';
 import { platformPrisma } from './platformPrisma.js';
 import { getTenantPrisma } from './tenantManager.js';
-import { configSiesa, intentarEnvioVentaSiesa } from './siesaVentas.js';
-import { intentarEnvioClienteSiesa } from './siesaClientes.js';
-import { intentarEnvioReciboSiesa } from './siesaRecibos.js';
+import { configSiesa, intentarEnvioVentaSiesa, prepararVenta, registrar } from './siesaVentas.js';
+import { intentarEnvioClienteSiesa, prepararCliente } from './siesaClientes.js';
+import { intentarEnvioReciboSiesa, prepararRecibo } from './siesaRecibos.js';
 
 const MAX_ERRORES = 5;
 const LIMITE_POR_CORRIDA = 200;
@@ -17,6 +17,8 @@ function resumirLogs(logs) {
     const resumen = porTipo.get(tipo) || { cerrada: false, errores: 0 };
     if (estado === 'OK' || estado === 'OMITIDO') resumen.cerrada = true;
     if (estado === 'ERROR') resumen.errores += 1;
+    // Un reenvio pedido a mano reabre el documento y borra el conteo de rechazos.
+    if (estado === 'REINICIADO') Object.assign(resumen, { cerrada: false, errores: 0 });
     porTipo.set(tipo, resumen);
   }
   return porTipo;
@@ -38,8 +40,81 @@ const logsDe = (prefijo, ids) => (ids.length
   ? prisma.logIntegracion.findMany({
     where: { sistema: 'SIESA', tipo: { in: ids.map((id) => `${prefijo}:${id}`) } },
     select: { tipo: true, estado: true },
+    orderBy: { fecha: 'asc' },
   })
   : []);
+
+// Documentos pendientes de la base activa ya con su plano armado, para que los envie el agente de Siesa
+// (el PC con la VPN de AWS). Orden: clientes, recibos y ventas; una venta depende de su cliente si este aun no esta en Siesa.
+export async function listarPendientesSiesa({ desde, cfg, limite = LIMITE_POR_CORRIDA, preparar = {} } = {}) {
+  const prepararVentaFn = preparar.venta || prepararVenta;
+  const prepararClienteFn = preparar.cliente || prepararCliente;
+  const prepararReciboFn = preparar.recibo || prepararRecibo;
+  const items = [];
+
+  // Arma un item; si no hay nada que enviar lo deja registrado como OMITIDO o ERROR y devuelve null.
+  const armar = async (tipo, id, extra) => {
+    const clave = `${tipo}:${id}`;
+    try {
+      const preparado = await extra();
+      if (preparado.noEncontrado) return null;
+      if (preparado.omitido) {
+        await registrar(clave, 'OMITIDO', { mensaje: preparado.omitido });
+        return null;
+      }
+      return { clave, tipo, ...preparado };
+    } catch (error) {
+      await registrar(clave, 'ERROR', { mensaje: error.message });
+      return null;
+    }
+  };
+
+  const abonos = await prisma.abono.findMany({
+    where: { createdAt: { gte: desde } }, select: { id: true }, orderBy: { createdAt: 'asc' },
+  });
+  const recibos = seleccionarPendientes(abonos, await logsDe('RECIBO', abonos.map(({ id }) => id)), limite, 'RECIBO');
+
+  const ventas = [];
+  for (const modelo of ['factura', 'facturaVenta']) {
+    const facturas = await prisma[modelo].findMany({
+      where: { createdAt: { gte: desde } }, select: { id: true }, orderBy: { createdAt: 'asc' },
+    });
+    const pendientes = seleccionarPendientes(facturas, await logsDe('VENTA', facturas.map(({ id }) => id)), limite);
+    for (const { id } of pendientes) {
+      const item = await armar('VENTA', id, () => prepararVentaFn(modelo, id));
+      if (item) ventas.push(item);
+    }
+  }
+
+  // Un cliente con documento debe existir en Siesa antes que sus facturas.
+  const clientes = new Map();
+  for (const venta of ventas) {
+    const { clienteId } = venta;
+    if (!clienteId) continue;
+    if (!clientes.has(clienteId)) {
+      const resumen = resumirLogs(await logsDe('CLIENTE', [clienteId])).get(`CLIENTE:${clienteId}`);
+      if (resumen?.cerrada) clientes.set(clienteId, { listo: true });
+      else if ((resumen?.errores || 0) >= MAX_ERRORES) clientes.set(clienteId, { listo: false });
+      else {
+        const item = await armar('CLIENTE', clienteId, () => prepararClienteFn(clienteId, cfg));
+        clientes.set(clienteId, item ? { listo: true, item } : { listo: false });
+      }
+    }
+  }
+  const clientesAEnviar = [...clientes.values()].filter(({ item }) => item).map(({ item }) => item);
+
+  for (const item of clientesAEnviar) items.push(item);
+  for (const { id } of recibos) {
+    const item = await armar('RECIBO', id, () => prepararReciboFn(id, cfg));
+    if (item) items.push(item);
+  }
+  for (const venta of ventas) {
+    const cliente = venta.clienteId ? clientes.get(venta.clienteId) : null;
+    if (cliente && !cliente.listo) continue;
+    items.push({ ...venta, depende: cliente?.item ? cliente.item.clave : null });
+  }
+  return items.slice(0, limite);
+}
 
 // Envia las pendientes de la base activa (la del restaurante dentro de tenantStorage o la base por defecto).
 export async function enviarPendientesSiesa({
