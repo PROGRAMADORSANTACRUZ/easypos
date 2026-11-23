@@ -1080,7 +1080,7 @@ tbody tr:last-child td { border-bottom: none; }
 .cocina-nota b { color: #B87400; text-transform: uppercase; font-size: 11px; letter-spacing: .04em; }
 .cocina-nota--motivo { border-left-color: var(--brand-red); background: rgba(225,54,38,.14); }
 .cocina-nota--motivo b { color: var(--brand-red); }
-.cocina-nota--pedido { margin: 8px 8px 0; padding: 6px 10px; font-size: 14px; }
+.cocina-nota--pedido { margin: 0 8px 8px; padding: 6px 10px; font-size: 14px; }
 .cocina-historial { position: sticky; top: 12px; min-width: 0; padding: 0 12px 12px; border-radius: var(--radius-lg); background: var(--panel); border: 1px solid var(--border); overflow: hidden; }
 .cocina-historial__cabecera { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 -12px; padding: 10px 12px; background: linear-gradient(90deg, #62120B, #1A1614); color: #F2EEE8; }
 .cocina-historial h2 { margin: 0; font-size: 16px; color: #F2EEE8; }
