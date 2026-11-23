@@ -229,7 +229,32 @@ model Mesa {
   pedidos   Pedido[]
   pedidosMesa PedidoMesa[]
   preparaciones PreparacionCocina[]
+  reservasProgramadas ReservaMesa[]
   createdAt DateTime @default(now())
+}
+
+// Reservas hechas por los clientes desde la pagina publica (/reservar/<restaurante>) para una fecha y hora futuras.
+model ReservaMesa {
+  id              String   @id @default(uuid()) @db.Uuid @map("Id")
+  mesaId          Int      @map("MesaId")
+  mesa            Mesa     @relation(fields: [mesaId], references: [id], onDelete: Cascade)
+  fechaHora       DateTime @map("FechaHora")
+  duracionMin     Int      @default(60) @map("DuracionMin")
+  personas        Int      @map("Personas")
+  zona            String   @default("RESTAURANTE") @db.VarChar(50) @map("Zona")
+  nombre          String   @db.VarChar(150) @map("Nombre")
+  celular         String   @db.VarChar(20) @map("Celular")
+  email           String   @db.VarChar(150) @map("Email")
+  comentarios     String?  @map("Comentarios")
+  estado          String   @default("CONFIRMADA") @db.VarChar(20) @map("Estado") // CONFIRMADA | CANCELADA | CUMPLIDA | NO_ASISTIO
+  aceptaMarketing Boolean  @default(false) @map("AceptaMarketing")
+  origen          String   @default("WEB") @db.VarChar(20) @map("Origen")
+  createdAt       DateTime @default(now()) @map("FechaCreacion")
+  updatedAt       DateTime @updatedAt @map("FechaActualizacion")
+
+  @@index([mesaId, fechaHora])
+  @@index([fechaHora])
+  @@map("ReservasMesa")
 }
 
 // Categorias del menu (ej. Hamburguesas, Bebidas)

@@ -158,6 +158,16 @@ que copia las asignaciones anteriores a la nueva tabla UsuariosMesas.
 El pedido conserva su creador y el historial registra quien realiza cada cambio.
 Domicilios y Repartidor / Entregas mantienen sus permisos independientes.
 
+### Reservas en linea
+
+Los clientes reservan desde la pagina publica `/reservar/<slug-del-restaurante>` (sin login):
+personas, fecha, hora (12:00 a 21:00 cada 30 minutos), zona y mesa, datos de contacto y aceptacion
+de politicas. Cada reserva ocupa la mesa 60 minutos; si dos clientes eligen la misma mesa y hora, la
+primera reserva confirmada gana. El personal con permiso de Mesas las ve en Ventas > Reservas, donde
+tambien copia el enlace publico. Horario, duracion y zonas estan en `server/src/reservasNucleo.js`.
+Antes de desplegar, aplica en cada base
+`server/prisma/migrations/20261123150000_reservas_en_linea/migration.sql`.
+
 ## API principal
 
 | Método | Ruta | Descripción |

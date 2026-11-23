@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, Fragment } from 'react';
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Mesas from './pages/Mesas.jsx';
+import Reservas from './pages/Reservas.jsx';
 import Cocina from './pages/Cocina.jsx';
 import Pedidos from './pages/Pedidos.jsx';
 import Repartidor from './pages/Repartidor.jsx';
@@ -144,6 +145,7 @@ export const NAV_GRUPOS = [
     id: 'ventas', label: 'Ventas', icon: 'facturas',
     items: [
       { permiso: 'mesas.ver', ruta: '/mesas', label: 'Mesas', icon: 'mesas' },
+      { permiso: 'mesas.ver', ruta: '/reservas', label: 'Reservas', icon: 'auditoria' },
       { permiso: 'cocina.ver', ruta: '/cocina', label: 'Cocina', icon: 'cocina' },
       { permiso: 'facturas.ver', ruta: '/facturas', label: 'Facturas', icon: 'facturas' },
       { permiso: 'factura_venta.ver', ruta: '/cotizaciones', label: 'Factura de venta', icon: 'facturas' },
@@ -568,6 +570,7 @@ export default function App() {
               {puede(user, 'domicilios.ver') && <Route path="/pedidos" element={<Pedidos />} />}
               {puede(user, 'repartidor.ver') && <Route path="/repartidor" element={<Repartidor />} />}
               {puede(user, 'mesas.ver') && <Route path="/mesas" element={<Mesas />} />}
+              {puede(user, 'mesas.ver') && <Route path="/reservas" element={<Reservas />} />}
               {puede(user, 'mesas.ver') && <Route path="/mesas/:mesaId/pedido" element={<TomarPedido />} />}
               {puede(user, 'cocina.ver') && <Route path="/cocina" element={<Cocina />} />}
               {puede(user, 'productos.ver') && <Route path="/productos" element={<Productos />} />}

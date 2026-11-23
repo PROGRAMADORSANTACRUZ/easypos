@@ -67,6 +67,7 @@ import rolesRouter from './routes/roles.js';
 import permisosRouter from './routes/permisos.js';
 import auditoriaRouter from './routes/auditoria.js';
 import restaurantesRouter from './routes/restaurantes.js';
+import { reservasPublicasRouter, reservasRouter } from './routes/reservas.js';
 import { resolverTenant } from './middleware/tenant.js';
 import { mayusculas } from './middleware/mayusculas.js';
 import { requireAuth, permisoPorMetodo, permisoAccesoPedidos, permisoModuloFacturacion, permisoSegunFactura, puedeLeerCatalogoParaPedidos } from './middleware/auth.js';
@@ -102,6 +103,8 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, servicio: 'POS API', 
 // Los routers de "usuarios" y "plataforma/restaurantes" gestionan su propia
 // autenticacion internamente porque exponen rutas publicas puntuales (login / listado publico).
 app.use('/api/mesas', requireAuth, permisoPorMetodo('mesas'), mesasRouter);
+app.use('/api/reservas-publicas', reservasPublicasRouter);
+app.use('/api/reservas', requireAuth, permisoPorMetodo('mesas'), reservasRouter);
 app.use('/api/meseras', requireAuth, meserasRouter);
 app.use('/api/cocineros', requireAuth, cocinerosRouter);
 app.use('/api/preparacion-cocina', requireAuth, preparacionCocinaRouter);

@@ -1859,3 +1859,92 @@ tbody tr:last-child td { border-bottom: none; }
 input.sin-flechas::-webkit-outer-spin-button,
 input.sin-flechas::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input.sin-flechas { -moz-appearance: textfield; appearance: textfield; }
+
+/* ===== Reservas en linea (pagina publica /reservar) — tema claro con la paleta de la marca ===== */
+.rsv { min-height: 100vh; background: #F7F6F4; color: #1A1614; font-family: inherit; }
+.rsv--fondo { display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at top, #62120B 0%, #1A1614 70%); }
+.rsv-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 32px; background: #fff; border-bottom: 1px solid #E4E1DB; }
+.rsv-marca { font-size: 22px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #62120B; margin: 0; }
+.rsv-volver { border: 0; background: none; font: inherit; color: #1A1614; cursor: pointer; font-size: 15px; }
+.rsv-reloj { font-size: 14px; color: #6B655E; }
+.rsv-reloj b { color: #1F9D55; font-size: 16px; }
+.rsv-pasos { list-style: none; margin: 0; padding: 12px 32px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; background: #fff; }
+.rsv-pasos li { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 2px solid #E4E1DB; color: #9A938A; }
+.rsv-pasos li.is-hecho { color: #1A1614; border-bottom-color: #1A1614; }
+.rsv-pasos__num { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 50%; display: grid; place-items: center; border: 2px solid currentColor; font-weight: 700; }
+.rsv-pasos li.is-hecho .rsv-pasos__num { background: #1A1614; color: #fff; border-color: #1A1614; }
+.rsv-pasos strong { display: block; font-size: 14px; }
+.rsv-pasos small { display: block; font-size: 12px; color: #6B655E; }
+.rsv-fondo { padding: 24px 32px 32px; background: linear-gradient(180deg, rgba(26,22,20,.88), rgba(98,18,11,.85)), #1A1614; min-height: calc(100vh - 140px); }
+.rsv-paneles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.rsv-panel { background: rgba(255,255,255,.94); border-radius: 14px; padding: 24px 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.rsv-panel h2 { margin: 0; font-size: 26px; font-weight: 300; font-style: italic; }
+.rsv-panel > p { margin: 4px 0 18px; font-style: italic; color: #3A3430; }
+.rsv-personas { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 300px; margin: 0 auto; }
+.rsv-personas button { width: 50px; height: 50px; border-radius: 50%; border: 1.5px solid #1A1614; background: transparent; font: inherit; font-size: 16px; cursor: pointer; }
+.rsv-personas button.is-activo { background: #1A1614; color: #fff; }
+.rsv-input { width: 100%; box-sizing: border-box; padding: 11px 14px; border: 1px solid #D2CEC6; border-radius: 8px; background: #fff; color: #1A1614; font: inherit; font-size: 15px; margin-bottom: 10px; }
+.rsv-input:focus { outline: 2px solid #E13626; outline-offset: 1px; }
+.rsv-input--centro { max-width: 120px; margin: 14px auto 0; text-align: center; display: block; }
+.rsv-calendario__mes { display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 12px; }
+.rsv-calendario__mes button, .rsv-hora-dia button { border: 0; background: none; font-size: 24px; line-height: 1; cursor: pointer; color: #1A1614; }
+.rsv-calendario__mes button:disabled, .rsv-hora-dia button:disabled { opacity: .25; cursor: default; }
+.rsv-calendario__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.rsv-calendario__dia { font-size: 12px; color: #6B655E; padding: 4px 0; }
+.rsv-calendario__grid button { padding: 7px 0; border: 0; border-radius: 4px; background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.rsv-calendario__grid button:disabled { font-weight: 400; color: #B0A89E; cursor: default; background: #F1EFEA; }
+.rsv-calendario__grid button.is-activo { background: #1A1614; color: #fff; }
+.rsv-hora-dia { display: flex; justify-content: center; align-items: center; gap: 12px; margin-bottom: 14px; color: #3A3430; }
+.rsv-horas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-height: 230px; overflow-y: auto; padding: 2px; }
+.rsv-horas button { padding: 9px 4px; border: 1px solid #9A938A; border-left: 4px solid #1A1614; border-radius: 6px; background: #fff; font: inherit; font-size: 14px; cursor: pointer; }
+.rsv-horas button:disabled { border-color: #E4E1DB; color: #B0A89E; background: #EDEAE5; cursor: default; }
+.rsv-horas button.is-activo { background: #1A1614; color: #fff; }
+.rsv-leyenda { display: flex; justify-content: center; gap: 16px; margin-top: 14px; font-size: 12px; color: #3A3430; }
+.rsv-leyenda i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; border: 1px solid #1A1614; }
+.rsv-leyenda__no { background: #EDEAE5; border-color: #D2CEC6 !important; }
+.rsv-btn { padding: 12px 28px; border: 0; border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; }
+.rsv-btn:disabled { opacity: .45; cursor: default; }
+.rsv-btn--negro { background: #1A1614; color: #fff; box-shadow: 0 6px 16px rgba(0,0,0,.25); }
+.rsv-btn--negro:not(:disabled):hover { background: #62120B; }
+.rsv-btn--ancho { width: 100%; padding: 15px; letter-spacing: .04em; }
+.rsv-error { background: #FBE9E7; color: #8F1E13; border-left: 4px solid #E13626; padding: 10px 14px; border-radius: 6px; margin: 0 0 14px; }
+.rsv-modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(26,22,20,.6); }
+.rsv-modal__caja { position: relative; width: min(560px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: #fff; color: #1A1614; border-radius: 18px; padding: 28px; text-align: center; }
+.rsv-modal__caja h2 { margin: 0 0 18px; font-size: 24px; }
+.rsv-modal__caja h3 { margin: 18px 0 10px; font-size: 16px; }
+.rsv-modal__caja > .rsv-btn { margin-top: 16px; min-width: 220px; }
+.rsv-modal__cerrar { position: absolute; top: 12px; right: 16px; border: 0; background: none; font-size: 30px; line-height: 1; cursor: pointer; color: #1A1614; }
+.rsv-zonas { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.rsv-zonas button { padding: 34px 12px; border: 2px solid #E4E1DB; border-radius: 12px; background: linear-gradient(135deg, #1A1614, #62120B); color: #fff; font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; }
+.rsv-zonas button.is-activo { border-color: #FFA217; box-shadow: 0 0 0 3px rgba(255,162,23,.35); }
+.rsv-mesas { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.rsv-mesas button { padding: 10px 6px; border: 1.5px solid #1A1614; border-radius: 10px; background: #fff; font: inherit; cursor: pointer; }
+.rsv-mesas button small { display: block; font-size: 11px; color: #6B655E; }
+.rsv-mesas button:disabled { border-color: #E4E1DB; background: #F1EFEA; color: #B0A89E; cursor: default; }
+.rsv-mesas button.is-activo { background: #E13626; border-color: #E13626; color: #fff; }
+.rsv-mesas button.is-activo small { color: #fff; }
+.rsv-tel { display: flex; gap: 8px; align-items: flex-start; }
+.rsv-tel span { padding: 11px 10px; border: 1px solid #D2CEC6; border-radius: 8px; white-space: nowrap; color: #6B655E; }
+.rsv-politicas { display: grid; gap: 8px; margin: 8px 0 4px; text-align: left; font-size: 12.5px; color: #3A3430; }
+.rsv-politicas label { display: flex; gap: 8px; align-items: flex-start; }
+.rsv-politicas input { margin-top: 2px; accent-color: #1A1614; width: 16px; height: 16px; flex: 0 0 16px; }
+.rsv-confirmar { max-width: 1040px; margin: 0 auto; padding: 28px 24px 40px; }
+.rsv-confirmar > h1 { margin: 0; text-align: center; font-size: 22px; }
+.rsv-confirmar > p { text-align: center; margin: 6px 0 24px; }
+.rsv-confirmar__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 16px; }
+.rsv-confirmar h2 { font-size: 16px; margin: 0 0 12px; }
+.rsv-resumen { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.rsv-resumen > div { border: 1.5px solid #1A1614; border-radius: 10px; padding: 12px 6px; text-align: center; display: grid; gap: 6px; }
+.rsv-resumen small { color: #6B655E; }
+.rsv-resumen--linea { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 22px; margin: 18px 0; font-size: 17px; }
+.rsv-exito { position: relative; width: min(620px, 100%); background: #fff; color: #1A1614; border-radius: 18px; padding: 36px 32px 28px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.4); }
+.rsv-exito h1 { color: #1F9D55; margin: 8px 0 12px; font-size: 32px; }
+.rsv-exito p { line-height: 1.5; }
+.rsv-exito__check { position: absolute; top: 0; right: 40px; width: 56px; height: 56px; display: grid; place-items: center; background: #1F9D55; color: #fff; font-size: 30px; border-radius: 0 0 12px 12px; }
+.rsv-exito__cierre { font-weight: 700; font-size: 18px; }
+@media (max-width: 900px) {
+  .rsv-top, .rsv-pasos, .rsv-fondo { padding-left: 14px; padding-right: 14px; }
+  .rsv-pasos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rsv-paneles, .rsv-confirmar__cols { grid-template-columns: 1fr; }
+  .rsv-reloj { font-size: 12px; text-align: right; }
+}
