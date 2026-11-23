@@ -104,12 +104,17 @@ function terceroDesdeFormulario(body) {
   const documento = limpiar(body.numeroDocumento) || limpiar(body.documento);
   const error = errorDocumento(documento);
   if (!documento || error) throw Object.assign(new Error(error || 'Indica el número de documento para consultar Siesa'), { status: 400 });
+  if (['222222222', '222222222222'].includes(documento)) {
+    throw Object.assign(new Error('El consumidor final no se crea como tercero en Siesa'), { status: 400 });
+  }
   return {
     tipoCliente: body.tipoCliente,
     tipoDocumento: body.tipoDocumento,
     numeroDocumento: documento,
     nombres: body.nombres,
     apellidos: body.apellidos,
+    primerApellido: body.primerApellido,
+    segundoApellido: body.segundoApellido,
     razonSocial: body.razonSocial,
     nombre: nombreCompleto(body.nombres, body.apellidos, body.nombre, body.razonSocial),
     direccion: body.direccion,

@@ -212,6 +212,12 @@ test('tercero: digito de verificacion DIAN y cuerpo de la API para persona natur
   assert.equal(juridica.departamento, '08');
   assert.throws(() => construirTerceroApi({ nombre: 'x', sucursales: [] }), /no tiene NIT/);
   assert.throws(() => construirTerceroApi({ nombre: 'x', numeroDocumento: 'ABC', sucursales: [] }), /no es numerico/);
+
+  // Apellidos separados desde el formulario: se respetan los compuestos.
+  const compuesto = construirTerceroApi({
+    tipoCliente: 'NATURAL', tipoDocumento: 'CC', numeroDocumento: '123', nombres: 'Ana', primerApellido: 'De la Hoz', segundoApellido: 'Pérez', sucursales: [],
+  });
+  assert.deepEqual([compuesto.primer_apellido, compuesto.segundo_apellido, compuesto.razon_social], ['DE LA HOZ', 'PEREZ', 'DE LA HOZ PEREZ ANA']);
 });
 
 const apiFalsa = (existentes, { creacion = { status: 200, cuerpo: '{"ok":true}' }, crea = true } = {}) => {

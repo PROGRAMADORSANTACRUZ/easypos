@@ -111,10 +111,13 @@ export function construirTerceroApi(cliente) {
   const sede = sedesDeCliente(cliente)[0];
   const u = ubicacion(sede.municipio);
   const apellidos = limpiarTexto(cliente.apellidos).split(/\s+/).filter(Boolean);
+  // Si el formulario trae los apellidos por separado se respetan (apellidos compuestos como "DE LA HOZ").
+  const primerApellido = cliente.primerApellido != null ? limpiarTexto(cliente.primerApellido) : apellidos[0];
+  const segundoApellido = cliente.segundoApellido != null ? limpiarTexto(cliente.segundoApellido) : apellidos.slice(1).join(' ');
   const nombres = limpiarTexto(cliente.nombres);
   const razon = esJuridica
     ? limpiarTexto(cliente.razonSocial || cliente.nombre)
-    : limpiarTexto([cliente.apellidos, cliente.nombres].filter(Boolean).join(' ') || cliente.nombre);
+    : limpiarTexto([primerApellido, segundoApellido, cliente.nombres].filter(Boolean).join(' ') || cliente.nombre);
   return {
     nit,
     digito_verificacion: esJuridica ? digitoVerificacion(nit) : '',
@@ -122,15 +125,15 @@ export function construirTerceroApi(cliente) {
     sucursal: SIESA_FIJOS.sucursal,
     razon_social: recortar(razon, 50),
     ...(esJuridica ? {} : {
-      primer_apellido: recortar(apellidos[0], 15),
-      segundo_apellido: recortar(apellidos.slice(1).join(' '), 15),
+      primer_apellido: recortar(primerApellido, 15),
+      segundo_apellido: recortar(segundoApellido, 15),
       nombres: recortar(nombres, 20),
     }),
     direccion: recortar(sede.direccion || SIESA_FIJOS.direccionDefecto, 40),
     departamento: u.departamento,
     ciudad: u.ciudad,
     telefono: limpiarTexto(sede.telefono).slice(0, 20),
-    correo_electronico: limpiarTexto(sede.email).slice(0, 100),
+    correo_electronico: limpiarTexto(sede.email).slice(0, 50),
   };
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, money } from '../api.js';
-import { MAX_DOCUMENTO, soloDigitos } from '../documento.js';
+import { DOCUMENTOS_GENERICOS, MAX_DOCUMENTO, digitoVerificacion, soloDigitos } from '../documento.js';
 import { Icon } from '../icons.jsx';
 import { useToast } from '../App.jsx';
 import { PageHeader, Modal, Button, TableSkeleton, EmptyState } from '../components/ui/index.jsx';
@@ -130,6 +130,8 @@ const VACIO = {
   documento: '',
   nombres: '',
   apellidos: '',
+  primerApellido: '',
+  segundoApellido: '',
   sucursales: [],
   telefono: '',
   direccion: '',
@@ -224,6 +226,8 @@ export default function Clientes() {
       documento: soloDigitos(c.documento),
       nombres: c.nombres || '',
       apellidos: c.apellidos || '',
+      primerApellido: (c.apellidos || '').trim().split(/\s+/)[0] || '',
+      segundoApellido: (c.apellidos || '').trim().split(/\s+/).slice(1).join(' '),
       sucursales: (c.sucursales || []).map((sucursal) => ({
         ...sucursal,
         paisSiesaCodigo: sucursal.municipioSiesa?.departamento?.paisCodigo || '169',
@@ -272,13 +276,35 @@ export default function Clientes() {
     sucursales: [...actual.sucursales, { nombre: '', telefono: '', direccion: '', barrio: '', ciudad: '', email: '', municipioSiesaCodigo: '', paisSiesaCodigo: '169', departamentoSiesaCodigo: '' }],
   }));
 
+  // Persona natural se identifica con cedula y persona juridica con NIT, como lo pide la creacion de terceros.
+  const cambiarTipoPersona = (tipoCliente) => setForm((actual) => ({
+    ...actual,
+    tipoCliente,
+    tipoDocumento: tipoCliente === 'JURIDICA' ? 'NIT' : 'CC',
+  }));
+
+  // Datos que se guardan y se envian a Siesa: apellidos combinados y solo los nombres del tipo de persona elegido.
+  const datosCliente = () => {
+    const juridica = form.tipoCliente === 'JURIDICA';
+    return {
+      ...form,
+      tipoDocumento: form.tipoDocumento || (juridica ? 'NIT' : 'CC'),
+      razonSocial: juridica ? form.razonSocial.trim() : '',
+      nombres: juridica ? '' : form.nombres.trim(),
+      apellidos: juridica ? '' : [form.primerApellido, form.segundoApellido].map((s) => s.trim()).filter(Boolean).join(' '),
+      primerApellido: juridica ? '' : form.primerApellido.trim(),
+      segundoApellido: juridica ? '' : form.segundoApellido.trim(),
+    };
+  };
+
   const guardarCliente = async ({ enviarSiesa = false, actualizar = false } = {}) => {
-    if (editando) await api.put(`/clientes/${editando}`, form);
-    else await api.post('/clientes', form);
+    const datos = datosCliente();
+    if (editando) await api.put(`/clientes/${editando}`, datos);
+    else await api.post('/clientes', datos);
     const accion = editando ? 'Cliente actualizado' : 'Cliente agregado';
     if (enviarSiesa) {
       try {
-        const r = await api.post('/clientes/siesa/tercero', { ...form, actualizar });
+        const r = await api.post('/clientes/siesa/tercero', { ...datos, actualizar });
         notify(`${accion} y tercero ${r.accion} en Siesa`);
       } catch (err) {
         notify(`${accion} en el POS, pero Siesa: ${err.message}`, 'err');
@@ -292,17 +318,20 @@ export default function Clientes() {
 
   const guardar = async (e) => {
     e.preventDefault();
-    if (!form.nombres.trim() && !form.razonSocial.trim()) return notify('Indica los nombres o la razón social', 'err');
-    if (form.condicionPago === 'CREDITO' && !String(form.creditoDias).trim()) {
-      return notify('Indica a cuántos días es el crédito', 'err');
-    }
-    if (form.sucursales.some((sucursal) => !sucursal.nombre.trim())) return notify('Indica el nombre de cada sucursal', 'err');
+    const juridica = form.tipoCliente === 'JURIDICA';
+    const documento = String(form.numeroDocumento || '').trim();
+    if (!documento) return notify(juridica ? 'Indica el NIT' : 'Indica el número de cédula', 'err');
+    if (juridica && !form.razonSocial.trim()) return notify('Indica la razón social', 'err');
+    if (!juridica && (!form.primerApellido.trim() || !form.nombres.trim())) return notify('Indica el primer apellido y los nombres', 'err');
+    if (!form.direccion.trim()) return notify('Indica la dirección', 'err');
+    if (!form.municipioSiesaCodigo) return notify('Selecciona el departamento y la ciudad', 'err');
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return notify('Correo inválido', 'err');
     setGuardando(true);
     try {
       let siesa = null;
-      if (String(form.numeroDocumento || '').trim()) {
+      if (!DOCUMENTOS_GENERICOS.has(documento)) {
         try {
-          siesa = await api.post('/clientes/siesa/consultar', form);
+          siesa = await api.post('/clientes/siesa/consultar', datosCliente());
         } catch (err) {
           if (!confirm(`No se pudo consultar Siesa: ${err.message}\n\n¿Guardar el cliente solo en el POS?`)) return;
         }
@@ -440,109 +469,69 @@ export default function Clientes() {
           )}
         >
           <form id="cliente-form" onSubmit={guardar}>
+            <p className="mini" style={{ marginTop: 0 }}>
+              Datos del tercero que se envían a Siesa (los campos con * son obligatorios).
+            </p>
             <div className="grid form-3col" style={{ gap: 12 }}>
               <div className="field">
-                <label>Tipo de cliente</label>
-                <select value={form.tipoCliente} onChange={(e) => setForm({ ...form, tipoCliente: e.target.value })}>
-                  <option value="NATURAL">Persona Natural</option>
-                  <option value="JURIDICA">Persona Jurídica</option>
+                <label>Tipo de persona *</label>
+                <select value={form.tipoCliente} onChange={(e) => cambiarTipoPersona(e.target.value)}>
+                  <option value="NATURAL">Persona natural (cédula)</option>
+                  <option value="JURIDICA">Persona jurídica (NIT)</option>
                 </select>
               </div>
               <div className="field">
-                <label>Tipo de documento</label>
-                <select value={form.tipoDocumento} onChange={(e) => setForm({ ...form, tipoDocumento: e.target.value })}>
-                  <option value="RC">Registro civil</option>
-                  <option value="TI">Tarjeta de identidad</option>
-                  <option value="CC">Cédula de ciudadanía</option>
-                  <option value="TE">Tarjeta de extranjería</option>
-                  <option value="CE">Cédula de extranjería</option>
-                  <option value="NIT">NIT</option>
-                  <option value="PAS">Pasaporte</option>
-                  <option value="DIE">Documento de identificación extranjero</option>
-                  <option value="PEP">PEP - Permiso especial de permanencia</option>
-                  <option value="NUIP">NUIP</option>
-                </select>
+                <label>{form.tipoCliente === 'JURIDICA' ? 'NIT *' : 'Número de cédula *'}</label>
+                <input value={form.numeroDocumento} onChange={(e) => setForm({ ...form, numeroDocumento: soloDigitos(e.target.value) })} inputMode="numeric" maxLength={MAX_DOCUMENTO} placeholder="Solo números, sin puntos ni guion" />
               </div>
               <div className="field">
-                <label>Número de documento</label>
-                <input value={form.numeroDocumento} onChange={(e) => setForm({ ...form, numeroDocumento: soloDigitos(e.target.value) })} inputMode="numeric" maxLength={MAX_DOCUMENTO} placeholder="Solo números (NIT o cédula, sin guiones)" />
+                <label>Dígito de verificación</label>
+                <input value={form.tipoCliente === 'JURIDICA' ? (form.numeroDocumento ? digitoVerificacion(form.numeroDocumento) : '') : 'No aplica'} readOnly disabled placeholder="Se calcula del NIT" />
               </div>
-              <div className="field">
-                <label>Razón social</label>
-                <input value={form.razonSocial} onChange={(e) => setForm({ ...form, razonSocial: e.target.value.toUpperCase() })} placeholder="Razón social (empresas)" />
-              </div>
-              <div className="field">
-                <label>Nombres</label>
-                <input value={form.nombres} onChange={(e) => setForm({ ...form, nombres: e.target.value.toUpperCase() })} placeholder="Nombres" />
-              </div>
-              <div className="field">
-                <label>Apellidos</label>
-                <input value={form.apellidos} onChange={(e) => setForm({ ...form, apellidos: e.target.value.toUpperCase() })} placeholder="Apellidos" />
-              </div>
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <div className="row between" style={{ alignItems: 'center' }}>
-                  <label style={{ margin: 0 }}>Sucursales del cliente</label>
-                  <button type="button" className="btn btn-sm" onClick={agregarSucursal}><Icon name="add" size={16} /> Agregar sucursal</button>
+              {form.tipoCliente === 'JURIDICA' ? (
+                <div className="field" style={{ gridColumn: '1 / -1' }}>
+                  <label>Razón social *</label>
+                  <input value={form.razonSocial} maxLength={50} onChange={(e) => setForm({ ...form, razonSocial: e.target.value.toUpperCase() })} placeholder="Razón social de la empresa" />
                 </div>
-                <div className="grid form-3col" style={{ gap: 12, marginTop: 8 }}>
-                  {form.sucursales.map((sucursal, indice) => (
-                    <EditorSucursalCliente
-                      key={sucursal.id || `nueva-${indice}`}
-                      sucursal={sucursal}
-                      paises={paisesSiesa}
-                      onChange={(campo, valor) => actualizarSucursal(indice, campo, valor)}
-                      onRemove={() => setForm((actual) => ({ ...actual, sucursales: actual.sucursales.filter((_, i) => i !== indice) }))}
-                    />
-                  ))}
-                </div>
+              ) : (
+                <>
+                  <div className="field">
+                    <label>Primer apellido *</label>
+                    <input value={form.primerApellido} maxLength={15} onChange={(e) => setForm({ ...form, primerApellido: e.target.value.toUpperCase() })} placeholder="Primer apellido" />
+                  </div>
+                  <div className="field">
+                    <label>Segundo apellido</label>
+                    <input value={form.segundoApellido} maxLength={15} onChange={(e) => setForm({ ...form, segundoApellido: e.target.value.toUpperCase() })} placeholder="Segundo apellido" />
+                  </div>
+                  <div className="field">
+                    <label>Nombres *</label>
+                    <input value={form.nombres} maxLength={20} onChange={(e) => setForm({ ...form, nombres: e.target.value.toUpperCase() })} placeholder="Nombres" />
+                  </div>
+                </>
+              )}
+              <div className="field" style={{ gridColumn: 'span 2' }}>
+                <label>Dirección *</label>
+                <input value={form.direccion} maxLength={40} onChange={(e) => setForm({ ...form, direccion: e.target.value.toUpperCase() })} placeholder="Ej. CL 45 # 20-10" />
               </div>
               <div className="field">
                 <label>Teléfono</label>
-                <input value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} placeholder="Número de teléfono" />
+                <input value={form.telefono} maxLength={20} inputMode="tel" onChange={(e) => setForm({ ...form, telefono: e.target.value })} placeholder="Número de teléfono" />
               </div>
               <div className="field">
-                <label>Correo</label>
-                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="correo@ejemplo.com" />
-              </div>
-              <div className="field">
-                <label>País Siesa</label>
-                <select
-                  value={paisSiesaCodigo}
-                  onChange={(e) => {
-                    setPaisSiesaCodigo(e.target.value);
-                    setDepartamentoSiesaCodigo('');
-                    setForm({
-                      ...form,
-                      municipioSiesaCodigo: '',
-                      ciudad: form.municipioSiesaCodigo ? '' : form.ciudad,
-                    });
-                  }}
-                >
-                  <option value="">Seleccionar país…</option>
-                  {paisesSiesa.map((pais) => <option key={pais.codigo} value={pais.codigo}>{pais.codigo} · {pais.nombre}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>Departamento Siesa</label>
+                <label>Departamento *</label>
                 <BuscadorUbicacionSiesa
-                  key={paisSiesaCodigo}
                   items={departamentosSiesa}
                   value={departamentoSiesaCodigo}
                   placeholder="Seleccionar departamento…"
                   placeholderBusqueda="Buscar código o departamento…"
-                  deshabilitado={!paisSiesaCodigo}
                   onChange={(codigo) => {
                     setDepartamentoSiesaCodigo(codigo);
-                    setForm({
-                      ...form,
-                      municipioSiesaCodigo: '',
-                      ciudad: form.municipioSiesaCodigo ? '' : form.ciudad,
-                    });
+                    setForm({ ...form, municipioSiesaCodigo: '', ciudad: '' });
                   }}
                 />
               </div>
               <div className="field">
-                <label>Ciudad Siesa</label>
+                <label>Ciudad *</label>
                 <BuscadorUbicacionSiesa
                   key={departamentoSiesaCodigo}
                   items={ciudadesSiesa}
@@ -557,70 +546,9 @@ export default function Clientes() {
                 />
               </div>
               <div className="field">
-                <label>Barrio</label>
-                <input value={form.barrio} onChange={(e) => setForm({ ...form, barrio: e.target.value.toUpperCase() })} placeholder="Barrio" />
+                <label>Correo</label>
+                <input type="email" maxLength={50} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="correo@ejemplo.com" />
               </div>
-              <div className="field">
-                <label>Dirección</label>
-                <input value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value.toUpperCase() })} placeholder="Dirección" />
-              </div>
-              <div className="field" style={{ justifyContent: 'flex-end' }}>
-                <label className="mini" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input type="checkbox" checked={form.responsableIVA} onChange={(e) => setForm({ ...form, responsableIVA: e.target.checked })} />
-                  Responsable de IVA
-                </label>
-              </div>
-              <div className="field">
-                <label>% Empleado / % Cliente</label>
-                <div className="grid" style={{ gap: 6, gridTemplateColumns: '1fr 1fr' }}>
-                  <input type="number" min="0" max="100" step="0.01" value={form.porcentajeEmpleado} onChange={(e) => setForm({ ...form, porcentajeEmpleado: e.target.value })} placeholder="Empleado" />
-                  <input type="number" min="0" max="100" step="0.01" value={form.porcentajeCliente} onChange={(e) => setForm({ ...form, porcentajeCliente: e.target.value })} placeholder="Cliente" />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid form-3col" style={{ gap: 12, alignItems: 'start' }}>
-              <div className="field">
-                <label>Condición de pago</label>
-                <div className="mesera-grid">
-                  {['CONTADO', 'CREDITO'].map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      className={`mesera-card ${form.condicionPago === c ? 'sel' : ''}`}
-                      onClick={() => setForm({ ...form, condicionPago: c })}
-                    >
-                      <div className="mesera-nombre">{c === 'CONTADO' ? 'Contado' : 'Crédito'}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {form.condicionPago === 'CREDITO' ? (
-                <>
-                  <div className="field">
-                    <label>Días de crédito *</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={form.creditoDias}
-                      onChange={(e) => setForm({ ...form, creditoDias: e.target.value })}
-                      placeholder="Ej. 30"
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Cupo máximo</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={form.creditoCupo}
-                      onChange={(e) => setForm({ ...form, creditoCupo: e.target.value })}
-                      placeholder="Ej. 500000"
-                    />
-                  </div>
-                </>
-              ) : (
-                <p className="mini" style={{ gridColumn: '2 / -1', alignSelf: 'center' }}>Pago de contado: no aplica plazo ni cupo.</p>
-              )}
             </div>
           </form>
         </Modal>
