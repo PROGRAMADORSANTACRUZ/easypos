@@ -193,6 +193,7 @@ export default function Cocina() {
                       </div>
                       <span className="cocina-comanda__tiempo" title={nivel.etiqueta}>{minutos} min</span>
                     </header>
+                    {p.observaciones && <div className="cocina-nota cocina-nota--pedido"><b>Observaciones:</b> {p.observaciones}</div>}
                     <ul className="cocina-comanda__platos">
                       {p.items.map((it) => {
                         const listo = (preparaciones[p.id]?.itemsListos || []).some((estado) => Number(estado.pedidoItemId) === it.id
