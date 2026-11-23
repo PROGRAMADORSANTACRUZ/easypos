@@ -7,6 +7,7 @@ const { spawn } = require('node:child_process');
 const path = require('node:path');
 const http = require('node:http');
 const { enviarPulsoCajon } = require('./cash-drawer.js');
+const { enviarComandaRed } = require('./impresora-red.js');
 const { crearServidorEstatico } = require('./static-server.js');
 const { iniciarActualizaciones } = require('./updater.js');
 
@@ -56,6 +57,10 @@ function registrarCanalesCajon() {
   ipcMain.handle('pos:app-version', (event) => {
     exigirVentanaPrincipal(event);
     return app.getVersion();
+  });
+  ipcMain.handle('pos:imprimir-red', async (event, comanda = {}) => {
+    exigirVentanaPrincipal(event);
+    return enviarComandaRed(comanda);
   });
   ipcMain.handle('pos:cash-drawer:list-printers', async (event) => {
     exigirVentanaPrincipal(event);

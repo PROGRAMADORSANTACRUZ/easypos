@@ -376,6 +376,17 @@ export default function App() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
+  // Avisa cuando una comanda no pudo salir por la impresora de la estacion (red del local).
+  useEffect(() => {
+    const avisar = (e) => {
+      const lista = e.detail || [];
+      const estaciones = [...new Set(lista.map((x) => `${x.estacion || 'cocina'} (${x.ip})`))].join(', ');
+      notify(`No se imprimió la comanda en ${estaciones}: ${lista[0]?.error || 'sin respuesta de la impresora'}`, 'err');
+    };
+    window.addEventListener('pos:comandas-fallidas', avisar);
+    return () => window.removeEventListener('pos:comandas-fallidas', avisar);
+  }, [notify]);
+
   const login = useCallback((u) => {
     setUsuarioActual(u);
     setUser(u);

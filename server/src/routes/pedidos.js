@@ -4,7 +4,7 @@ import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import { errorDocumento } from '../documentoCliente.js';
 import { calcularInsumosRequeridos, validarStockSuficiente, descontarInsumos, revertirInsumos } from '../inventarioKits.js';
-import { imprimirComandaPorEstacion } from '../impresionCocina.js';
+import { prepararComandas } from '../impresionCocina.js';
 import { conEventoPedido, registrarEventoPedido, estadoAntesDeReenvio, validarMotivoCancelacion, itemsCanceladosDeEventos } from '../historialPedidos.js';
 import { consultarEntregaPedido, registrarResultadoCocinaTransaccion } from '../historialCocina.js';
 import { descontarStockMesa00, devolverStockMesa00, itemsDeInventarioNormal } from '../stockMesa00.js';
@@ -388,8 +388,7 @@ router.post('/', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
     return res.status(e.status || 409).json({ error: e.message });
   }
 
-  imprimirComandaPorEstacion(pedido, pedido.items).catch(() => {});
-  res.status(201).json(pedido);
+  res.status(201).json({ ...pedido, comandasImpresion: prepararComandas(pedido, pedido.items) });
 }));
 
 // Pedido en linea del cliente (auto-pedido / domicilio): el cliente digita sus datos,
@@ -489,8 +488,7 @@ router.post('/online', exigirPermiso('domicilios.crear'), wrap(async (req, res) 
     return res.status(409).json({ error: e.message });
   }
 
-  imprimirComandaPorEstacion(pedido, pedido.items).catch(() => {});
-  res.status(201).json(pedido);
+  res.status(201).json({ ...pedido, comandasImpresion: prepararComandas(pedido, pedido.items) });
 }));
 
 // Seguimiento público del pedido para el cliente (requiere el token entregado al crear).
@@ -619,8 +617,8 @@ router.post('/:id/items', exigirPermiso('pedidos.editar'), wrap(async (req, res)
     return res.status(e.status || 409).json({ error: e.message });
   }
   const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId }, include: pedidoInclude });
-  imprimirComandaPorEstacion(pedido, [{ cantidad: cant, notas: notas || null, producto }]).catch(() => {});
-  res.status(201).json(pedido);
+  const comandasImpresion = prepararComandas(pedido, [{ cantidad: cant, notas: notas || null, producto }]);
+  res.status(201).json({ ...pedido, comandasImpresion });
 }));
 
 

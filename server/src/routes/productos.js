@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
-import { imprimirComandaPorEstacion } from '../impresionCocina.js';
+import { prepararComandas } from '../impresionCocina.js';
 import { sincronizarItemsSiesa } from '../siesaProductos.js';
 import { costoReceta, recalcularCostosPlatos } from '../costeoPlatos.js';
 
@@ -111,16 +111,17 @@ router.delete('/categorias/:id', wrap(async (req, res) => {
   }
 }));
 
-// Envía un ticket de prueba a la impresora de la categoría, para verificar la IP sin tomar un pedido.
+// Arma un ticket de prueba para la impresora de la categoría, para verificar la IP sin tomar un pedido. Lo envía
+// el dispositivo que lo pide (está en la red del local) o, con IMPRESION_COMANDAS_SERVIDOR=true, el servidor.
 router.post('/categorias/:id/probar-impresora', wrap(async (req, res) => {
   const cat = await prisma.categoria.findUnique({ where: { id: String(req.params.id) } });
   if (!cat) return res.status(404).json({ error: 'Categoría no encontrada' });
   if (!cat.impresoraIp) return res.status(400).json({ error: 'Esta categoría no tiene impresora configurada' });
-  await imprimirComandaPorEstacion(
+  const comandasImpresion = prepararComandas(
     { id: 0, mesa: { numero: 'PRUEBA' }, mesera: { nombre: 'Sistema' } },
     [{ cantidad: 1, notas: null, producto: { nombre: 'TICKET DE PRUEBA', categoria: cat } }],
   );
-  res.json({ ok: true });
+  res.json({ ok: true, comandasImpresion });
 }));
 
 // Crear producto (opcionalmente con receta de kit)

@@ -3,6 +3,8 @@
 // reverse proxy en producción). Si el frontend corre en un origen distinto al backend
 // (ej. la app de escritorio, que sirve cada uno en su propio puerto), se usa la URL
 // absoluta inyectada en window.POS_API_URL.
+import { imprimirComandas } from './comandas.js';
+
 const BASE = (typeof window !== 'undefined' && window.POS_API_URL) || '/api';
 
 let usuarioSesion = null;
@@ -61,7 +63,15 @@ async function request(path, options = {}) {
     throw Object.assign(new Error(msg), { status: res.status });
   }
   if (res.status === 204) return null;
-  return res.json();
+  const datos = await res.json();
+  // Comandas de cocina que el servidor deja para que las imprima este dispositivo (red del local).
+  if (datos && Array.isArray(datos.comandasImpresion)) {
+    const comandas = datos.comandasImpresion;
+    delete datos.comandasImpresion;
+    const impresion = comandas.length ? imprimirComandas(comandas) : Promise.resolve([]);
+    Object.defineProperty(datos, 'impresionComandas', { value: impresion, enumerable: false });
+  }
+  return datos;
 }
 
 export const api = {

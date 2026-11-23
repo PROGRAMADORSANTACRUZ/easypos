@@ -32,7 +32,7 @@ test('installer uses native DPI rendering and high-resolution artwork', () => {
   }
 });
 
-test('preload exposes only the app version and cash drawer bridges', async () => {
+test('preload exposes only the app version, network printing and cash drawer bridges', async () => {
   const calls = [];
   let exposedName;
   let exposedApi;
@@ -48,15 +48,46 @@ test('preload exposes only the app version and cash drawer bridges', async () =>
   vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '..', 'preload.js'), 'utf8'), context);
 
   assert.equal(exposedName, 'posDesktop');
-  assert.deepEqual(Object.keys(exposedApi), ['appVersion', 'cashDrawer']);
+  assert.deepEqual(Object.keys(exposedApi), ['appVersion', 'imprimirRed', 'cashDrawer']);
   await exposedApi.appVersion();
+  await exposedApi.imprimirRed({ ip: '192.168.0.95', puerto: 9100, datos: 'eA==' });
   await exposedApi.cashDrawer.listPrinters();
   await exposedApi.cashDrawer.open({ printerName: 'Thermal' });
   assert.deepEqual(calls, [
     ['pos:app-version'],
+    ['pos:imprimir-red', { ip: '192.168.0.95', puerto: 9100, datos: 'eA==' }],
     ['pos:cash-drawer:list-printers'],
     ['pos:cash-drawer:open', { printerName: 'Thermal' }],
   ]);
+});
+
+test('network printing only reaches private LAN printers and sends the raw ticket', async () => {
+  const { enviarComandaRed, esIpPrivada } = require('../impresora-red.js');
+  for (const ip of ['192.168.0.95', '10.0.0.5', '172.16.1.1', '172.31.255.254']) assert.equal(esIpPrivada(ip), true, ip);
+  for (const ip of ['8.8.8.8', '172.32.0.1', '192.169.0.1', '127.0.0.1', '192.168.0.256', 'impresora', '']) assert.equal(esIpPrivada(ip), false, ip);
+
+  const enviado = [];
+  const socketFalso = (falla) => () => {
+    const handlers = {};
+    return {
+      setTimeout() {},
+      once(evento, fn) { handlers[evento] = fn; },
+      connect(puerto, ip, alConectar) {
+        enviado.push(`${ip}:${puerto}`);
+        if (falla) setImmediate(() => handlers.error(new Error('ECONNREFUSED')));
+        else setImmediate(alConectar);
+      },
+      end(datos, fin) { enviado.push(datos.toString('binary')); setImmediate(fin); },
+      destroy() {},
+    };
+  };
+  const datos = Buffer.from('\x1b@HOLA', 'binary').toString('base64');
+  assert.deepEqual(await enviarComandaRed({ ip: '192.168.0.95', puerto: 9100, datos }, { crearSocket: socketFalso(false) }), { ok: true });
+  assert.deepEqual(enviado, ['192.168.0.95:9100', '\x1b@HOLA']);
+  await assert.rejects(enviarComandaRed({ ip: '192.168.0.95', datos }, { crearSocket: socketFalso(true) }), /No se pudo conectar con la impresora 192\.168\.0\.95:9100/);
+  await assert.rejects(enviarComandaRed({ ip: '8.8.8.8', datos }), /red local/);
+  await assert.rejects(enviarComandaRed({ ip: '192.168.0.95', puerto: 70000, datos }), /Puerto/);
+  await assert.rejects(enviarComandaRed({ ip: '192.168.0.95', datos: '' }), /vacía/);
 });
 
 test('packaged window has only native overlay controls and the POS icon', async () => {
@@ -98,6 +129,7 @@ test('packaged window has only native overlay controls and the POS icon', async 
         return { crearServidorEstatico: async (options) => { serverOptions = options; return { close() {} }; } };
       }
       if (name === './cash-drawer.js') return { enviarPulsoCajon: async () => {} };
+      if (name === './impresora-red.js') return { enviarComandaRed: async () => ({ ok: true }) };
       if (name === './updater.js') return require('../updater.js');
       if (name === 'electron-updater') {
         return { autoUpdater: { on() {}, checkForUpdates: async () => { updateChecks += 1; } } };
@@ -185,6 +217,7 @@ test('local desktop routes API through the window origin to preserve session coo
         return { crearServidorEstatico: async (options) => { serverOptions = options; return { close() {} }; } };
       }
       if (name === './cash-drawer.js') return { enviarPulsoCajon: async () => {} };
+      if (name === './impresora-red.js') return { enviarComandaRed: async () => ({ ok: true }) };
       if (name === './updater.js') return require('../updater.js');
       if (name === 'node:child_process') return { spawn: () => ({ on() {} }) };
       if (name === 'node:http') {

@@ -53,11 +53,12 @@ function enviarAImpresora(ip, puerto, contenido) {
   });
 }
 
-// Agrupa los items del pedido por la impresora de su categoria y envia un ticket
-// por cada estacion (cocina, bar, postres, etc). Items sin categoria/impresora se ignoran.
+// Agrupa los items del pedido por la impresora de su categoria y arma un ticket ESC/POS por estacion
+// (cocina, bar, postres, etc). Items sin categoria/impresora se ignoran.
 // pedido: { id, mesa, mesera, cambios }, items: [{ cantidad, notas, producto: { nombre, categoria } }]
-export async function imprimirComandaPorEstacion(pedido, items) {
-  const grupos = new Map(); // "ip:puerto|nombreCategoria" -> { ip, puerto, estacion, items: [] }
+// Devuelve [{ ip, puerto, estacion, datos }] con `datos` en base64, listo para enviar por TCP.
+export function ticketsComanda(pedido, items) {
+  const grupos = new Map(); // "ip:puerto" -> { ip, puerto, estacion, items: [] }
   for (const it of items) {
     const cat = it.producto?.categoria;
     if (!cat?.impresoraIp) continue;
@@ -66,10 +67,11 @@ export async function imprimirComandaPorEstacion(pedido, items) {
     if (!grupos.has(clave)) grupos.set(clave, { ip: cat.impresoraIp, puerto, estacion: cat.nombre, items: [] });
     grupos.get(clave).items.push({ cantidad: it.cantidad, notas: it.notas, nombre: it.producto?.nombre });
   }
-
-  const envios = [];
-  for (const grupo of grupos.values()) {
-    const ticket = construirTicket({
+  return [...grupos.values()].map((grupo) => ({
+    ip: grupo.ip,
+    puerto: grupo.puerto,
+    estacion: grupo.estacion,
+    datos: Buffer.from(construirTicket({
       estacion: grupo.estacion,
       mesa: pedido.mesa?.numero ?? (pedido.tipo === 'DOMICILIO' ? 'DOMICILIO' : null),
       mesera: pedido.mesera?.nombre,
@@ -77,8 +79,26 @@ export async function imprimirComandaPorEstacion(pedido, items) {
       items: grupo.items,
       notasGenerales: pedido.cambios,
       observaciones: pedido.observaciones,
-    });
-    envios.push(enviarAImpresora(grupo.ip, grupo.puerto, ticket));
+    }), 'binary').toString('base64'),
+  }));
+}
+
+// Con el servidor en la nube las impresoras (IP privada del local) no son alcanzables: las comandas las envia el
+// dispositivo que tomo el pedido (APK o app de escritorio, que si estan en la red del local). El servidor solo las
+// envia el mismo si IMPRESION_COMANDAS_SERVIDOR=true (instalacion con el servidor dentro del local).
+export const imprimeElServidor = (env = process.env) => String(env.IMPRESION_COMANDAS_SERVIDOR || '').toLowerCase() === 'true';
+
+// Arma las comandas, las envia desde el servidor si corresponde y las devuelve para que las imprima el dispositivo.
+export function prepararComandas(pedido, items, { env = process.env, enviar = enviarAImpresora } = {}) {
+  const tickets = ticketsComanda(pedido, items);
+  if (imprimeElServidor(env)) {
+    for (const t of tickets) enviar(t.ip, t.puerto, Buffer.from(t.datos, 'base64').toString('binary')).catch(() => {});
+    return [];
   }
-  await Promise.all(envios);
+  return tickets;
+}
+
+export async function imprimirComandaPorEstacion(pedido, items) {
+  await Promise.all(ticketsComanda(pedido, items)
+    .map((t) => enviarAImpresora(t.ip, t.puerto, Buffer.from(t.datos, 'base64').toString('binary'))));
 }

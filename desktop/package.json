@@ -1,6 +1,6 @@
 {
   "name": "pos-desktop",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "App de escritorio POS (Electron)",
   "main": "main.js",
   "type": "commonjs",
@@ -29,6 +29,7 @@
       "main.js",
       "preload.js",
       "cash-drawer.js",
+      "impresora-red.js",
       "static-server.js",
       "updater.js",
       "build/icon.ico",

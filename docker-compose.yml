@@ -50,6 +50,8 @@ services:
       CONSULTA_API_URL: ${CONSULTA_API_URL:-https://apiconsulta.grupo-santacruz.com}
       CONSULTA_API_KEY: ${CONSULTA_API_KEY:-}
       CONSULTA_CLIENTES_SIN_CONDICIONES: ${CONSULTA_CLIENTES_SIN_CONDICIONES:-false}
+      # Comandas de cocina: las imprime la APK o la app de escritorio dentro del local (la nube no alcanza las impresoras).
+      IMPRESION_COMANDAS_SERVIDOR: ${IMPRESION_COMANDAS_SERVIDOR:-false}
       # La inicializacion y el seed se ejecutan manualmente al crear una
       # instalacion; nunca al reiniciar un servicio con datos reales.
       RUN_DB_INIT: "false"

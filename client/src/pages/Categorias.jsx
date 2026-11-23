@@ -78,8 +78,11 @@ export default function Categorias() {
   const probarImpresora = async (c) => {
     try {
       setProbando(c.id);
-      await api.post(`/productos/categorias/${c.id}/probar-impresora`, {});
-      notify(`Ticket de prueba enviado a ${c.impresoraIp}`);
+      const r = await api.post(`/productos/categorias/${c.id}/probar-impresora`, {});
+      const resultados = await (r.impresionComandas || Promise.resolve([]));
+      const fallo = resultados.find((x) => !x.ok);
+      if (fallo) notify(`No se pudo imprimir en ${c.impresoraIp}: ${fallo.error || 'sin respuesta'}`, 'err');
+      else notify(`Ticket de prueba enviado a ${c.impresoraIp}`);
     } catch (err) {
       notify(err.message, 'err');
     } finally {
