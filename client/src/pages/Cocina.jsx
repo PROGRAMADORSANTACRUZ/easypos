@@ -4,6 +4,20 @@ import { useToast } from '../App.jsx';
 import { LoadingState, EmptyState, Button, Modal } from '../components/ui/index.jsx';
 import { diaColombia } from '../fechaComercial.js';
 
+// Semaforo por minutos de espera de la comanda.
+const SEMAFORO = [
+  { hasta: 10, clase: 'verde', etiqueta: 'A tiempo', rango: '< 10 min' },
+  { hasta: 20, clase: 'naranja', etiqueta: 'Atención', rango: '10–20 min' },
+  { hasta: 30, clase: 'rojo', etiqueta: 'Demorada', rango: '20–30 min' },
+  { hasta: Infinity, clase: 'vino', etiqueta: 'Crítica', rango: '> 30 min' },
+];
+const semaforoDe = (minutos) => SEMAFORO.find((nivel) => minutos < nivel.hasta);
+const ESTADOS_HISTORIAL = {
+  RECHAZADO: { clase: 'rechazado', etiqueta: 'Rechazado' },
+  ENTREGADO: { clase: 'entregado', etiqueta: 'Entregado' },
+  LISTO: { clase: 'listo', etiqueta: 'Listo' },
+};
+
 // Vista de cocina: pedidos abiertos con sus items, ingredientes de cada plato, y el
 // check de "listo" para avisarle al mesero que puede pasar a recoger la mesa.
 export default function Cocina() {
@@ -24,7 +38,13 @@ export default function Cocina() {
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(1);
   const [resultado, setResultado] = useState(null);
+  const [ahora, setAhora] = useState(() => Date.now());
   const notify = useToast();
+
+  useEffect(() => {
+    const reloj = setInterval(() => setAhora(Date.now()), 30000);
+    return () => clearInterval(reloj);
+  }, []);
 
   const cargar = async () => {
     try {
@@ -113,7 +133,11 @@ export default function Cocina() {
   if (cargando) return <LoadingState label="Cargando comandas…" />;
 
   const pendientes = pedidos.filter((pedido) => !preparaciones[pedido.id]?.listo
-    && !['ENTREGADO', 'RECHAZADO'].includes(preparaciones[pedido.id]?.estadoCocina));
+    && !['ENTREGADO', 'RECHAZADO'].includes(preparaciones[pedido.id]?.estadoCocina))
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const minutosDe = (pedido) => Math.max(0, Math.floor((ahora - new Date(pedido.createdAt).getTime()) / 60000));
+  const conteoSemaforo = Object.fromEntries(SEMAFORO.map((nivel) => [nivel.clase, 0]));
+  pendientes.forEach((pedido) => { conteoSemaforo[semaforoDe(minutosDe(pedido)).clase] += 1; });
   const texto = busqueda.trim().toLocaleLowerCase('es-CO');
   const filtrado = historial.filter((fila) =>
     (!estadoFiltro || fila.estado === estadoFiltro) &&
@@ -142,111 +166,138 @@ export default function Cocina() {
         </div>
       </div>
 
-      {pendientes.length === 0 ? (
-        <EmptyState icon="mesas" title="Sin comandas pendientes" description="No hay comandas por preparar." />
-      ) : (
-        <div className="grid" style={{ gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-          {pendientes.map((p) => (
-            <div key={p.id} className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <strong>
-                  {p.tipo === 'DOMICILIO' ? `Domicilio #${p.consecutivoDia ?? p.id}` : `Mesa ${p.mesa?.numero ?? '-'}`}
-                </strong>
-                <span className="mini">{new Date(p.createdAt).toLocaleTimeString()}</span>
-              </div>
-              {p.mesera?.nombre && <div className="mini" style={{ opacity: .8 }}>{p.mesera.nombre}</div>}
-              <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-                {p.items.map((it) => {
-                  const listo = (preparaciones[p.id]?.itemsListos || []).some((estado) => Number(estado.pedidoItemId) === it.id
-                    && Number(estado.cantidad ?? it.cantidad) === it.cantidad);
+      <div className="cocina-semaforo" aria-label="Semáforo de comandas">
+        {SEMAFORO.map((nivel) => (
+          <div key={nivel.clase} className={`cocina-semaforo__nivel cocina-semaforo__nivel--${nivel.clase}`}>
+            <span className="cocina-semaforo__luz" aria-hidden="true" />
+            <div><strong>{conteoSemaforo[nivel.clase]}</strong> <span>{nivel.etiqueta}</span><small>{nivel.rango}</small></div>
+          </div>
+        ))}
+      </div>
+
+      <div className="cocina-layout">
+        <div className="cocina-comandas">
+          {pendientes.length === 0 ? (
+            <EmptyState icon="mesas" title="Sin comandas pendientes" description="No hay comandas por preparar." />
+          ) : (
+            <div className="cocina-comandas__grid">
+              {pendientes.map((p) => {
+                const minutos = minutosDe(p);
+                const nivel = semaforoDe(minutos);
+                return (
+                  <article key={p.id} className={`cocina-comanda cocina-comanda--${nivel.clase}`}>
+                    <header className="cocina-comanda__cabecera">
+                      <div>
+                        <strong>{p.tipo === 'DOMICILIO' ? `Domicilio #${p.consecutivoDia ?? p.id}` : `Mesa ${p.mesa?.numero ?? '-'}`}</strong>
+                        <span>{p.mesera?.nombre || 'Sin mesero'} · {new Date(p.createdAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <span className="cocina-comanda__tiempo" title={nivel.etiqueta}>{minutos} min</span>
+                    </header>
+                    <ul className="cocina-comanda__platos">
+                      {p.items.map((it) => {
+                        const listo = (preparaciones[p.id]?.itemsListos || []).some((estado) => Number(estado.pedidoItemId) === it.id
+                          && Number(estado.cantidad ?? it.cantidad) === it.cantidad);
+                        return (
+                          <li key={it.id}>
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              className={`cocina-plato${listo ? ' cocina-plato--listo' : ''}`}
+                              aria-pressed={listo}
+                              aria-disabled={listo || marcando !== null}
+                              aria-label={listo ? `${it.producto?.nombre || 'Plato'} listo` : `Marcar ${it.producto?.nombre || 'plato'} como listo`}
+                              onClick={() => !listo && marcando === null && marcarItemListo(p, it)}
+                              onKeyDown={(e) => {
+                                if ((e.key === 'Enter' || e.key === ' ') && !listo && marcando === null) {
+                                  e.preventDefault();
+                                  marcarItemListo(p, it);
+                                }
+                              }}
+                            >
+                              <strong className="cocina-plato__nombre">
+                                <span className="cocina-plato__cantidad">{it.cantidad}x</span> {it.producto?.nombre}
+                                {it.cantidadMesa00 > 0 && <span className="badge blue">Mesa 00 ×{it.cantidadMesa00}</span>}
+                              </strong>
+                              {it.notas && <span className="cocina-nota"><b>Obs:</b> {it.notas}</span>}
+                              {it.producto?.componentes?.length > 0 && (
+                                <div className="cocina-plato__ingredientes">
+                                  Ingredientes: {it.producto.componentes.map((c) => c.item?.nombre).join(', ')}
+                                </div>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <section className="cocina-historial" aria-labelledby="historial-cocina-titulo">
+          <div className="cocina-historial__cabecera">
+            <h2 id="historial-cocina-titulo">Historial de cocina</h2>
+            <Button icon="reload" title="Actualizar historial" aria-label="Actualizar historial" style={{ width: 36, flex: '0 0 36px' }} onClick={cargarHistorial} />
+          </div>
+          <div className="cocina-historial-filtros">
+            <div className="field"><label htmlFor="cocina-desde">Desde</label>
+              <input id="cocina-desde" type="date" value={desde} onChange={(event) => { setDesde(event.target.value); setPagina(1); }} /></div>
+            <div className="field"><label htmlFor="cocina-hasta">Hasta</label>
+              <input id="cocina-hasta" type="date" value={hasta} onChange={(event) => { setHasta(event.target.value); setPagina(1); }} /></div>
+            <div className="field"><label htmlFor="cocina-estado">Estado</label>
+              <select id="cocina-estado" value={estadoFiltro} onChange={(event) => { setEstadoFiltro(event.target.value); setPagina(1); }}>
+                <option value="">Todos</option><option value="ENTREGADO">Entregados</option><option value="RECHAZADO">Rechazados</option><option value="LISTO">Listos</option>
+              </select></div>
+            <div className="field"><label htmlFor="cocina-historial-cocinero">Cocinero</label>
+              <select id="cocina-historial-cocinero" value={cocineroFiltro} onChange={(event) => { setCocineroFiltro(event.target.value); setPagina(1); }}>
+                <option value="">Todos</option>{responsables.map((cocinero) => <option key={cocinero.id} value={cocinero.id}>{cocinero.nombre}</option>)}
+              </select></div>
+            <div className="field cocina-historial-filtros__busqueda"><label htmlFor="cocina-busqueda">Buscar</label>
+              <input id="cocina-busqueda" type="search" placeholder="Plato, mesa o motivo" value={busqueda} onChange={(event) => { setBusqueda(event.target.value); setPagina(1); }} /></div>
+          </div>
+          {cargandoHistorial ? <LoadingState label="Cargando historial..." /> : errorHistorial ? (
+            <p role="alert" style={{ color: 'var(--red)' }}>{errorHistorial}</p>
+          ) : filtrado.length === 0 ? (
+            <EmptyState icon="cocina" title="Sin registros" description="No hay registros para los filtros seleccionados." />
+          ) : (
+            <>
+              <ul className="cocina-historial__lista" aria-label="Historial de platos">
+                {filasVisibles.map((fila) => {
+                  const estado = ESTADOS_HISTORIAL[fila.estado] || ESTADOS_HISTORIAL.LISTO;
                   return (
-                  <li key={it.id} style={{ marginBottom: 6, listStyle: 'none', marginLeft: -18 }}>
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      className={`cocina-plato${listo ? ' cocina-plato--listo' : ''}`}
-                      aria-pressed={listo}
-                      aria-disabled={listo || marcando !== null}
-                      aria-label={listo ? `${it.producto?.nombre || 'Plato'} listo` : `Marcar ${it.producto?.nombre || 'plato'} como listo`}
-                      onClick={() => !listo && marcando === null && marcarItemListo(p, it)}
-                      onKeyDown={(e) => {
-                        if ((e.key === 'Enter' || e.key === ' ') && !listo && marcando === null) {
-                          e.preventDefault();
-                          marcarItemListo(p, it);
-                        }
-                      }}
-                    >
-                      <strong>{it.cantidad}x {it.producto?.nombre} {it.cantidadMesa00 > 0 && <span className="badge blue">Mesa 00 ×{it.cantidadMesa00}</span>}</strong>
-                      {it.notas && <span className="mini" style={{ display: 'block', opacity: .8 }}>{it.notas}</span>}
-                      {it.producto?.componentes?.length > 0 && (
-                        <div className="mini" style={{ opacity: .75, marginTop: 2 }}>
-                          Ingredientes: {it.producto.componentes.map((c) => c.item?.nombre).join(', ')}
-                        </div>
+                    <li key={fila.id} className={`cocina-hist cocina-hist--${estado.clase}`}>
+                      <div className="cocina-hist__fila">
+                        <strong>{fila.tipo === 'DOMICILIO' ? `Domicilio #${fila.consecutivoDia ?? fila.pedidoId}` : `Mesa ${fila.mesa ?? '-'}`}
+                          <span className="cocina-hist__pedido"> · Pedido #{fila.pedidoId}</span></strong>
+                        <span className={`cocina-hist__estado cocina-hist__estado--${estado.clase}`}>{estado.etiqueta}</span>
+                      </div>
+                      <div className="cocina-hist__platos">{fila.productos}</div>
+                      <div className="cocina-hist__meta">
+                        <span>{new Date(fila.fecha).toLocaleString('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>Cocinero: {fila.cocinero || 'Sin asignar'}</span>
+                        <span>Mesero: {fila.mesera || '-'}</span>
+                      </div>
+                      {fila.motivo && <div className="cocina-nota cocina-nota--motivo"><b>Motivo:</b> {fila.motivo}</div>}
+                      {fila.estado === 'RECHAZADO' && pedidos.some((pedido) => pedido.id === fila.pedidoId && preparaciones[pedido.id]?.estadoCocina === 'RECHAZADO') && (
+                        <Button size="sm" icon="reload" disabled={marcando !== null} onClick={() => abrirResultado(fila.pedidoId, 'REABIERTO')}>Reenviar a cocina</Button>
                       )}
-                    </div>
-                  </li>
+                    </li>
                   );
                 })}
               </ul>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <section className="cocina-historial" aria-labelledby="historial-cocina-titulo">
-        <div className="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <h2 id="historial-cocina-titulo">Historial de cocina</h2>
-          <Button icon="reload" title="Actualizar historial" aria-label="Actualizar historial" style={{ width: 40, flex: '0 0 40px' }} onClick={cargarHistorial} />
-        </div>
-        <div className="cocina-historial-filtros">
-          <div className="field"><label htmlFor="cocina-desde">Desde</label>
-            <input id="cocina-desde" type="date" value={desde} onChange={(event) => { setDesde(event.target.value); setPagina(1); }} /></div>
-          <div className="field"><label htmlFor="cocina-hasta">Hasta</label>
-            <input id="cocina-hasta" type="date" value={hasta} onChange={(event) => { setHasta(event.target.value); setPagina(1); }} /></div>
-          <div className="field"><label htmlFor="cocina-estado">Estado</label>
-            <select id="cocina-estado" value={estadoFiltro} onChange={(event) => { setEstadoFiltro(event.target.value); setPagina(1); }}>
-              <option value="">Todos</option><option value="ENTREGADO">Entregados</option><option value="RECHAZADO">Rechazados</option><option value="LISTO">Listos</option>
-            </select></div>
-          <div className="field"><label htmlFor="cocina-historial-cocinero">Cocinero</label>
-            <select id="cocina-historial-cocinero" value={cocineroFiltro} onChange={(event) => { setCocineroFiltro(event.target.value); setPagina(1); }}>
-              <option value="">Todos</option>{responsables.map((cocinero) => <option key={cocinero.id} value={cocinero.id}>{cocinero.nombre}</option>)}
-            </select></div>
-          <div className="field"><label htmlFor="cocina-busqueda">Buscar</label>
-            <input id="cocina-busqueda" type="search" placeholder="Plato, mesa o motivo" value={busqueda} onChange={(event) => { setBusqueda(event.target.value); setPagina(1); }} /></div>
-        </div>
-        {cargandoHistorial ? <LoadingState label="Cargando historial..." /> : errorHistorial ? (
-          <p role="alert" style={{ color: 'var(--red)' }}>{errorHistorial}</p>
-        ) : filtrado.length === 0 ? (
-          <EmptyState icon="cocina" title="Sin registros" description="No hay registros para los filtros seleccionados." />
-        ) : (
-          <>
-            <div className="cocina-historial-tabla" tabIndex={0} aria-label="Historial de platos">
-              <table>
-                <thead><tr><th>Fecha y hora</th><th>Comanda</th><th>Platos</th><th>Estado</th><th>Cocinero</th><th>Mesero</th><th>Motivo</th><th></th></tr></thead>
-                <tbody>{filasVisibles.map((fila) => (
-                  <tr key={fila.id}>
-                    <td>{new Date(fila.fecha).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
-                    <td>{fila.tipo === 'DOMICILIO' ? `Domicilio #${fila.consecutivoDia ?? fila.pedidoId}` : `Mesa ${fila.mesa ?? '-'}`}<div className="mini">Pedido #{fila.pedidoId}</div></td>
-                    <td>{fila.productos}</td>
-                    <td><span className={`badge ${fila.estado === 'RECHAZADO' ? 'red' : fila.estado === 'ENTREGADO' ? 'green' : 'blue'}`}>{fila.estado === 'RECHAZADO' ? 'Rechazado' : fila.estado === 'ENTREGADO' ? 'Entregado' : 'Listo'}</span></td>
-                    <td>{fila.cocinero || 'Sin asignar'}</td><td>{fila.mesera || '-'}</td><td>{fila.motivo || '-'}</td>
-                    <td>{fila.estado === 'RECHAZADO' && pedidos.some((pedido) => pedido.id === fila.pedidoId && preparaciones[pedido.id]?.estadoCocina === 'RECHAZADO') && (
-                      <Button size="sm" icon="reload" disabled={marcando !== null} onClick={() => abrirResultado(fila.pedidoId, 'REABIERTO')}>Reenviar a cocina</Button>
-                    )}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-            <div className="row between" style={{ marginTop: 12, gap: 8, flexWrap: 'wrap' }}>
-              <span className="mini">{filtrado.length} registros · {paginaActual} / {paginas}</span>
-              <div className="row" style={{ gap: 8 }}>
-                <Button icon="back" title="Pagina anterior" aria-label="Pagina anterior" disabled={paginaActual === 1} onClick={() => setPagina(paginaActual - 1)} />
-                <Button icon="forward" title="Pagina siguiente" aria-label="Pagina siguiente" disabled={paginaActual === paginas} onClick={() => setPagina(paginaActual + 1)} />
+              <div className="row between" style={{ marginTop: 10, gap: 8, flexWrap: 'wrap' }}>
+                <span className="mini">{filtrado.length} registros · {paginaActual} / {paginas}</span>
+                <div className="row" style={{ gap: 8 }}>
+                  <Button icon="back" title="Pagina anterior" aria-label="Pagina anterior" disabled={paginaActual === 1} onClick={() => setPagina(paginaActual - 1)} />
+                  <Button icon="forward" title="Pagina siguiente" aria-label="Pagina siguiente" disabled={paginaActual === paginas} onClick={() => setPagina(paginaActual + 1)} />
+                </div>
               </div>
-            </div>
-          </>
-        )}
-      </section>
+            </>
+          )}
+        </section>
+      </div>
 
       {resultado && (
         <Modal title="Reenviar a cocina" size="sm"

@@ -1044,22 +1044,70 @@ tbody tr:last-child td { border-bottom: none; }
 .factura-directa-modal > .row h3 { min-width: 0; flex: 1; }
 
 .cobro-dividir-toggle { width: 100%; margin: 2px 0 12px; }
-.cocina-plato { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer; user-select: none; }
-.cocina-plato:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+/* Cocina: paleta vinotinto / rojo / naranja / negro con semaforo por tiempo de espera */
+.cocina-semaforo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 4px 0 16px; }
+.cocina-semaforo__nivel { --sem: var(--green); display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--radius-md); background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--sem); }
+.cocina-semaforo__nivel strong { font-size: 20px; color: var(--sem); margin-right: 4px; }
+.cocina-semaforo__nivel span { font-weight: 600; font-size: 13px; }
+.cocina-semaforo__nivel small { display: block; font-size: 11px; color: var(--muted); }
+.cocina-semaforo__luz { width: 14px; height: 14px; border-radius: 50%; background: var(--sem); box-shadow: 0 0 0 4px color-mix(in srgb, var(--sem) 22%, transparent), 0 0 10px var(--sem); flex: 0 0 14px; }
+.cocina-semaforo__nivel--verde, .cocina-comanda--verde { --sem: #1F9D55; }
+.cocina-semaforo__nivel--naranja, .cocina-comanda--naranja { --sem: var(--brand-orange); }
+.cocina-semaforo__nivel--rojo, .cocina-comanda--rojo { --sem: var(--brand-red); }
+.cocina-semaforo__nivel--vino, .cocina-comanda--vino { --sem: #8F1E13; }
+.cocina-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); gap: 16px; align-items: start; }
+.cocina-comandas { min-width: 0; }
+.cocina-comandas__grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.cocina-comanda { background: var(--panel); border: 1px solid var(--border); border-top: 4px solid var(--sem); border-radius: var(--radius-md); overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.cocina-comanda--vino { animation: cocina-pulso 1.6s ease-in-out infinite; }
+@keyframes cocina-pulso { 50% { box-shadow: 0 0 0 3px rgba(143,30,19,.45); } }
+.cocina-comanda__cabecera { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; background: linear-gradient(90deg, #1A1614, #3A1410); color: #F2EEE8; }
+.cocina-comanda__cabecera strong { display: block; font-size: 15px; }
+.cocina-comanda__cabecera span { font-size: 12px; opacity: .8; }
+.cocina-comanda__tiempo { flex: 0 0 auto; padding: 3px 9px; border-radius: var(--radius-pill); background: var(--sem); color: #fff !important; opacity: 1 !important; font-weight: 700; font-size: 12px !important; }
+.cocina-comanda--naranja .cocina-comanda__tiempo { color: #1A1614 !important; }
+.cocina-comanda__platos { list-style: none; margin: 0; padding: 8px; display: grid; gap: 6px; }
+.cocina-plato { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-2); cursor: pointer; user-select: none; transition: border-color .15s, background .15s; }
+.cocina-plato:hover:not(.cocina-plato--listo) { border-color: var(--brand-red); }
+.cocina-plato:focus-visible { outline: 2px solid var(--brand-orange); outline-offset: 2px; }
 .cocina-plato--listo { background: var(--green-soft); border-color: var(--green); cursor: default; }
+.cocina-plato--listo .cocina-plato__nombre { text-decoration: line-through; opacity: .75; }
 .cocina-plato[aria-disabled="true"]:not(.cocina-plato--listo) { opacity: .6; cursor: progress; }
-.cocina-historial { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); min-width: 0; }
-.cocina-historial h2 { margin: 0; font-size: 18px; }
-.cocina-historial-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 16px 0; }
+.cocina-plato__nombre { display: block; font-size: 14px; line-height: 1.3; }
+.cocina-plato__cantidad { color: var(--brand-red); font-weight: 800; }
+.cocina-plato__ingredientes { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.cocina-nota { display: block; margin-top: 5px; padding: 4px 8px; border-left: 3px solid var(--brand-orange); border-radius: 4px; background: rgba(255,162,23,.16); color: var(--text); font-size: 13px; font-weight: 600; }
+.cocina-nota b { color: #B87400; text-transform: uppercase; font-size: 11px; letter-spacing: .04em; }
+.cocina-nota--motivo { border-left-color: var(--brand-red); background: rgba(225,54,38,.14); }
+.cocina-nota--motivo b { color: var(--brand-red); }
+.cocina-historial { position: sticky; top: 12px; min-width: 0; padding: 0 12px 12px; border-radius: var(--radius-lg); background: var(--panel); border: 1px solid var(--border); overflow: hidden; }
+.cocina-historial__cabecera { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 -12px; padding: 10px 12px; background: linear-gradient(90deg, #62120B, #1A1614); color: #F2EEE8; }
+.cocina-historial h2 { margin: 0; font-size: 16px; color: #F2EEE8; }
+.cocina-historial-filtros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
 .cocina-historial-filtros .field { min-width: 0; margin: 0; }
+.cocina-historial-filtros__busqueda { grid-column: 1 / -1; }
 .cocina-historial-filtros input, .cocina-historial-filtros select { width: 100%; min-width: 0; }
-.cocina-historial-tabla { width: 100%; overflow-x: auto; }
-.cocina-historial-tabla table { display: table; min-width: 900px; }
-.cocina-historial-tabla thead { display: table-header-group; }
-.cocina-historial-tabla tbody { display: table-row-group; }
-.cocina-historial-tabla tr { display: table-row; }
-.cocina-historial-tabla th, .cocina-historial-tabla td { display: table-cell; white-space: normal; vertical-align: top; }
-@media (max-width: 600px) { .cocina-historial-filtros .field:last-child { grid-column: 1 / -1; } }
+.cocina-historial__lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: calc(100vh - 340px); min-height: 200px; overflow-y: auto; }
+.cocina-hist { --est: var(--brand-orange); padding: 8px 10px; border: 1px solid var(--border); border-left: 4px solid var(--est); border-radius: var(--radius-md); background: var(--panel-2); display: grid; gap: 4px; }
+.cocina-hist--entregado { --est: #1A1614; }
+[data-theme="dark"] .cocina-hist--entregado { --est: #F2EEE8; }
+.cocina-hist--rechazado { --est: var(--brand-red); }
+.cocina-hist__fila { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.cocina-hist__fila strong { font-size: 14px; }
+.cocina-hist__pedido { font-weight: 400; font-size: 12px; color: var(--muted); }
+.cocina-hist__estado { flex: 0 0 auto; padding: 2px 9px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 700; }
+.cocina-hist__estado--listo { background: var(--brand-orange); color: #1A1614; }
+.cocina-hist__estado--entregado { background: #1A1614; color: #F2EEE8; border: 1px solid #4A433B; }
+.cocina-hist__estado--rechazado { background: #62120B; color: #FCEBE8; }
+.cocina-hist__platos { font-size: 13px; line-height: 1.35; }
+.cocina-hist__meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.cocina-hist .btn { justify-self: start; }
+@media (max-width: 1100px) {
+  .cocina-layout { grid-template-columns: 1fr; }
+  .cocina-historial { position: static; }
+  .cocina-historial__lista { max-height: none; }
+}
+@media (max-width: 600px) { .cocina-semaforo { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .cobro-dividir-toggle.is-active { border-color: var(--primary); color: var(--primary); }
 .split-segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-2); }
 .split-segmented button { min-height: 36px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
