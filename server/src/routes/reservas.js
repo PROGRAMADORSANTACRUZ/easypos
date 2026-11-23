@@ -4,7 +4,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { auditar } from '../auditoria.js';
 import {
-  CONFIG_RESERVAS, fechaHoraColombia, fechaReservable, horaReservable, mesaDisponible, turnosDelDia, validarSolicitudReserva,
+  CONFIG_RESERVAS, fechaHoraColombia, fechaReservable, horaReservable, hoyColombia, mesaDisponible, turnosDelDia, validarSolicitudReserva,
 } from '../reservasNucleo.js';
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -107,13 +107,19 @@ reservasPublicasRouter.post('/', limitarIntentos, wrap(async (req, res) => {
 export const reservasRouter = Router();
 
 reservasRouter.get('/', wrap(async (req, res) => {
-  const fecha = String(req.query.fecha || '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return res.status(400).json({ error: 'Indica la fecha (AAAA-MM-DD)' });
-  const { inicio, fin } = rangoDia(fecha);
+  const fechaValida = (valor) => /^\d{4}-\d{2}-\d{2}$/.test(String(valor || ''));
+  const desde = fechaValida(req.query.desde) ? String(req.query.desde) : hoyColombia();
+  const hasta = fechaValida(req.query.hasta) ? String(req.query.hasta) : null;
+  if (hasta && hasta < desde) return res.status(400).json({ error: 'La fecha inicial debe ser menor o igual a la final' });
+  const estado = ESTADOS.includes(String(req.query.estado)) ? String(req.query.estado) : undefined;
   res.json(await prisma.reservaMesa.findMany({
-    where: { fechaHora: { gte: inicio, lt: fin } },
+    where: {
+      fechaHora: { gte: rangoDia(desde).inicio, ...(hasta && { lt: rangoDia(hasta).fin }) },
+      ...(estado && { estado }),
+    },
     include: { mesa: { select: { numero: true, capacidad: true } } },
     orderBy: [{ fechaHora: 'asc' }, { createdAt: 'asc' }],
+    take: 500,
   }));
 }));
 
