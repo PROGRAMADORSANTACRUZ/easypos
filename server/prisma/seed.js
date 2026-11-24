@@ -218,6 +218,10 @@ async function sembrarRolesYPermisos() {
       descripcion: 'Toma de pedidos por mesa',
       permisos: ['mesas.ver', 'pedidos.ver', 'pedidos.crear', 'pedidos.editar', 'pedidos.eliminar', 'pedidos.prefactura', 'pedidos.observaciones'],
     },
+          COCINA: {
+            descripcion: 'Preparación de comandas en cocina',
+            permisos: ['cocina.ver', 'pedidos.ver'],
+          },
   };
 
   for (const [nombre, def] of Object.entries(ROLES)) {
