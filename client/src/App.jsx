@@ -44,6 +44,7 @@ import SolicitudesMesa00 from './pages/SolicitudesMesa00.jsx';
 import { Icon } from './icons.jsx';
 import { LoadingState, Logo } from './components/ui/index.jsx';
 import ActualizadorApk from './components/ActualizadorApk.jsx';
+import AlertaPlatoListo from './components/AlertaPlatoListo.jsx';
 import { api, limpiarSesionActual, setTenantActual, setUsuarioActual } from './api.js';
 
 const ToastCtx = createContext(() => {});
@@ -614,6 +615,7 @@ export default function App() {
             </Routes>
           </main>
           <ActualizadorApk />
+          <AlertaPlatoListo />
           {toast && <div className={`toast ${toast.tipo === 'err' ? 'err' : 'ok'}`}>{toast.mensaje}</div>}
         </div>
       </AuthCtx.Provider>

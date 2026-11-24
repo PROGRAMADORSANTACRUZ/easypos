@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ApkUpdaterPlugin.class);
         registerPlugin(BiometricoPlugin.class);
         registerPlugin(ImpresionPlugin.class);
+        registerPlugin(AlertaPlatoPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

@@ -4,6 +4,7 @@ import { api, money } from '../api.js';
 import { Icon } from '../icons.jsx';
 import { useAuth, useToast } from '../App.jsx';
 import { LoadingState, Modal, Button } from '../components/ui/index.jsx';
+import { platosListos, tienePlatoListo } from '../platosListos.js';
 
 export default function Mesas() {
   const { user } = useAuth();
@@ -83,26 +84,6 @@ export default function Mesas() {
     if (!p) return 0;
     return p.items.reduce((s, it) => s + it.precioUnit * it.cantidad, 0);
   };
-  // Platos que cocina ya marco como listos y aun no se entregan en la mesa
-  const platosListos = (mesa) => {
-    const pedido = mesa.pedidos?.[0];
-    const preparacion = pedido?.preparacion;
-    if (!pedido || !preparacion) return [];
-    const marcados = Array.isArray(preparacion.itemsListos) ? preparacion.itemsListos : [];
-    return marcados.filter((estado) => !estado.entregadoAt).map((estado) => {
-      const item = pedido.items.find((it) => it.id === Number(estado.pedidoItemId));
-      return item && Number(estado.cantidad ?? item.cantidad) === item.cantidad
-        ? `${item.cantidad}x ${item.producto?.nombre || ''}` : null;
-    }).filter(Boolean);
-  };
-  // Pedidos anteriores a la confirmacion por plato solo traen el indicador general
-  const tienePlatoListo = (mesa) => {
-    const preparacion = mesa.pedidos?.[0]?.preparacion;
-    if (!preparacion) return false;
-    return Array.isArray(preparacion.itemsListos) && preparacion.itemsListos.length > 0
-      ? platosListos(mesa).length > 0 : !!preparacion.listo;
-  };
-
   const resumenMesas = [
     { etiqueta: 'Total', estado: 'TOTAL', cantidad: mesas.length },
     { etiqueta: 'Disponibles', estado: 'LIBRE', cantidad: mesas.filter((mesa) => mesa.estado === 'LIBRE').length },

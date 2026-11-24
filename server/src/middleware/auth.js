@@ -96,6 +96,7 @@ export function requireAuth(req, res, next) {
       nombre: true,
       activo: true,
       roles: { include: { rol: { include: { permisos: { include: { permiso: true } } } } } },
+      mesasMesero: { select: { mesaId: true } },
       centrosOperacion: {
         include: {
           centroOperacion: {
@@ -125,6 +126,7 @@ export function requireAuth(req, res, next) {
       nombre: usuario.nombre,
       roles,
       permisos,
+      mesaIds: usuario.mesasMesero.map(({ mesaId }) => mesaId),
       centrosOperacion: usuario.centrosOperacion.map(({ centroOperacion }) => centroOperacion),
     };
     req.headers['x-usuario-id'] = usuario.id;

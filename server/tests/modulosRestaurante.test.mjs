@@ -154,7 +154,7 @@ test('requireAuth reemplaza el usuario de auditoría enviado por el cliente', as
   process.env.JWT_SECRET ||= 'test-authenticated-audit-user';
   const { requireAuth, firmarToken } = await import('../src/middleware/auth.js');
   const { tenantStorage } = await import('../src/prisma.js');
-  const usuario = { id: 'usuario-autenticado', usuario: 'mesero1', nombre: 'Mesero', activo: true, roles: [], centrosOperacion: [] };
+  const usuario = { id: 'usuario-autenticado', usuario: 'mesero1', nombre: 'Mesero', activo: true, roles: [], mesasMesero: [{ mesaId: 3 }], centrosOperacion: [] };
   const db = { usuario: { findUnique: async () => usuario } };
   const req = {
     headers: {
@@ -171,6 +171,7 @@ test('requireAuth reemplaza el usuario de auditoría enviado por el cliente', as
   })));
   assert.equal(llamadaNext, true);
   assert.equal(req.headers['x-usuario-id'], usuario.id);
+  assert.deepEqual(req.usuario.mesaIds, [3]);
 });
 
 test('bloquea endpoints de grupos deshabilitados', () => {

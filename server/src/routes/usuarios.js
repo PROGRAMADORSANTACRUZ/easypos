@@ -41,7 +41,7 @@ const normalizarUsuario = normalizarMayusculas;
 
 // Calcula roles y permisos efectivos de un usuario (RBAC)
 async function conRolesYPermisos(u) {
-  const [asignaciones, centros] = await Promise.all([
+  const [asignaciones, centros, mesas] = await Promise.all([
     prisma.usuarioRol.findMany({
       where: { usuarioId: u.id },
       include: { rol: { include: { permisos: { include: { permiso: true } } } } },
@@ -50,10 +50,11 @@ async function conRolesYPermisos(u) {
       where: { usuarioId: u.id },
       include: { centroOperacion: { include: { compania: true } } },
     }),
+    prisma.usuarioMesa.findMany({ where: { usuarioId: u.id }, select: { mesaId: true } }),
   ]);
   const roles = asignaciones.map((a) => a.rol.nombre);
   const permisos = permisosEfectivos(asignaciones.flatMap((a) => a.rol.permisos.map((rp) => rp.permiso.codigo)));
-  return { ...sinHash(u), roles, permisos, centrosOperacion: centros.map(({ centroOperacion }) => centroOperacion) };
+  return { ...sinHash(u), roles, permisos, mesaIds: mesas.map(({ mesaId }) => mesaId), centrosOperacion: centros.map(({ centroOperacion }) => centroOperacion) };
 }
 
 // Inicio de sesión: valida usuario/contraseña, devuelve roles/permisos y un token de sesion (JWT)
