@@ -387,7 +387,7 @@ export default function ReservaPublica() {
                 <h3>Elige tu mesa</h3>
                 <div className="rsv-mesas">
                   {mesasOrdenadas.map((m) => (
-                    <button key={m.id} type="button" disabled={!m.disponible} className={mesa?.id === m.id ? 'is-activo' : ''} onClick={() => setMesa(m)}>
+                    <button key={m.id} type="button" disabled={!m.disponible} className={mesa?.id === m.id ? 'is-activo' : ''} onClick={() => { setMesa(m); setModal(''); }}>
                       <strong>Mesa {m.numero}</strong><small>{m.disponible ? `${m.capacidad} puestos` : 'Reservada'}</small>
                     </button>
                   ))}
