@@ -10,11 +10,18 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
 
-// Sirena al maximo volumen (canal de alarma: suena aunque el telefono este en silencio) y vibracion
-// continua. Se apaga solo con detener().
+// Campana de recepcion de hotel (varios golpes y una pausa, en bucle) al maximo volumen (canal de alarma:
+// suena aunque el telefono este en silencio) y vibracion continua. Se apaga solo con detener().
 class SirenaAlarma {
-    private static final int MUESTRAS_POR_SEGUNDO = 22050;
+    private static final int MUESTRAS_POR_SEGUNDO = 44100;
     private static final long[] PATRON_VIBRACION = {0, 900, 250, 900, 250, 400, 150, 400, 250};
+    // Campana de recepcion: fundamental brillante y parciales no armonicos que decaen mas rapido
+    private static final double FRECUENCIA_CAMPANA = 2200;
+    private static final double[] PARCIALES = {1.0, 2.76, 5.40, 8.93};
+    private static final double[] AMPLITUDES = {1.0, 0.6, 0.35, 0.2};
+    private static final int GOLPES_POR_CICLO = 4;
+    private static final double SEPARACION_GOLPES = 0.28;
+    private static final double DURACION_CICLO = 2.0;
 
     private final Context contexto;
     private AudioTrack sirena;
@@ -72,15 +79,27 @@ class SirenaAlarma {
         }
     }
 
-    // Sirena que sube y baja entre 900 y 2300 Hz, generada en memoria y repetida en bucle
+    // Varios golpes seguidos de campana y una pausa, generados en memoria y repetidos en bucle
     private void iniciarSirena() {
-        short[] datos = new short[MUESTRAS_POR_SEGUNDO];
-        double fase = 0;
+        double[] mezcla = new double[(int) (DURACION_CICLO * MUESTRAS_POR_SEGUNDO)];
+        for (int golpe = 0; golpe < GOLPES_POR_CICLO; golpe++) {
+            int inicio = (int) (golpe * SEPARACION_GOLPES * MUESTRAS_POR_SEGUNDO);
+            for (int i = inicio; i < mezcla.length; i++) {
+                double s = (double) (i - inicio) / MUESTRAS_POR_SEGUNDO;
+                if (s > 0.9) break;
+                double ataque = Math.min(1, s / 0.002);
+                for (int k = 0; k < PARCIALES.length; k++) {
+                    mezcla[i] += ataque * AMPLITUDES[k] * Math.exp(-(5 + 2 * k) * s)
+                        * Math.sin(2 * Math.PI * FRECUENCIA_CAMPANA * PARCIALES[k] * s);
+                }
+            }
+        }
+        double pico = 0;
+        for (double valor : mezcla) pico = Math.max(pico, Math.abs(valor));
+        short[] datos = new short[mezcla.length];
         for (int i = 0; i < datos.length; i++) {
-            double t = (double) i / MUESTRAS_POR_SEGUNDO;
-            double frecuencia = 1600 + 700 * Math.sin(2 * Math.PI * 2 * t);
-            fase += 2 * Math.PI * frecuencia / MUESTRAS_POR_SEGUNDO;
-            datos[i] = (short) (Math.signum(Math.sin(fase)) * Short.MAX_VALUE * 0.95);
+            // Saturacion suave: sube el volumen percibido sin distorsion fea
+            datos[i] = (short) (Math.tanh(2.2 * mezcla[i] / pico) * Short.MAX_VALUE * 0.95);
         }
         AudioAttributes atributos = new AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
