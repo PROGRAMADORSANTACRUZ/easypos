@@ -6,24 +6,30 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
 
-// Campana de recepcion de hotel (varios golpes y una pausa, en bucle) al maximo volumen (canal de alarma:
-// suena aunque el telefono este en silencio) y vibracion continua. Se apaga solo con detener().
+// Campana de recepcion de hotel: dos toques, una sola vez, al maximo volumen (canal de alarma: suena
+// aunque el telefono este en silencio) con dos pulsos de vibracion fuerte, uno por toque. Se apaga sola.
 class SirenaAlarma {
     private static final int MUESTRAS_POR_SEGUNDO = 44100;
-    private static final long[] PATRON_VIBRACION = {0, 900, 250, 900, 250, 400, 150, 400, 250};
+    private static final long[] PATRON_VIBRACION = {0, 400, 100, 400};
+    private static final int[] AMPLITUDES_VIBRACION = {0, 255, 0, 255};
+    private static final long DURACION_TOTAL_MS = 1500;
     // Campana de recepcion: fundamental brillante y parciales no armonicos que decaen mas rapido
     private static final double FRECUENCIA_CAMPANA = 2200;
     private static final double[] PARCIALES = {1.0, 2.76, 5.40, 8.93};
     private static final double[] AMPLITUDES = {1.0, 0.6, 0.35, 0.2};
-    private static final int GOLPES_POR_CICLO = 4;
-    private static final double SEPARACION_GOLPES = 0.28;
-    private static final double DURACION_CICLO = 2.0;
+    private static final int GOLPES = 2;
+    private static final double SEPARACION_GOLPES = 0.5;
+    private static final double DURACION_SONIDO = 1.4;
 
     private final Context contexto;
+    private final Handler manejador = new Handler(Looper.getMainLooper());
+    private final Runnable apagar = this::detener;
     private AudioTrack sirena;
     private Vibrator vibrador;
     private int volumenAnterior = -1;
@@ -43,11 +49,13 @@ class SirenaAlarma {
         subirVolumen();
         iniciarSirena();
         iniciarVibracion();
+        manejador.postDelayed(apagar, DURACION_TOTAL_MS);
     }
 
     synchronized void detener() {
         if (!sonando) return;
         sonando = false;
+        manejador.removeCallbacks(apagar);
         if (sirena != null) {
             try { sirena.stop(); } catch (IllegalStateException ignorada) { }
             sirena.release();
@@ -79,10 +87,10 @@ class SirenaAlarma {
         }
     }
 
-    // Varios golpes seguidos de campana y una pausa, generados en memoria y repetidos en bucle
+    // Dos golpes de campana generados en memoria y reproducidos una sola vez
     private void iniciarSirena() {
-        double[] mezcla = new double[(int) (DURACION_CICLO * MUESTRAS_POR_SEGUNDO)];
-        for (int golpe = 0; golpe < GOLPES_POR_CICLO; golpe++) {
+        double[] mezcla = new double[(int) (DURACION_SONIDO * MUESTRAS_POR_SEGUNDO)];
+        for (int golpe = 0; golpe < GOLPES; golpe++) {
             int inicio = (int) (golpe * SEPARACION_GOLPES * MUESTRAS_POR_SEGUNDO);
             for (int i = inicio; i < mezcla.length; i++) {
                 double s = (double) (i - inicio) / MUESTRAS_POR_SEGUNDO;
@@ -112,7 +120,6 @@ class SirenaAlarma {
             .build();
         sirena = new AudioTrack(atributos, formato, datos.length * 2, AudioTrack.MODE_STATIC, AudioManager.AUDIO_SESSION_ID_GENERATE);
         sirena.write(datos, 0, datos.length);
-        sirena.setLoopPoints(0, datos.length, -1);
         sirena.setVolume(AudioTrack.getMaxVolume());
         sirena.play();
     }
@@ -127,6 +134,13 @@ class SirenaAlarma {
         }
         if (vibrador == null || !vibrador.hasVibrator()) return;
         AudioAttributes alarma = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build();
-        vibrador.vibrate(VibrationEffect.createWaveform(PATRON_VIBRACION, 0), alarma);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            vibrador.vibrate(PATRON_VIBRACION, -1);
+            return;
+        }
+        VibrationEffect efecto = vibrador.hasAmplitudeControl()
+            ? VibrationEffect.createWaveform(PATRON_VIBRACION, AMPLITUDES_VIBRACION, -1)
+            : VibrationEffect.createWaveform(PATRON_VIBRACION, -1);
+        vibrador.vibrate(efecto, alarma);
     }
 }

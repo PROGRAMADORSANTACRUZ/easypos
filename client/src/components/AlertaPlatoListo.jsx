@@ -5,8 +5,9 @@ import { esApk, llamarNativo } from '../movil.js';
 import { useAuth } from '../App.jsx';
 
 // Solo en la APK de las meseras. Al iniciar sesion arranca el servicio nativo AlertaPlato (notificacion fija,
-// como WhatsApp) que consulta los platos listos aunque la pantalla este apagada y hace sonar la campana con
-// vibracion hasta que se entregue el plato. Aqui solo se arranca/detiene el servicio y se muestra el aviso
+// como WhatsApp) que consulta los platos listos aunque la pantalla este apagada y hace sonar la campana
+// (dos toques y vibracion fuerte) cuando aparece un plato listo nuevo. Aqui solo se arranca/detiene el
+// servicio y se muestra el aviso
 // en pantalla; la alarma la maneja el servicio. Si la mesera tiene mesas asignadas, el servidor solo
 // devuelve esas; sin asignacion, todas.
 const CADA_MS = 4000;

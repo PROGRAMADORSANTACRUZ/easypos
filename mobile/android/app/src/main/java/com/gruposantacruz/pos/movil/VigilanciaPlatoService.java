@@ -28,7 +28,8 @@ import org.json.JSONObject;
 
 // Vigilancia de "plato listo" para las meseras, al estilo WhatsApp: servicio en primer plano (con su
 // notificacion fija) que consulta al servidor cada pocos segundos con la sesion de la app, aunque la
-// pantalla este apagada o la app cerrada, y hace sonar la campana hasta que el plato se entregue.
+// pantalla este apagada o la app cerrada, y hace sonar la campana (dos toques y vibracion) cada vez que
+// aparece un plato listo nuevo; el aviso en la notificacion queda hasta que se entregue.
 public class VigilanciaPlatoService extends Service {
     static final String PREFS = "pos_vigilancia";
     static final String EXTRA_URL = "url";
@@ -225,7 +226,7 @@ public class VigilanciaPlatoService extends Service {
         if (!aviso.equals(avisoActual)) {
             avisoActual = aviso;
             mostrarAlarma(aviso);
+            sirena.iniciar();
         }
-        if (!sirena.estaSonando()) sirena.iniciar();
     }
 }
