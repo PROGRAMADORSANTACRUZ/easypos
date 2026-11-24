@@ -270,27 +270,27 @@ async function imprimirPrefactura(pedido) {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pre-cuenta</title>
   <style>
     ${estiloPagina(await formatoDe('formatoPrefactura'))}
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; font-size: 16px; padding: 3mm 4mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; font-size: 20px; padding: 3mm 4mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .logo { display: block; width: 28mm; max-width: 55%; margin: 0 auto 2px; }
     .marca { text-align: center; font-size: 20px; font-weight: 900; letter-spacing: 2px; margin-top: 0; }
-    .sub { text-align: center; font-size: 16px; color: #333; margin-bottom: 2px; }
+    .sub { text-align: center; font-size: 20px; color: #333; margin-bottom: 2px; }
     .hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; }
-    .meta { font-size: 16px; text-align: center; line-height: 1.4; }
+    .meta { font-size: 20px; text-align: center; line-height: 1.4; }
     table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-    thead th { font-size: 16px; text-transform: uppercase; letter-spacing: .5px; color: #444; text-align: left; border-bottom: 1px solid #000; padding-bottom: 2px; }
+    thead th { font-size: 20px; text-transform: uppercase; letter-spacing: .5px; color: #444; text-align: left; border-bottom: 1px solid #000; padding-bottom: 2px; }
     thead th.vu, thead th.p { text-align: right; }
-    td { padding: 3px 0; vertical-align: top; font-size: 16px; }
-    td.c { width: 28px; font-weight: 700; }
+    td { padding: 3px 0; vertical-align: top; font-size: 20px; }
+    td.c { width: 42px; font-weight: 700; }
     td.n { text-transform: uppercase; line-height: 1.15; }
     td.vu { text-align: right; white-space: nowrap; padding-left: 4px; }
     td.p { text-align: right; white-space: nowrap; font-weight: 700; padding-left: 4px; }
-    .detalle-titulo { font-weight: 800; font-size: 16px; text-transform: uppercase; margin: 6px 0 2px; }
-    .metodos { text-align: center; font-size: 16px; color: #333; margin-top: 6px; line-height: 1.4; }
-    .tot { display: flex; justify-content: space-between; font-size: 16px; padding: 2px 0; }
-    .tot.grand { font-weight: 900; font-size: 16px; border-top: 2px solid #000; margin-top: 4px; padding-top: 6px; }
-    .nota { text-align: center; font-size: 16px; color: #333; margin-top: 6px; }
-    .pie { text-align: center; margin-top: 10px; font-size: 16px; color: #333; }
-    .pie .big { font-size: 16px; font-weight: 700; color: #000; }
+    .detalle-titulo { font-weight: 800; font-size: 20px; text-transform: uppercase; margin: 6px 0 2px; }
+    .metodos { text-align: center; font-size: 20px; color: #333; margin-top: 6px; line-height: 1.4; }
+    .tot { display: flex; justify-content: space-between; font-size: 20px; padding: 2px 0; }
+    .tot.grand { font-weight: 900; font-size: 20px; border-top: 2px solid #000; margin-top: 4px; padding-top: 6px; }
+    .nota { text-align: center; font-size: 20px; color: #333; margin-top: 6px; }
+    .pie { text-align: center; margin-top: 10px; font-size: 20px; color: #333; }
+    .pie .big { font-size: 20px; font-weight: 700; color: #000; }
   </style></head><body>
     <img class="logo" src="${LOGO_RECIBO}" alt="Asados Santacruz">
     ${empresaRecibo?.razonSocial || empresaRecibo?.nombreComercial

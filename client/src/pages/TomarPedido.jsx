@@ -71,24 +71,24 @@ async function imprimirComandaAsync(pedido, { reimpresion = false, cambios = '' 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${titulo}</title>
   <style>
     ${estiloPagina(await formatoDe('formatoComanda'))}
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; font-size: 16px; padding: 3mm 4mm; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; font-size: 20px; padding: 3mm 4mm; }
     .logo { display: block; width: 28mm; max-width: 55%; margin: 0 auto 4px; }
-    .titulo { text-align: center; font-weight: 800; font-size: 16px; text-transform: uppercase; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 6px; line-height: 1.2; }
-    .marca { text-align: center; font-size: 16px; font-weight: 800; letter-spacing: 1px; margin-top: 0; }
-    .meta { font-size: 16px; margin-bottom: 6px; }
+    .titulo { text-align: center; font-weight: 800; font-size: 20px; text-transform: uppercase; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 6px; line-height: 1.2; }
+    .marca { text-align: center; font-size: 20px; font-weight: 800; letter-spacing: 1px; margin-top: 0; }
+    .meta { font-size: 20px; margin-bottom: 6px; }
     .meta div { margin: 1px 0; }
     table { width: 100%; border-collapse: collapse; }
-    td { padding: 2px 0; vertical-align: top; font-size: 16px; }
-    td.c { width: 30px; font-weight: 700; }
+    td { padding: 2px 0; vertical-align: top; font-size: 20px; }
+    td.c { width: 42px; font-weight: 700; }
     td.n { text-transform: uppercase; }
     td.p { text-align: right; white-space: nowrap; font-weight: 700; }
-    .tot { border-top: 1px dashed #000; margin-top: 6px; padding-top: 4px; display: flex; justify-content: space-between; font-weight: 800; font-size: 16px; }
+    .tot { border-top: 1px dashed #000; margin-top: 6px; padding-top: 4px; display: flex; justify-content: space-between; font-weight: 800; font-size: 20px; }
     .sec { margin-top: 6px; border-top: 1px dashed #000; padding-top: 4px; }
     .obs { margin-top: 6px; border: 1px solid #000; border-radius: 3px; padding: 4px 6px; }
-    .obs .lbl { font-weight: 800; font-size: 16px; text-transform: uppercase; }
-    .lbl { font-weight: 700; font-size: 16px; }
-    .cambios { white-space: pre-wrap; font-size: 16px; }
-    .pie { text-align: center; margin-top: 8px; font-size: 16px; }
+    .obs .lbl { font-weight: 800; font-size: 20px; text-transform: uppercase; }
+    .lbl { font-weight: 700; font-size: 20px; }
+    .cambios { white-space: pre-wrap; font-size: 20px; }
+    .pie { text-align: center; margin-top: 8px; font-size: 20px; }
   </style></head><body>
     <div class="titulo">${titulo}</div>
     <div class="meta">
@@ -132,27 +132,27 @@ async function imprimirPrefacturaAsync(pedido) {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>PRE-CUENTA</title>
   <style>
     ${estiloPagina(await formatoDe('formatoPrefactura'))}
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; font-size: 16px; padding: 3mm 4mm; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; font-size: 20px; padding: 3mm 4mm; }
     .logo { display: block; width: 28mm; max-width: 55%; margin: 0 auto 4px; }
-    .titulo { text-align: center; font-weight: 800; font-size: 16px; text-transform: uppercase; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 6px; line-height: 1.2; }
-    .meta { font-size: 16px; margin-bottom: 6px; }
+    .titulo { text-align: center; font-weight: 800; font-size: 20px; text-transform: uppercase; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 6px; line-height: 1.2; }
+    .meta { font-size: 20px; margin-bottom: 6px; }
     .meta div { margin: 1px 0; }
     table { width: 100%; border-collapse: collapse; }
-    thead th { font-size: 16px; text-transform: uppercase; letter-spacing: .3px; color: #444; text-align: left; border-bottom: 1px solid #000; padding-bottom: 2px; }
+    thead th { font-size: 20px; text-transform: uppercase; letter-spacing: .3px; color: #444; text-align: left; border-bottom: 1px solid #000; padding-bottom: 2px; }
     thead th.vu, thead th.p { text-align: right; }
-    td { padding: 2px 0; vertical-align: top; font-size: 16px; }
-    td.c { width: 28px; font-weight: 700; }
+    td { padding: 2px 0; vertical-align: top; font-size: 20px; }
+    td.c { width: 42px; font-weight: 700; }
     td.n { text-transform: uppercase; line-height: 1.15; }
     td.vu { text-align: right; white-space: nowrap; padding-left: 4px; }
     td.p { text-align: right; white-space: nowrap; font-weight: 700; padding-left: 4px; }
-    .detalle-titulo { font-weight: 800; font-size: 16px; text-transform: uppercase; margin: 6px 0 2px; }
-    .metodos { text-align: center; font-size: 16px; margin-top: 6px; line-height: 1.4; }
-    .lin { display: flex; justify-content: space-between; font-size: 16px; margin: 2px 0; }
+    .detalle-titulo { font-weight: 800; font-size: 20px; text-transform: uppercase; margin: 6px 0 2px; }
+    .metodos { text-align: center; font-size: 20px; margin-top: 6px; line-height: 1.4; }
+    .lin { display: flex; justify-content: space-between; font-size: 20px; margin: 2px 0; }
     .sep { border-top: 1px dashed #000; margin-top: 6px; padding-top: 4px; }
-    .tot { display: flex; justify-content: space-between; font-weight: 800; font-size: 16px; border-top: 1px dashed #000; margin-top: 4px; padding-top: 4px; }
-    .obs { border: 1px solid #000; border-radius: 3px; padding: 4px 6px; margin-top: 6px; font-size: 16px; text-align: left; }
-    .nota { text-align: center; font-size: 16px; margin-top: 6px; }
-    .pie { text-align: center; margin-top: 8px; font-size: 16px; }
+    .tot { display: flex; justify-content: space-between; font-weight: 800; font-size: 20px; border-top: 1px dashed #000; margin-top: 4px; padding-top: 4px; }
+    .obs { border: 1px solid #000; border-radius: 3px; padding: 4px 6px; margin-top: 6px; font-size: 20px; text-align: left; }
+    .nota { text-align: center; font-size: 20px; margin-top: 6px; }
+    .pie { text-align: center; margin-top: 8px; font-size: 20px; }
   </style></head><body>
     <img class="logo" src="${LOGO_RECIBO}" alt="Asados Santacruz">
     <div class="titulo">Pre-cuenta</div>
