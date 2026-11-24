@@ -1,10 +1,27 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
+import { mesasConPlatosListos } from '../platosListos.js';
 
 const router = Router();
 
 // Envuelve handlers async para propagar errores
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+// Mesas con platos listos sin entregar (solo las asignadas al usuario, si tiene). Lo consulta la APK
+// de las meseras, tambien en segundo plano, para hacer sonar la alarma.
+router.get('/platos-listos', wrap(async (req, res) => {
+  const mesas = await prisma.mesa.findMany({
+    where: { esFantasma: false },
+    orderBy: { numero: 'asc' },
+    include: {
+      pedidos: {
+        where: { estado: 'ABIERTO' },
+        include: { items: { include: { producto: { select: { nombre: true } } } }, preparacion: true },
+      },
+    },
+  });
+  res.json(mesasConPlatosListos(mesas, req.usuario?.mesaIds || []));
+}));
 
 // Listar mesas
 router.get('/', wrap(async (req, res) => {

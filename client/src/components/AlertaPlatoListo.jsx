@@ -1,43 +1,40 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, tenantActual } from '../api.js';
 import { esApk, llamarNativo } from '../movil.js';
-import { platosListos, tienePlatoListo } from '../platosListos.js';
 import { useAuth } from '../App.jsx';
 
-// Solo en la APK de las meseras: mientras haya platos listos sin entregar suena una alarma fuerte y
-// vibra sin parar (plugin nativo AlertaPlato). Se apaga sola cuando la mesera confirma la entrega.
-// Si la mesera tiene mesas asignadas solo la avisan sus mesas; sin asignacion, todas.
+// Solo en la APK de las meseras. Al iniciar sesion arranca el servicio nativo AlertaPlato (notificacion fija,
+// como WhatsApp) que consulta los platos listos aunque la pantalla este apagada y hace sonar la sirena con
+// vibracion hasta que se entregue el plato. Aqui solo se arranca/detiene el servicio y se muestra el aviso
+// en pantalla; la alarma la maneja el servicio. Si la mesera tiene mesas asignadas, el servidor solo
+// devuelve esas; sin asignacion, todas.
 const CADA_MS = 4000;
-const alarma = (metodo) => llamarNativo('AlertaPlato', metodo, {}).catch(() => {});
 
 export default function AlertaPlatoListo() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [pendientes, setPendientes] = useState([]);
-  const sonando = useRef(false);
   const aplica = esApk() && (user?.roles || []).includes('MESERO') && (user?.permisos || []).includes('mesas.ver');
-  const mesaIds = (user?.mesaIds || []).join(',');
+
+  useEffect(() => {
+    if (!aplica) return undefined;
+    llamarNativo('AlertaPlato', 'vigilar', { url: window.location.origin, tenant: tenantActual() || '' }).catch(() => {});
+    return () => { llamarNativo('AlertaPlato', 'detener', {}).catch(() => {}); };
+  }, [aplica]);
 
   useEffect(() => {
     if (!aplica) return undefined;
     let activo = true;
     let consultando = false;
-    const asignadas = mesaIds ? mesaIds.split(',').map(Number) : [];
     const consultar = async () => {
       if (consultando || document.visibilityState !== 'visible') return;
       consultando = true;
       try {
-        const mesas = await api.get('/mesas');
-        if (!activo) return;
-        const lista = mesas
-          .filter((mesa) => (!asignadas.length || asignadas.includes(mesa.id)) && tienePlatoListo(mesa))
-          .map((mesa) => ({ id: mesa.id, numero: mesa.numero, platos: platosListos(mesa) }));
-        setPendientes(lista);
-        if (lista.length && !sonando.current) { sonando.current = true; alarma('iniciar'); }
-        if (!lista.length && sonando.current) { sonando.current = false; alarma('detener'); }
+        const lista = await api.get('/mesas/platos-listos');
+        if (activo) setPendientes(lista);
       } catch {
-        // Sin conexion momentanea: se mantiene el estado actual y se reintenta.
+        // Sin conexion momentanea: se mantiene el aviso actual y se reintenta.
       } finally {
         consultando = false;
       }
@@ -49,9 +46,8 @@ export default function AlertaPlatoListo() {
       activo = false;
       clearInterval(intervalo);
       document.removeEventListener('visibilitychange', consultar);
-      if (sonando.current) { sonando.current = false; alarma('detener'); }
     };
-  }, [aplica, mesaIds]);
+  }, [aplica]);
 
   if (!aplica || !pendientes.length) return null;
 
@@ -59,7 +55,7 @@ export default function AlertaPlatoListo() {
     <div className="alerta-plato-listo" role="alert">
       <strong>¡Plato listo! Entrégalo y confirma la entrega.</strong>
       {pendientes.map((mesa) => (
-        <button key={mesa.id} type="button" onClick={() => navigate(`/mesas/${mesa.id}/pedido`)}>
+        <button key={mesa.mesaId} type="button" onClick={() => navigate(`/mesas/${mesa.mesaId}/pedido`)}>
           <span>Mesa {mesa.numero}</span>
           <span className="mini">{mesa.platos.join(' · ') || 'Plato listo'}</span>
         </button>
