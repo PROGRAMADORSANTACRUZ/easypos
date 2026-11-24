@@ -444,6 +444,7 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 .mesa.OCUPADA { border-color: var(--red); }
 .mesa.LISTO { border-color: #eab308; background: rgba(234,179,8,.12); }
 .mesa.LISTO .estado { color: #eab308; }
+.mesa .plato-listo { color: #eab308; font-weight: 600; text-transform: uppercase; }
 .mesa .num { font-size: 34px; font-weight: 800; }
 .mesa .estado { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
 .mesa.LIBRE .estado { color: var(--green); }

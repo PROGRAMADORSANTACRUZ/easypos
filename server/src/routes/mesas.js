@@ -17,7 +17,7 @@ router.get('/', wrap(async (req, res) => {
       reservaCliente: true,
       pedidos: {
         where: { estado: 'ABIERTO' },
-        include: { mesera: true, items: true, preparacion: true },
+        include: { mesera: true, items: { include: { producto: { select: { nombre: true } } } }, preparacion: true },
       },
     },
   });
