@@ -1865,6 +1865,8 @@ input.sin-flechas { -moz-appearance: textfield; appearance: textfield; }
 .rsv--fondo { display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at top, #62120B 0%, #1A1614 70%); }
 .rsv-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 32px; background: #fff; border-bottom: 1px solid #E4E1DB; }
 .rsv-marca { font-size: 22px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #62120B; margin: 0; }
+.rsv-logo { display: block; height: 52px; width: auto; }
+.rsv-logo--exito { height: 64px; margin: 0 auto 4px; }
 .rsv-volver { border: 0; background: none; font: inherit; color: #1A1614; cursor: pointer; font-size: 15px; }
 .rsv-reloj { font-size: 14px; color: #6B655E; }
 .rsv-reloj b { color: #1F9D55; font-size: 16px; }

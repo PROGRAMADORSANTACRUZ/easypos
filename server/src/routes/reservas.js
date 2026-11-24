@@ -47,7 +47,7 @@ export const reservasPublicasRouter = Router();
 reservasPublicasRouter.get('/info', wrap(async (req, res) => {
   const empresa = await prisma.empresa.findFirst({ select: { nombreComercial: true, razonSocial: true, telefono: true } });
   res.json({
-    restaurante: req.tenant?.nombre || empresa?.nombreComercial || empresa?.razonSocial || 'Restaurante',
+    restaurante: req.tenant?.nombre || empresa?.nombreComercial || empresa?.razonSocial || 'Asados Santacruz',
     telefono: empresa?.telefono || null,
     turnos: turnosDelDia(),
     duracionMin: CONFIG_RESERVAS.duracionMin,

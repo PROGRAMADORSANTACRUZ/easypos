@@ -102,8 +102,11 @@ export default function ReservaPublica() {
   const [documento, setDocumento] = useState(''); // terminos | privacidad
 
   useEffect(() => {
-    document.title = 'Reservas';
-    apiPublica('/info').then((datos) => { setInfo(datos); document.title = `Reservas · ${datos.restaurante}`; }).catch((e) => setError(e.message));
+    document.title = 'Reservas · Asados Santacruz';
+    apiPublica('/info').then((datos) => {
+      setInfo(datos);
+      if (datos.restaurante && datos.restaurante !== 'Restaurante') document.title = `Reservas · ${datos.restaurante}`;
+    }).catch((e) => setError(e.message));
   }, []);
 
   useEffect(() => {
@@ -171,7 +174,7 @@ export default function ReservaPublica() {
   };
 
   const mesasOrdenadas = useMemo(() => [...mesas].sort((a, b) => a.numero - b.numero), [mesas]);
-  const nombreRestaurante = info?.restaurante || '';
+  const nombreRestaurante = info?.restaurante && info.restaurante !== 'Restaurante' ? info.restaurante : 'Asados Santacruz';
 
   const erroresCliente = {
     nombre: cliente.nombre.trim().length < 3 ? 'Escribe tu nombre completo' : '',
@@ -260,7 +263,7 @@ export default function ReservaPublica() {
       <div className="rsv rsv--fondo">
         <div className="rsv-exito">
           <span className="rsv-exito__check" aria-hidden="true">✓</span>
-          <p className="rsv-marca">{nombreRestaurante}</p>
+          <img className="rsv-logo rsv-logo--exito" src="/logo-oscuro.png" alt={nombreRestaurante} />
           <h1>¡Felicitaciones!</h1>
           <p><b>{capitalizar(reserva.nombre)}</b>, tu reserva ha sido realizada y confirmada con éxito.</p>
           <div className="rsv-resumen rsv-resumen--linea">
@@ -286,7 +289,7 @@ export default function ReservaPublica() {
       <div className="rsv">
         <header className="rsv-top">
           <button type="button" className="rsv-volver" onClick={() => setEtapa('seleccion')}>‹ Volver</button>
-          <strong className="rsv-marca">{nombreRestaurante}</strong>
+          <img className="rsv-logo" src="/logo-oscuro.png" alt={nombreRestaurante} />
           <span className="rsv-reloj">Para completar tu reserva te quedan <b>{mm}:{ss}</b></span>
         </header>
         <main className="rsv-confirmar">
@@ -323,7 +326,7 @@ export default function ReservaPublica() {
   return (
     <div className="rsv">
       <header className="rsv-top">
-        <strong className="rsv-marca">{nombreRestaurante || 'Reservas'}</strong>
+        <img className="rsv-logo" src="/logo-oscuro.png" alt={nombreRestaurante} />
       </header>
       <Pasos personas={personas} fecha={fecha} hora={hora} zona={zona} mesa={mesa} />
       <main className="rsv-fondo">
