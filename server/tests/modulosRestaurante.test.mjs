@@ -54,6 +54,13 @@ test('mesero sin permisos de domicilio ni reparto conserva solo los pedidos de m
   assert.equal((await evaluarPedidos('/1', 'GET', permisos, 'MESA')).siguiente, true);
 });
 
+test('Cocina lista las comandas de mesa sin pedidos.ver, pero no modifica pedidos', async () => {
+  const permisos = ['cocina.ver'];
+  assert.deepEqual((await evaluarPedidos('/', 'GET', permisos)).req.tiposPedidoPermitidos, ['MESA']);
+  assert.equal((await evaluarPedidos('/', 'GET', permisos, 'DOMICILIO', { tipo: 'DOMICILIO' })).status, 403);
+  assert.equal((await evaluarPedidos('/1', 'PUT', permisos, 'MESA')).status, 403);
+});
+
 test('Domicilios puede crear sin permisos de mesa, pero no gestionar reparto', async () => {
   const permisos = ['domicilios.ver', 'domicilios.crear'];
   assert.equal((await evaluarPedidos('/online', 'POST', permisos)).siguiente, true);

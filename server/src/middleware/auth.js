@@ -154,7 +154,8 @@ export async function permisoAccesoPedidos(req, res, next) {
     const ruta = req.path.replace(/\/$/, '') || '/';
     if (lectura && ruta === '/') {
       const tipos = [];
-      if (permisos.includes('pedidos.ver')) tipos.push('MESA');
+      // La pantalla de Cocina necesita leer las comandas de mesa aunque el rol no tenga pedidos.ver
+      if (permisos.includes('pedidos.ver') || permisos.includes('cocina.ver')) tipos.push('MESA');
       if (permisos.includes('domicilios.ver') || permisos.includes('repartidor.ver')) tipos.push('DOMICILIO');
       if (!tipos.length || (req.query.tipo && !tipos.includes(req.query.tipo))) {
         return res.status(403).json({ error: 'No tienes permiso para consultar estos pedidos' });
