@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useToast } from '../App.jsx';
 import { LoadingState, EmptyState, Button, Modal } from '../components/ui/index.jsx';
@@ -12,6 +12,29 @@ const SEMAFORO = [
   { hasta: Infinity, clase: 'vino', etiqueta: 'Crítica', rango: '> 30 min' },
 ];
 const semaforoDe = (minutos) => SEMAFORO.find((nivel) => minutos < nivel.hasta);
+
+const esPendiente = (preparacion) => !preparacion?.listo
+  && !['ENTREGADO', 'RECHAZADO'].includes(preparacion?.estadoCocina);
+
+// "Pin pin pin": tres pitidos agudos y fuertes para que se escuche en la cocina.
+const sonarPedidoNuevo = (contexto) => {
+  if (!contexto || contexto.state !== 'running') return;
+  const inicio = contexto.currentTime;
+  [0, 0.3, 0.6].forEach((desfase) => {
+    const t = inicio + desfase;
+    const oscilador = contexto.createOscillator();
+    const volumen = contexto.createGain();
+    oscilador.type = 'triangle';
+    oscilador.frequency.setValueAtTime(1320, t);
+    volumen.gain.setValueAtTime(0.0001, t);
+    volumen.gain.exponentialRampToValueAtTime(0.6, t + 0.01);
+    volumen.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    oscilador.connect(volumen);
+    volumen.connect(contexto.destination);
+    oscilador.start(t);
+    oscilador.stop(t + 0.22);
+  });
+};
 const ESTADOS_HISTORIAL = {
   RECHAZADO: { clase: 'rechazado', etiqueta: 'Rechazado' },
   ENTREGADO: { clase: 'entregado', etiqueta: 'Entregado' },
@@ -40,6 +63,36 @@ export default function Cocina() {
   const [resultado, setResultado] = useState(null);
   const [ahora, setAhora] = useState(() => Date.now());
   const notify = useToast();
+  const audio = useRef(null);
+  const itemsAnteriores = useRef(null); // ids de platos pendientes en la consulta anterior
+
+  // El navegador solo deja sonar audio despues de que alguien toque la pantalla o una tecla.
+  useEffect(() => {
+    const desbloquear = () => {
+      const AudioContexto = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContexto) return;
+      audio.current ||= new AudioContexto();
+      if (audio.current.state === 'suspended') audio.current.resume().catch(() => {});
+    };
+    desbloquear();
+    window.addEventListener('pointerdown', desbloquear);
+    window.addEventListener('keydown', desbloquear);
+    return () => {
+      window.removeEventListener('pointerdown', desbloquear);
+      window.removeEventListener('keydown', desbloquear);
+    };
+  }, []);
+
+  // Suena cuando llega una comanda nueva o le agregan platos a una abierta (no en la primera carga).
+  const avisarPedidosNuevos = (peds, preps) => {
+    const ids = new Set(peds.filter((p) => esPendiente(preps[p.id])).flatMap((p) => (p.items || []).map((it) => it.id)));
+    const hayNuevos = itemsAnteriores.current && [...ids].some((id) => !itemsAnteriores.current.has(id));
+    itemsAnteriores.current = ids;
+    if (!hayNuevos) return;
+    const contexto = audio.current;
+    if (contexto?.state === 'suspended') contexto.resume().then(() => sonarPedidoNuevo(contexto)).catch(() => {});
+    else sonarPedidoNuevo(contexto);
+  };
 
   useEffect(() => {
     const reloj = setInterval(() => setAhora(Date.now()), 30000);
@@ -54,8 +107,10 @@ export default function Cocina() {
         api.get('/preparacion-cocina?listo=1'),
         api.get('/cocineros').catch(() => []),
       ]);
+      const preps = Object.fromEntries([...pendientesPrep, ...listasPrep].map((p) => [p.pedidoId, p]));
+      avisarPedidosNuevos(peds, preps);
       setPedidos(peds);
-      setPreparaciones(Object.fromEntries([...pendientesPrep, ...listasPrep].map((p) => [p.pedidoId, p])));
+      setPreparaciones(preps);
       setCocineros(cocs.filter((c) => c.activo !== false));
     } catch (e) {
       notify(e.message, 'err');
@@ -132,8 +187,7 @@ export default function Cocina() {
 
   if (cargando) return <LoadingState label="Cargando comandas…" />;
 
-  const pendientes = pedidos.filter((pedido) => !preparaciones[pedido.id]?.listo
-    && !['ENTREGADO', 'RECHAZADO'].includes(preparaciones[pedido.id]?.estadoCocina))
+  const pendientes = pedidos.filter((pedido) => esPendiente(preparaciones[pedido.id]))
     .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   const minutosDe = (pedido) => Math.max(0, Math.floor((ahora - new Date(pedido.createdAt).getTime()) / 60000));
   const conteoSemaforo = Object.fromEntries(SEMAFORO.map((nivel) => [nivel.clase, 0]));
