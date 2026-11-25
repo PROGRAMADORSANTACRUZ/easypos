@@ -189,16 +189,18 @@ export default function TomarPedido() {
   const navigate = useNavigate();
   const notify = useToast();
   const puede = (codigo) => user?.__dev === true || (user?.permisos || []).includes(codigo);
-  const puedeCrearPedido = puede('pedidos.crear');
-  const puedeEditarPedido = puede('pedidos.editar');
-  const puedeCancelarPedido = puede('pedidos.eliminar');
-  const puedePrefactura = puede('pedidos.prefactura');
-  const puedeEditarObservaciones = puede('pedidos.observaciones');
-  const puedeEditarMesa = puede('mesas.editar');
 
   const [mesa, setMesa] = useState(null);
   const [productos, setProductos] = useState([]);
   const [pedido, setPedido] = useState(null);      // pedido abierto existente
+  // Una mesa ocupada solo la modifica quien la atiende (o un ADMIN); el servidor lo valida igual
+  const atiendeOtro = !!pedido?.usuarioId && pedido.usuarioId !== user?.id && user?.__dev !== true && !user?.roles?.includes('ADMIN');
+  const puedeCrearPedido = puede('pedidos.crear');
+  const puedeEditarPedido = puede('pedidos.editar') && !atiendeOtro;
+  const puedeCancelarPedido = puede('pedidos.eliminar') && !atiendeOtro;
+  const puedePrefactura = puede('pedidos.prefactura');
+  const puedeEditarObservaciones = puede('pedidos.observaciones') && !atiendeOtro;
+  const puedeEditarMesa = puede('mesas.editar') && !atiendeOtro;
   const [cancelados, setCancelados] = useState([]); // productos quitados del pedido (historial)
   const [solicitudesMesa00, setSolicitudesMesa00] = useState([]);
   const [cantidadesMoverMesa00, setCantidadesMoverMesa00] = useState({});
@@ -689,6 +691,7 @@ export default function TomarPedido() {
             <p className="mini" role="status">Entregado: {new Date(estadoEntrega.entrega.fecha).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
               {estadoEntrega.entrega.usuarioNombre ? ` · ${estadoEntrega.entrega.usuarioNombre}` : ''}</p>
           )}
+          {atiendeOtro && <p className="mini" role="status">Esta mesa la atiende {pedido.mesera?.nombre || pedido.usuario?.nombre}; solo puedes consultarla.</p>}
           {errorEntrega && <p className="mini" role="alert">{errorEntrega}</p>}
         </div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>

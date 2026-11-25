@@ -302,7 +302,7 @@ test('no cambia el responsable ni crea movimientos si la mesa ya esta ocupada', 
   assert.equal(responsables.size, 0);
 });
 
-test('otro MESERO puede editar un pedido compartido sin cambiar su creador y queda registrado como actor', async (t) => {
+test('solo quien atiende la mesa (o un ADMIN) puede editarla; otro mesero ve la mesa pero no la modifica', async (t) => {
   const { crear, solicitar, eventos } = await entorno(t, {
     mesasAsignadas: { 1: 'usuario-mesero-1', 2: 'usuario-mesero-2' },
   });
@@ -316,9 +316,16 @@ test('otro MESERO puede editar un pedido compartido sin cambiar su creador y que
   assert.deepEqual((await solicitar('GET', '/pedidos?estado=ABIERTO', undefined, { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' })).body.map((pedido) => pedido.mesaId), [1, 2]);
   const editor = { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO' };
   assert.equal((await solicitar('GET', '/pedidos/2', undefined, editor)).status, 200);
-  const editado = await solicitar('PUT', '/pedidos/2/items/1', { cantidad: 3 }, editor);
+  const bloqueado = await solicitar('PUT', '/pedidos/2/items/1', { cantidad: 3 }, editor);
+  assert.equal(bloqueado.status, 403);
+  assert.match(bloqueado.body.error, /atiende/);
+  assert.equal(eventos.length, 2);
+  const responsable = { 'x-test-user': 'usuario-mesero-2', 'x-test-role': 'MESERO' };
+  assert.equal((await solicitar('PUT', '/pedidos/2/items/1', { cantidad: 3 }, responsable)).status, 200);
+  const administrador = { 'x-test-user': 'usuario-admin', 'x-test-role': 'ADMIN' };
+  const editado = await solicitar('PUT', '/pedidos/2/items/1', { cantidad: 4 }, administrador);
   assert.equal(editado.status, 200);
-  assert.equal(eventos.at(-1).usuarioId, 'usuario-mesero-1');
+  assert.equal(eventos.at(-1).usuarioId, 'usuario-admin');
   assert.equal(eventos.at(-1).antes.usuarioId, 'usuario-mesero-2');
   assert.equal(eventos.at(-1).despues.usuarioId, 'usuario-mesero-2');
   assert.deepEqual((await solicitar('GET', '/mesas', undefined, { 'x-test-user': 'usuario-sin-mesas', 'x-test-role': 'MESERO' })).body.map((mesa) => mesa.numero), [1, 2]);
@@ -328,7 +335,7 @@ test('otro MESERO puede editar un pedido compartido sin cambiar su creador y que
 test('registra quien edita y los valores anteriores y posteriores de productos y observaciones', async (t) => {
   const { crear, solicitar, eventos } = await entorno(t);
   await crear();
-  const editor = { 'x-test-user': 'usuario-editor', 'x-test-name': 'Editor' };
+  const editor = { 'x-test-user': 'usuario-editor', 'x-test-name': 'Editor', 'x-test-role': 'ADMIN' };
   assert.equal((await solicitar('PUT', '/1/items/1', { cantidad: 3 }, editor)).status, 200);
   assert.equal(eventos[1].usuarioId, 'usuario-editor');
   assert.equal(eventos[1].antes.items[0].cantidad, 1);
@@ -362,7 +369,7 @@ test('exige motivo de cancelacion y registra actor y estado sin reasignar al cre
   assert.equal(pedidos[0].estado, 'ABIERTO');
   const resultado = await solicitar('POST', '/1/cancelar', {
     motivo: '  Cliente se retira  ', usuarioId: 'suplantado',
-  }, { 'x-test-user': 'usuario-supervisor', 'x-test-name': 'Supervisor' });
+  }, { 'x-test-user': 'usuario-supervisor', 'x-test-name': 'Supervisor', 'x-test-role': 'ADMIN' });
   assert.equal(resultado.status, 200);
   assert.equal(eventos[1].usuarioId, 'usuario-supervisor');
   assert.equal(eventos[1].motivo, 'Cliente se retira');
@@ -473,7 +480,7 @@ test('cocina marca listo y el mesero entrega con fecha, hora y actores separados
   assert.equal((await solicitar('PUT', '/preparacion-cocina/1/listo', {})).status, 409);
   assert.equal((await solicitar('GET', '/1/entrega')).body.estadoCocina, 'LISTO');
   const entrega = await solicitar('POST', '/1/entregar', { usuarioId: 'suplantado', fecha: '2000-01-01' }, {
-    'x-test-user': 'usuario-mesero', 'x-test-name': 'Mesero',
+    'x-test-user': 'usuario-mesero', 'x-test-name': 'Mesero', 'x-test-role': 'ADMIN',
   });
   assert.equal(entrega.status, 200);
   assert.equal(entrega.body.estadoCocina, 'ENTREGADO');
@@ -497,7 +504,7 @@ test('el mesero confirma un plato listo sin entregar los demás y el pedido se c
     { productoId: 'producto-prueba', cantidad: 2 },
   ] });
   const cocina = { 'x-test-user': 'usuario-cocina', 'x-test-name': 'Cocina' };
-  const mesero = { 'x-test-user': 'usuario-mesero', 'x-test-name': 'Mesero' };
+  const mesero = { 'x-test-user': 'usuario-mesero', 'x-test-name': 'Mesero', 'x-test-role': 'ADMIN' };
   await solicitar('PUT', '/preparacion-cocina/1/items/1/listo', {}, cocina);
 
   const listo = await solicitar('GET', '/1/entrega');

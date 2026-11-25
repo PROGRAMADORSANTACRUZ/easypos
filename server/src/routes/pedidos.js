@@ -19,6 +19,17 @@ const exigirPermiso = (codigo) => (req, res, next) => {
   return res.status(403).json({ error: `No tienes permiso para ${requerido}` });
 };
 
+// Un pedido de mesa abierto solo lo modifica quien lo atiende (o un ADMIN).
+const exigirResponsable = wrap(async (req, res, next) => {
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: Number(req.params.id) },
+    select: { tipo: true, estado: true, usuarioId: true, usuario: { select: { nombre: true } } },
+  });
+  if (!pedido || pedido.tipo !== 'MESA' || pedido.estado !== 'ABIERTO' || !pedido.usuarioId
+    || pedido.usuarioId === req.usuario?.id || req.usuario?.roles?.includes('ADMIN')) return next();
+  return res.status(403).json({ error: `Esta mesa la atiende ${pedido.usuario?.nombre || 'otro usuario'}; solo esa persona puede modificarla` });
+});
+
 // Estados posibles del seguimiento de entrega a domicilio (en orden)
 const ESTADOS_ENTREGA = ['RECIBIDO', 'EN_PREPARACION', 'EN_CAMINO', 'ENTREGADO', 'CANCELADO'];
 
@@ -214,7 +225,7 @@ router.get('/:id/entrega', exigirPermiso('pedidos.ver'), wrap(async (req, res) =
   res.json(await consultarEntregaPedido(prisma, pedidoId));
 }));
 
-router.post('/:id/entregar', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
+router.post('/:id/entregar', exigirPermiso('pedidos.editar'), exigirResponsable, wrap(async (req, res) => {
   const pedidoId = Number(req.params.id);
   const pedidoItemIds = req.body?.pedidoItemIds;
   if (pedidoItemIds !== undefined && (!Array.isArray(pedidoItemIds) || !pedidoItemIds.length
@@ -566,7 +577,7 @@ router.post('/:id/ubicacion', exigirPermiso('repartidor.editar'), wrap(async (re
 }));
 
 // Agregar item a un pedido abierto (si ya existe el producto, suma cantidad)
-router.post('/:id/items', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
+router.post('/:id/items', exigirPermiso('pedidos.editar'), exigirResponsable, wrap(async (req, res) => {
   const { productoId, cantidad, notas } = req.body;
   const pedidoId = Number(req.params.id);
   const producto = await prisma.producto.findUnique({ where: { id: String(productoId) }, include: { componentes: true, categoria: true } });
@@ -623,7 +634,7 @@ router.post('/:id/items', exigirPermiso('pedidos.editar'), wrap(async (req, res)
 
 
 // Cambiar la cantidad de un item (si llega a 0 o menos, se elimina). Ajusta el inventario por la diferencia.
-router.put('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
+router.put('/:id/items/:itemId', exigirPermiso('pedidos.editar'), exigirResponsable, wrap(async (req, res) => {
   const cant = Number(req.body.cantidad);
   const pedidoId = Number(req.params.id);
   const itemId = Number(req.params.itemId);
@@ -672,7 +683,7 @@ router.put('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async (re
 }));
 
 // Quitar item (devuelve sus insumos al inventario)
-router.delete('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
+router.delete('/:id/items/:itemId', exigirPermiso('pedidos.editar'), exigirResponsable, wrap(async (req, res) => {
   const pedidoId = Number(req.params.id);
   const itemId = Number(req.params.itemId);
   await prisma.$transaction(async (tx) => conEventoPedido(tx, req, pedidoId, 'QUITAR_PRODUCTO', async () => {
@@ -695,7 +706,7 @@ router.delete('/:id/items/:itemId', exigirPermiso('pedidos.editar'), wrap(async 
   res.json(pedido);
 }));
 
-router.put('/:id/observaciones', exigirPermiso('pedidos.observaciones'), wrap(async (req, res) => {
+router.put('/:id/observaciones', exigirPermiso('pedidos.observaciones'), exigirResponsable, wrap(async (req, res) => {
   const id = Number(req.params.id);
   const observaciones = req.body?.observaciones ? String(req.body.observaciones).trim() || null : null;
   const linea = `[${new Date().toLocaleString('es-CO')}] Observaciones actualizadas`;
@@ -712,7 +723,7 @@ router.put('/:id/observaciones', exigirPermiso('pedidos.observaciones'), wrap(as
 
 // Reenviar pedido editado: registra en el log qué cambió
 // body: { cambios: "texto" }
-router.post('/:id/reenviar', exigirPermiso('pedidos.editar'), wrap(async (req, res) => {
+router.post('/:id/reenviar', exigirPermiso('pedidos.editar'), exigirResponsable, wrap(async (req, res) => {
   const id = Number(req.params.id);
   const texto = (req.body?.cambios || '').trim();
   const { observaciones } = req.body;
@@ -740,7 +751,7 @@ router.post('/:id/reenviar', exigirPermiso('pedidos.editar'), wrap(async (req, r
 // Mover un pedido abierto a otra mesa: libera la mesa anterior, ocupa la nueva
 // y deja registro del movimiento en el log (visible en facturación).
 // body: { mesaId }
-router.post('/:id/cambiar-mesa', exigirPermiso('mesas.editar'), wrap(async (req, res) => {
+router.post('/:id/cambiar-mesa', exigirPermiso('mesas.editar'), exigirResponsable, wrap(async (req, res) => {
   const id = Number(req.params.id);
   const nuevaMesaId = Number(req.body?.mesaId);
   if (!nuevaMesaId) return res.status(400).json({ error: 'mesaId es requerido' });
@@ -769,7 +780,7 @@ router.post('/:id/cambiar-mesa', exigirPermiso('mesas.editar'), wrap(async (req,
 }));
 
 // Cancelar pedido, devolver los insumos consumidos al inventario y liberar la mesa
-router.post('/:id/cancelar', exigirPermiso('pedidos.eliminar'), wrap(async (req, res) => {
+router.post('/:id/cancelar', exigirPermiso('pedidos.eliminar'), exigirResponsable, wrap(async (req, res) => {
   const id = Number(req.params.id);
   const motivo = validarMotivoCancelacion(req.body?.motivo);
   const pedido = await prisma.$transaction(async (tx) => conEventoPedido(tx, req, id, 'CANCELAR', async () => {
