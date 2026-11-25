@@ -1991,3 +1991,17 @@ input.sin-flechas { -moz-appearance: textfield; appearance: textfield; }
   .rsv-paneles, .rsv-confirmar__cols { grid-template-columns: 1fr; }
   .rsv-reloj { font-size: 12px; text-align: right; }
 }
+/* Bascula (app de escritorio) */
+.bascula-panel {
+  display: flex; align-items: center; gap: 10px;
+  margin: 8px 0; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2);
+}
+.bascula-panel__peso { flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bascula-panel__peso strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.bascula-config { display: grid; gap: 12px; }
+.bascula-config__lectura {
+  display: grid; gap: 4px; padding: 10px 12px;
+  border: 1px dashed var(--border-strong); border-radius: 8px;
+}
+.bascula-config__lectura code { word-break: break-all; }

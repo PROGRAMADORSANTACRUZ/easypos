@@ -16,6 +16,8 @@ import { diaColombia } from '../fechaComercial.js';
 import PagosMultiples from '../components/PagosMultiples.jsx';
 import { etiquetaPagos, resumirPagos, formasPagoActivas, esPagoEfectivo } from '../pagosMultiples.js';
 import { calcularPropinaSugerida, calcularTotalesPedido } from '../totalesPedido.js';
+import { PanelBascula, useBascula } from '../components/Bascula.jsx';
+import { cantidadDesdePeso, esProductoPesable } from '../bascula.js';
 
 // Número visible de la factura: prefijo + consecutivo DIAN, o el ID corto si aún no tiene numeración.
 function numeroDian(f) {
@@ -1132,14 +1134,37 @@ export default function Facturas({ electronica = true }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, idDefault]);
 
+  const bascula = useBascula();
+
+  // Peso estable de la bascula en la unidad del producto, o null avisando el motivo
+  const pesoParaProducto = (producto, { avisar = true } = {}) => {
+    const aviso = (texto) => { if (avisar) notify(texto, 'err'); return null; };
+    const lectura = bascula.lectura;
+    if (!lectura || lectura.kg == null) return aviso('No hay lectura de la báscula.');
+    if (!lectura.estable) return aviso('Espera a que el peso se estabilice.');
+    const cantidad = cantidadDesdePeso(producto, lectura.kg);
+    if (!cantidad) return aviso('La báscula marca cero: pon el producto encima.');
+    if (!(Number(producto.unidad?.factorConversion) > 1)) {
+      notify(`La unidad ${producto.unidad?.abreviatura || ''} no admite decimales; ajusta su factor de conversión (ej. 1000) en Unidades de medida.`, 'err');
+    }
+    return cantidad;
+  };
+
+  const tomarPeso = (producto) => {
+    const cantidad = pesoParaProducto(producto);
+    if (cantidad) establecerCantidadDirecta(producto.id, cantidad);
+  };
+
   const agregarDirecta = (producto) => {
     if (producto.disponibles === 0) return notify(`${producto.nombre} sin inventario`, 'err');
     const factor = Number(producto.unidad?.factorConversion) > 0 ? Number(producto.unidad.factorConversion) : 1;
     const pasoRapido = factor > 1 ? 0.1 : 1;
+    // Un producto pesable nuevo entra con el peso estable de la bascula, si hay uno
+    const pesado = esProductoPesable(producto) && bascula.lectura?.estable ? pesoParaProducto(producto, { avisar: false }) : null;
     setCarrito((prev) => {
       const existe = prev.find((c) => c.producto.id === producto.id);
       if (existe) return prev.map((c) => (c.producto.id === producto.id ? { ...c, cantidad: Number(c.cantidad) + pasoRapido } : c));
-      return [...prev, { producto, cantidad: 1 }];
+      return [...prev, { producto, cantidad: pesado || 1 }];
     });
   };
 
@@ -2052,6 +2077,7 @@ export default function Facturas({ electronica = true }) {
                   value={sucursalIdPara(cliente ?? idDefault, sucursalDirecta) || ''}
                   onChange={setSucursalDirecta}
                 />
+                <PanelBascula bascula={bascula} />
                 {carrito.length === 0 ? (
                   <p className="empty">Agrega productos del menú.</p>
                 ) : (
@@ -2069,6 +2095,17 @@ export default function Facturas({ electronica = true }) {
                               <button className="btn btn-sm" title={`Restar ${pasoRapidoUnidad(c.producto)} ${c.producto.unidad?.abreviatura || 'U'}`} onClick={() => cambiarDirecta(c.producto.id, -pasoRapidoUnidad(c.producto))}>−</button>
                               <input className="qty-num" type="number" min={pasoUnidad(c.producto)} step={pasoUnidad(c.producto)} aria-label={`Cantidad en ${c.producto.unidad?.abreviatura || 'unidades'}`} value={c.cantidad} onChange={(e) => establecerCantidadDirecta(c.producto.id, e.target.value)} />
                               <button className="btn btn-sm" title={`Sumar ${pasoRapidoUnidad(c.producto)} ${c.producto.unidad?.abreviatura || 'U'}`} onClick={() => cambiarDirecta(c.producto.id, pasoRapidoUnidad(c.producto))}>+</button>
+                              {bascula.disponible && esProductoPesable(c.producto) && (
+                                <button
+                                  className="btn btn-sm"
+                                  title="Tomar peso de la báscula"
+                                  aria-label={`Tomar peso de la báscula para ${c.producto.nombre}`}
+                                  disabled={!bascula.lectura?.estable}
+                                  onClick={() => tomarPeso(c.producto)}
+                                >
+                                  <Icon name="bascula" size={16} />
+                                </button>
+                              )}
                             </div>
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 700 }}>{money(c.producto.precio * c.cantidad)}</td>

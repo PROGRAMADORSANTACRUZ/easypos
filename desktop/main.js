@@ -10,6 +10,8 @@ const { enviarPulsoCajon } = require('./cash-drawer.js');
 const { enviarComandaRed } = require('./impresora-red.js');
 const { crearServidorEstatico } = require('./static-server.js');
 const { iniciarActualizaciones } = require('./updater.js');
+const fs = require('node:fs');
+const { Bascula, PERFILES } = require('./bascula.js');
 
 const API_PORT = process.env.PORT || 4010;
 const API_ORIGIN = app.isPackaged
@@ -98,6 +100,69 @@ function registrarCanalesCajon() {
   });
 }
 
+// --- Bascula (puerto COM) ---
+let bascula = null;
+const archivoBascula = () => path.join(app.getPath('userData'), 'bascula.json');
+
+function obtenerBascula() {
+  if (bascula) return bascula;
+  // Carga diferida: si el modulo nativo falla, el resto del POS sigue funcionando
+  const { SerialPort } = require('serialport');
+  bascula = new Bascula({ SerialPort });
+  const enviar = (canal, dato) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(canal, dato);
+  };
+  bascula.on('peso', (lectura) => enviar('pos:bascula:peso', lectura));
+  bascula.on('estado', (estado) => enviar('pos:bascula:estado', estado));
+  return bascula;
+}
+
+function guardarConfigBascula(config) {
+  fs.writeFileSync(archivoBascula(), JSON.stringify(config, null, 2));
+}
+
+async function reconectarBascula() {
+  try {
+    if (!fs.existsSync(archivoBascula())) return;
+    const config = JSON.parse(fs.readFileSync(archivoBascula(), 'utf8'));
+    if (config?.path && config.activa !== false) await obtenerBascula().conectar(config);
+  } catch (err) {
+    console.error('[POS] bascula:', err.message);
+  }
+}
+
+function registrarCanalesBascula() {
+  const manejar = (canal, fn) => ipcMain.handle(canal, async (event, ...args) => {
+    exigirVentanaPrincipal(event);
+    return fn(...args);
+  });
+  manejar('pos:bascula:perfiles', () => PERFILES);
+  manejar('pos:bascula:puertos', async () => {
+    const { SerialPort } = require('serialport');
+    const puertos = await SerialPort.list();
+    return puertos.map((p) => ({ path: p.path, nombre: p.friendlyName || p.manufacturer || p.path }));
+  });
+  manejar('pos:bascula:estado', () => obtenerBascula().estado());
+  manejar('pos:bascula:conectar', async (config = {}) => {
+    const estado = await obtenerBascula().conectar(config);
+    guardarConfigBascula({ ...estado.config, activa: true });
+    return estado;
+  });
+  manejar('pos:bascula:desconectar', async () => {
+    const b = obtenerBascula();
+    if (b.config) guardarConfigBascula({ ...b.config, activa: false });
+    await b.desconectar();
+    return b.estado();
+  });
+  manejar('pos:bascula:detectar', async () => {
+    const estado = await obtenerBascula().detectar({
+      progreso: (texto) => mainWindow?.webContents.send('pos:bascula:progreso', texto),
+    });
+    guardarConfigBascula({ ...estado.config, activa: true });
+    return estado;
+  });
+}
+
 function startServer() {
   serverProcess = spawn(process.env.POS_NODE || 'node', [path.join(serverDir, 'src', 'index.js')], {
     cwd: serverDir,
@@ -171,6 +236,7 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   app.setAppUserModelId('com.gruposantacruz.pos');
   registrarCanalesCajon();
+  registrarCanalesBascula();
   if (!app.isPackaged) startServer();
   staticServer = await crearServidorEstatico({
     clientDist,
@@ -186,6 +252,7 @@ app.whenReady().then(async () => {
     }
   }
   createWindow();
+  reconectarBascula();
 
   if (app.isPackaged) {
     const { autoUpdater } = require('electron-updater');

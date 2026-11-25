@@ -32,8 +32,9 @@ test('installer uses native DPI rendering and high-resolution artwork', () => {
   }
 });
 
-test('preload exposes only the app version, network printing and cash drawer bridges', async () => {
+test('preload exposes only the app version, network printing, cash drawer and scale bridges', async () => {
   const calls = [];
+  const oyentes = new Map();
   let exposedName;
   let exposedApi;
   const context = {
@@ -41,24 +42,37 @@ test('preload exposes only the app version, network printing and cash drawer bri
       assert.equal(name, 'electron');
       return {
         contextBridge: { exposeInMainWorld: (key, api) => { exposedName = key; exposedApi = api; } },
-        ipcRenderer: { invoke: (...args) => { calls.push(args); return Promise.resolve(args[0]); } },
+        ipcRenderer: {
+          invoke: (...args) => { calls.push(args); return Promise.resolve(args[0]); },
+          on: (canal, fn) => oyentes.set(canal, fn),
+          removeListener: (canal, fn) => { if (oyentes.get(canal) === fn) oyentes.delete(canal); },
+        },
       };
     },
   };
   vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '..', 'preload.js'), 'utf8'), context);
 
   assert.equal(exposedName, 'posDesktop');
-  assert.deepEqual(Object.keys(exposedApi), ['appVersion', 'imprimirRed', 'cashDrawer']);
+  assert.deepEqual(Object.keys(exposedApi), ['appVersion', 'imprimirRed', 'cashDrawer', 'bascula']);
   await exposedApi.appVersion();
   await exposedApi.imprimirRed({ ip: '192.168.0.95', puerto: 9100, datos: 'eA==' });
   await exposedApi.cashDrawer.listPrinters();
   await exposedApi.cashDrawer.open({ printerName: 'Thermal' });
+  await exposedApi.bascula.conectar({ path: 'COM3' });
   assert.deepEqual(calls, [
     ['pos:app-version'],
     ['pos:imprimir-red', { ip: '192.168.0.95', puerto: 9100, datos: 'eA==' }],
     ['pos:cash-drawer:list-printers'],
     ['pos:cash-drawer:open', { printerName: 'Thermal' }],
+    ['pos:bascula:conectar', { path: 'COM3' }],
   ]);
+  // El renderer recibe solo el dato, nunca el evento IPC, y puede cancelar la suscripcion
+  const pesos = [];
+  const cancelar = exposedApi.bascula.onPeso((lectura) => pesos.push(lectura));
+  oyentes.get('pos:bascula:peso')({ sender: 'ipc' }, { kg: 1.5 });
+  assert.deepEqual(pesos, [{ kg: 1.5 }]);
+  cancelar();
+  assert.equal(oyentes.has('pos:bascula:peso'), false);
 });
 
 test('network printing only reaches private LAN printers and sends the raw ticket', async () => {
@@ -130,6 +144,7 @@ test('packaged window has only native overlay controls and the POS icon', async 
       }
       if (name === './cash-drawer.js') return { enviarPulsoCajon: async () => {} };
       if (name === './impresora-red.js') return { enviarComandaRed: async () => ({ ok: true }) };
+      if (name === './bascula.js') return require('../bascula.js');
       if (name === './updater.js') return require('../updater.js');
       if (name === 'electron-updater') {
         return { autoUpdater: { on() {}, checkForUpdates: async () => { updateChecks += 1; } } };
@@ -218,6 +233,7 @@ test('local desktop routes API through the window origin to preserve session coo
       }
       if (name === './cash-drawer.js') return { enviarPulsoCajon: async () => {} };
       if (name === './impresora-red.js') return { enviarComandaRed: async () => ({ ok: true }) };
+      if (name === './bascula.js') return require('../bascula.js');
       if (name === './updater.js') return require('../updater.js');
       if (name === 'node:child_process') return { spawn: () => ({ on() {} }) };
       if (name === 'node:http') {

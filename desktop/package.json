@@ -32,6 +32,7 @@
       "impresora-red.js",
       "static-server.js",
       "updater.js",
+      "bascula.js",
       "build/icon.ico",
       "web/**"
     ],
@@ -76,6 +77,7 @@
     ]
   },
   "dependencies": {
-    "electron-updater": "^6.8.11"
+    "electron-updater": "^6.8.11",
+    "serialport": "^12.0.0"
   }
 }

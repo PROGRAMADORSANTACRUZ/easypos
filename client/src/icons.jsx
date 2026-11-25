@@ -9,7 +9,7 @@ import {
   Landmark, Antenna, Plug, Circle, Calculator, Gift,
   Pencil, Trash2, X, Plus, Minus, DollarSign, Save, Check, Ban, RotateCw, Download,
   ArrowLeft, ArrowRight, Shuffle, Lock, Snowflake, Menu, MapPin, Navigation, LocateFixed, ChefHat,
-  Eye, EyeOff, LayoutDashboard, Copy,
+  Eye, EyeOff, LayoutDashboard, Copy, Scale, Settings,
 } from 'lucide-react';
 
 const MAP = {
@@ -93,6 +93,8 @@ const MAP = {
   mapa: MapPin,
   ubicacion: Navigation,
   gps: LocateFixed,
+  bascula: Scale,
+  ajustes: Settings,
 };
 
 export function Icon({ name, size = 18, strokeWidth = 1.75, className, style }) {
