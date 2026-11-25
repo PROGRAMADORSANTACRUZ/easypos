@@ -675,11 +675,6 @@ export default function TomarPedido() {
           {errorEntrega && <p className="mini" role="alert">{errorEntrega}</p>}
         </div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          {pedido && puedeEditarPedido && (Array.isArray(estadoEntrega?.itemsListos)
-            ? estadoEntrega.itemsListos.some((item) => !item.entregadoAt)
-            : estadoEntrega?.estadoCocina === 'LISTO') && estadoEntrega.estadoPedido === 'ABIERTO' && (
-            <Button variant="success" icon="check" disabled={procesando || editando} onClick={() => entregarPedido()}>Entregar platos listos</Button>
-          )}
           {estadoEntrega?.entrega && <span className="badge green">Entregado</span>}
           {pedido && puedeEditarMesa && (
             <button className="btn" onClick={() => setMoviendo(true)}><Icon name="swap" size={16} /> Cambiar mesa</button>
@@ -687,6 +682,15 @@ export default function TomarPedido() {
           <button className="btn" onClick={() => navigate('/mesas')}><Icon name="back" size={16} /> Volver a mesas</button>
         </div>
       </div>
+
+      {/* Fuera de la cabecera y mas abajo, para no tocarlo sin querer al bajar las notificaciones del celular */}
+      {pedido && puedeEditarPedido && (Array.isArray(estadoEntrega?.itemsListos)
+        ? estadoEntrega.itemsListos.some((item) => !item.entregadoAt)
+        : estadoEntrega?.estadoCocina === 'LISTO') && estadoEntrega.estadoPedido === 'ABIERTO' && (
+        <div className="entregar-platos">
+          <Button variant="success" icon="check" disabled={procesando || editando} onClick={() => entregarPedido()}>Entregar platos listos</Button>
+        </div>
+      )}
 
       <div className="grid grid-2">
         {/* Menu */}

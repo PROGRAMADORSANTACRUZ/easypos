@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api, tenantActual } from '../api.js';
 import { esApk, llamarNativo } from '../movil.js';
 import { useAuth } from '../App.jsx';
@@ -15,6 +15,8 @@ const CADA_MS = 4000;
 export default function AlertaPlatoListo() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const avisoRef = useRef(null);
   const [pendientes, setPendientes] = useState([]);
   const aplica = esApk() && (user?.roles || []).includes('MESERO') && (user?.permisos || []).includes('mesas.ver');
 
@@ -50,12 +52,34 @@ export default function AlertaPlatoListo() {
     };
   }, [aplica]);
 
-  if (!aplica || !pendientes.length) return null;
+  // En el pedido de una mesa no se avisa de esa misma mesa: ahi ya esta el boton "Entregar platos listos".
+  const mesaAbierta = location.pathname.match(/^\/mesas\/([^/]+)\/pedido/)?.[1];
+  const visibles = aplica ? pendientes.filter((mesa) => String(mesa.mesaId) !== mesaAbierta) : [];
+
+  // Reserva el alto del aviso arriba de la pagina para que no tape botones (ej. "Entregar platos listos").
+  useLayoutEffect(() => {
+    const raiz = document.documentElement;
+    const el = avisoRef.current;
+    if (!el) {
+      raiz.style.removeProperty('--alerta-plato-alto');
+      return undefined;
+    }
+    const medir = () => raiz.style.setProperty('--alerta-plato-alto', `${el.offsetHeight + 16}px`);
+    medir();
+    const observador = new ResizeObserver(medir);
+    observador.observe(el);
+    return () => {
+      observador.disconnect();
+      raiz.style.removeProperty('--alerta-plato-alto');
+    };
+  }, [visibles.length]);
+
+  if (!visibles.length) return null;
 
   return (
-    <div className="alerta-plato-listo" role="alert">
+    <div className="alerta-plato-listo" role="alert" ref={avisoRef}>
       <strong>¡Plato listo! Entrégalo y confirma la entrega.</strong>
-      {pendientes.map((mesa) => (
+      {visibles.map((mesa) => (
         <button key={mesa.mesaId} type="button" onClick={() => navigate(`/mesas/${mesa.mesaId}/pedido`)}>
           <span>Mesa {mesa.numero}</span>
           <span className="mini">{mesa.platos.join(' · ') || 'Plato listo'}</span>

@@ -1289,6 +1289,11 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .alerta-plato-listo .mini { color: #fff; font-weight: 600; text-transform: uppercase; }
 @keyframes parpadeo-plato-listo { 50% { background: #eab308; color: #000; } }
+/* Mientras el aviso esta visible, la pagina (y la barra superior en movil) bajan su alto para no quedar tapadas */
+body { padding-top: var(--alerta-plato-alto, 0px); }
+/* Boton "Entregar platos listos" en su propia fila, debajo de la cabecera de la mesa */
+.entregar-platos { margin: 24px 0 16px; }
+.entregar-platos .btn { width: 100%; justify-content: center; min-height: 52px; font-size: 16px; }
 .nav-user-rol {
   display: inline-block;
   font-size: 11px;
@@ -1592,7 +1597,7 @@ tbody tr:last-child td { border-bottom: none; }
     align-items: center;
     gap: 12px;
     position: fixed;
-    top: 0; left: 0; right: 0;
+    top: var(--alerta-plato-alto, 0px); left: 0; right: 0;
     height: 56px;
     padding: 0 12px;
     background: var(--panel);
