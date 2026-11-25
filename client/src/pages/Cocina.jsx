@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useToast } from '../App.jsx';
 import { LoadingState, EmptyState, Button, Modal } from '../components/ui/index.jsx';
 import { diaColombia } from '../fechaComercial.js';
+import { esLlevar, notasSinLlevar } from '../llevar.js';
 
 // Semaforo por minutos de espera de la comanda.
 const SEMAFORO = [
@@ -269,9 +270,10 @@ export default function Cocina() {
                             >
                               <strong className="cocina-plato__nombre">
                                 <span className="cocina-plato__cantidad">{it.cantidad}x</span> {it.producto?.nombre}
+                                {esLlevar(it.notas) && <span className="badge-llevar">LLEVAR</span>}
                                 {it.cantidadMesa00 > 0 && <span className="badge blue">Mesa 00 ×{it.cantidadMesa00}</span>}
                               </strong>
-                              {it.notas && <span className="cocina-nota"><b>Obs:</b> {it.notas}</span>}
+                              {notasSinLlevar(it.notas) && <span className="cocina-nota"><b>Obs:</b> {notasSinLlevar(it.notas)}</span>}
                               {it.producto?.componentes?.length > 0 && (
                                 <div className="cocina-plato__ingredientes">
                                   Ingredientes: {it.producto.componentes.map((c) => c.item?.nombre).join(', ')}

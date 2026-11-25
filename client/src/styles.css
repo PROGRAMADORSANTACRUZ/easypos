@@ -1294,6 +1294,13 @@ body { padding-top: var(--alerta-plato-alto, 0px); }
 /* Boton "Entregar platos listos" en su propia fila, debajo de la cabecera de la mesa */
 .entregar-platos { margin: 24px 0 16px; }
 .entregar-platos .btn { width: 100%; justify-content: center; min-height: 52px; font-size: 16px; }
+/* Producto "para llevar": boton en la cuenta y etiqueta en cuenta/cocina */
+.btn-llevar { color: var(--green); border-color: var(--green); font-weight: 700; }
+.btn-llevar.activo { background: var(--green); color: #06210f; }
+.badge-llevar {
+  display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--green); color: #06210f;
+  font-size: 12px; font-weight: 800; letter-spacing: .5px; vertical-align: middle;
+}
 .nav-user-rol {
   display: inline-block;
   font-size: 11px;

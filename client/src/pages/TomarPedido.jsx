@@ -9,6 +9,7 @@ import { LoadingState, overlayCierre, Modal, Button } from '../components/ui/ind
 import { LOGO_RECIBO } from '../logoRecibo.js';
 import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir } from '../print.js';
 import { municipiosColombia } from '../municipiosColombia.js';
+import { esLlevar, notasSinLlevar, alternarLlevar } from '../llevar.js';
 
 // Escapa texto libre antes de insertarlo en el HTML del ticket (evita inyeccion via nombres/observaciones).
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
@@ -366,6 +367,7 @@ export default function TomarPedido() {
         cantidad: it.cantidad,
         cantidadMesa00: it.cantidadMesa00 || 0,
         precioUnit: it.precioUnit,
+        notas: it.notas || '',
       }));
     }
     return carrito.flatMap((c, carritoIndex) => (c.cancelado ? [] : [{
@@ -407,7 +409,8 @@ export default function TomarPedido() {
       }
     } else {
       setCarrito((prev) => {
-        const existe = prev.find((c) => c.producto.id === producto.id && !c.desdeMesa00 && !c.cancelado);
+        // Las lineas "para llevar" quedan aparte: el mismo producto vuelve a entrar como linea normal.
+        const existe = prev.find((c) => c.producto.id === producto.id && !c.desdeMesa00 && !c.cancelado && !esLlevar(c.notas));
         if (existe) return prev.map((c) => (c === existe ? { ...c, cantidad: c.cantidad + 1 } : c));
         return [...prev, { producto, cantidad: 1, cantidadMesa00: 0, desdeMesa00: false }];
       });
@@ -437,6 +440,11 @@ export default function TomarPedido() {
     } else {
       setCarrito((prev) => prev.map((c, indice) => (indice === item.carritoIndex ? { ...c, cancelado: true } : c)));
     }
+  };
+
+  // Marca o desmarca un producto del pedido nuevo como "para llevar"
+  const alternarLlevarItem = (item) => {
+    setCarrito((prev) => prev.map((c, indice) => (indice === item.carritoIndex ? { ...c, notas: alternarLlevar(c.notas) } : c)));
   };
 
   // Cambia la cantidad de un item en +/-1 (si llega a 0 se cancela y queda tachado)
@@ -760,10 +768,13 @@ export default function TomarPedido() {
                   return (
                   <tr key={it.id}>
                     <td>
-                      <div style={{ fontWeight: 600, textTransform: 'uppercase' }}>{it.nombre}</div>
+                      <div style={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                        {it.nombre}
+                        {esLlevar(it.notas) && it.carritoIndex == null && <span className="badge-llevar" style={{ marginLeft: 6 }}>LLEVAR</span>}
+                      </div>
                       <div className="mini">{money(it.precioUnit)} c/u</div>
                       {it.cantidadMesa00 > 0 && <span className="badge blue">Mesa 00 · {it.cantidadMesa00}</span>}
-                      {it.notas && <div className="mini">{it.notas}</div>}
+                      {notasSinLlevar(it.notas) && <div className="mini">{notasSinLlevar(it.notas)}</div>}
                       {estadoItem && (
                         <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                           <span className={`badge ${estadoItem.entregadoAt ? 'green' : 'orange'}`}>
@@ -805,6 +816,15 @@ export default function TomarPedido() {
                           <button className="btn btn-sm" onClick={() => cambiarCantidad(it, -1)}>−</button>
                           <span className="qty-num">{it.cantidad}</span>
                           <button className="btn btn-sm" onClick={() => cambiarCantidad(it, 1)}>+</button>
+                          {it.carritoIndex != null && (
+                            <button
+                              type="button"
+                              className={`btn btn-sm btn-llevar${esLlevar(it.notas) ? ' activo' : ''}`}
+                              aria-pressed={esLlevar(it.notas)}
+                              title="Marcar para llevar"
+                              onClick={() => alternarLlevarItem(it)}
+                            >Llevar</button>
+                          )}
                         </div>
                       ) : (
                         <span className="qty-num">×{it.cantidad}</span>
