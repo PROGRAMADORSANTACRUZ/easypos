@@ -1,18 +1,27 @@
 name: Publicar POS de escritorio
 
-# Al subir a main un cambio de version en desktop/package.json se compila el
-# instalador de Windows y se publica en GitHub Releases (etiqueta vX.Y.Z).
-# Las apps instaladas lo detectan al abrirse (electron-updater).
+# Cada push a main que cambie la app (client/ o desktop/) compila el instalador de
+# Windows y lo publica en GitHub Releases con una version nueva (vX.Y.Z+1).
+# Las apps instaladas lo detectan al abrirse y cada 4 horas (electron-updater).
+# La version se calcula sola: la ultima publicada + 1 en el patch. Para saltar a
+# otra serie (ej. 1.1.0) basta con subir la version en desktop/package.json.
 on:
   push:
     branches:
       - main
     paths:
-      - desktop/package.json
+      - client/**
+      - '!client/public/movil/**'
+      - desktop/**
+      - .github/workflows/desktop-release.yml
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -24,29 +33,31 @@ jobs:
         with:
           node-version: 20
 
-      - name: Leer version y comprobar si ya esta publicada
+      - name: Calcular la nueva version
         id: version
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $version = (Get-Content desktop/package.json -Raw | ConvertFrom-Json).version
-          gh release view "v$version" --repo "${{ github.repository }}" *> $null
-          $existe = ($LASTEXITCODE -eq 0)
-          $global:LASTEXITCODE = 0
-          "publicar=$((-not $existe).ToString().ToLower())" >> $env:GITHUB_OUTPUT
-          if ($existe) { Write-Host "v$version ya esta publicada; no hay nada que hacer." }
+          $base = [version](Get-Content desktop/package.json -Raw | ConvertFrom-Json).version
+          $tags = gh release list --repo "${{ github.repository }}" --limit 200 --json tagName --jq '.[].tagName'
+          $ultima = $tags | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } |
+            ForEach-Object { [version]$_.Substring(1) } | Sort-Object -Descending | Select-Object -First 1
+          $nueva = if (-not $ultima -or $base -gt $ultima) { $base } else { [version]::new($ultima.Major, $ultima.Minor, $ultima.Build + 1) }
+          Write-Host "Ultima publicada: $ultima -> nueva: $nueva"
+          "version=$nueva" >> $env:GITHUB_OUTPUT
 
-      - if: steps.version.outputs.publicar == 'true'
-        run: npm ci
-        working-directory: client
-
-      - if: steps.version.outputs.publicar == 'true'
-        run: npm ci
+      - name: Aplicar la version al paquete
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
         working-directory: desktop
 
-      - if: steps.version.outputs.publicar == 'true'
-        name: Compilar y publicar
+      - run: npm ci
+        working-directory: client
+
+      - run: npm ci
+        working-directory: desktop
+
+      - name: Compilar y publicar
         run: npm run dist -- --publish always
         working-directory: desktop
         env:
