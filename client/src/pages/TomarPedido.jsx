@@ -301,6 +301,8 @@ export default function TomarPedido() {
     if (!pedido?.id) return;
     let activo = true;
     itemsListosAnteriores.current = null;
+    // El aviso de plato listo es solo para quien hizo el pedido (pedidos viejos sin usuario: para todos).
+    const avisarAlUsuario = !pedido.usuarioId || pedido.usuarioId === user?.id;
     const desbloquearAudio = () => {
       const AudioContexto = window.AudioContext || window.webkitAudioContext;
       if (!AudioContexto) return;
@@ -316,7 +318,7 @@ export default function TomarPedido() {
         const itemsListos = Array.isArray(estado.itemsListos) ? estado.itemsListos : [];
         const clavesActuales = new Set(itemsListos.map((item) => `${item.pedidoItemId}:${item.cantidad ?? ''}:${item.fechaListo ?? ''}`));
         const anteriores = itemsListosAnteriores.current;
-        if (anteriores) {
+        if (anteriores && avisarAlUsuario) {
           const nuevos = itemsListos.filter((item) => !anteriores.has(`${item.pedidoItemId}:${item.cantidad ?? ''}:${item.fechaListo ?? ''}`));
           if (nuevos.length) {
             const cantidad = nuevos.length;
@@ -343,7 +345,7 @@ export default function TomarPedido() {
       window.removeEventListener('pointerdown', desbloquearAudio);
       window.removeEventListener('keydown', desbloquearAudio);
     };
-  }, [pedido?.id]);
+  }, [pedido?.id, pedido?.usuarioId, user?.id]);
 
   // Categorías y productos filtrados del menú
   const categoriasMenu = categoriasOrdenadas(productos);

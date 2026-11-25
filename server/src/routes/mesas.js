@@ -7,7 +7,7 @@ const router = Router();
 // Envuelve handlers async para propagar errores
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-// Mesas con platos listos sin entregar (solo las asignadas al usuario, si tiene). Lo consulta la APK
+// Mesas con platos listos sin entregar, solo de los pedidos que hizo el usuario. Lo consulta la APK
 // de las meseras, tambien en segundo plano, para hacer sonar la alarma.
 router.get('/platos-listos', wrap(async (req, res) => {
   const mesas = await prisma.mesa.findMany({
@@ -20,7 +20,7 @@ router.get('/platos-listos', wrap(async (req, res) => {
       },
     },
   });
-  res.json(mesasConPlatosListos(mesas, req.usuario?.mesaIds || []));
+  res.json(mesasConPlatosListos(mesas, req.usuario?.mesaIds || [], req.usuario?.id));
 }));
 
 // Listar mesas
