@@ -447,6 +447,13 @@ export default function TomarPedido() {
     setCarrito((prev) => prev.map((c, indice) => (indice === item.carritoIndex ? { ...c, notas: alternarLlevar(c.notas) } : c)));
   };
 
+  // Observacion propia de un plato del pedido nuevo (conserva la marca "para llevar")
+  const cambiarObsItem = (item, texto) => {
+    setCarrito((prev) => prev.map((c, indice) => (indice === item.carritoIndex
+      ? { ...c, notas: esLlevar(c.notas) ? (texto ? `LLEVAR · ${texto}` : 'LLEVAR') : texto }
+      : c)));
+  };
+
   // Cambia la cantidad de un item en +/-1 (si llega a 0 se cancela y queda tachado)
   const cambiarCantidad = async (item, delta) => {
     const nuevaCant = item.cantidad + delta;
@@ -477,7 +484,7 @@ export default function TomarPedido() {
     try {
       const nuevo = await api.post('/pedidos', {
         mesaId: Number(mesaId),
-        items: carritoActivo.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad, cantidadMesa00: c.cantidadMesa00 || 0, notas: c.notas || null })),
+        items: carritoActivo.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad, cantidadMesa00: c.cantidadMesa00 || 0, notas: c.notas?.trim() || null })),
         ...(puedeEditarObservaciones && { observaciones: observaciones.trim() || null }),
       });
       setPedido(nuevo);
@@ -774,7 +781,16 @@ export default function TomarPedido() {
                       </div>
                       <div className="mini">{money(it.precioUnit)} c/u</div>
                       {it.cantidadMesa00 > 0 && <span className="badge blue">Mesa 00 · {it.cantidadMesa00}</span>}
-                      {notasSinLlevar(it.notas) && <div className="mini">{notasSinLlevar(it.notas)}</div>}
+                      {it.carritoIndex != null && puedeEditarObservaciones ? (
+                        <input
+                          className="obs-plato"
+                          aria-label={`Observación de ${it.nombre}`}
+                          placeholder="Obs. de este plato (ej. sin cebolla)"
+                          maxLength={120}
+                          value={notasSinLlevar(it.notas)}
+                          onChange={(e) => cambiarObsItem(it, e.target.value)}
+                        />
+                      ) : notasSinLlevar(it.notas) && <div className="mini">Obs: {notasSinLlevar(it.notas)}</div>}
                       {estadoItem && (
                         <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                           <span className={`badge ${estadoItem.entregadoAt ? 'green' : 'orange'}`}>

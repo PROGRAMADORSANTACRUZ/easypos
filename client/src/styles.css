@@ -1301,6 +1301,8 @@ body { padding-top: var(--alerta-plato-alto, 0px); }
   display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--green); color: #06210f;
   font-size: 12px; font-weight: 800; letter-spacing: .5px; vertical-align: middle;
 }
+/* Observacion propia de cada plato en la cuenta */
+.obs-plato { width: 100%; margin-top: 6px; padding: 6px 8px; font-size: 13px; }
 .nav-user-rol {
   display: inline-block;
   font-size: 11px;
