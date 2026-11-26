@@ -750,8 +750,9 @@ router.post('/:id/reenviar', exigirPermiso('pedidos.editar'), exigirResponsable,
 
 // Mover un pedido abierto a otra mesa: libera la mesa anterior, ocupa la nueva
 // y deja registro del movimiento en el log (visible en facturación).
+// Es una edicion del pedido: la mesera que lo atiende puede moverlo sin permisos de administrar mesas.
 // body: { mesaId }
-router.post('/:id/cambiar-mesa', exigirPermiso('mesas.editar'), exigirResponsable, wrap(async (req, res) => {
+router.post('/:id/cambiar-mesa', exigirPermiso('pedidos.editar'), exigirResponsable, wrap(async (req, res) => {
   const id = Number(req.params.id);
   const nuevaMesaId = Number(req.body?.mesaId);
   if (!nuevaMesaId) return res.status(400).json({ error: 'mesaId es requerido' });

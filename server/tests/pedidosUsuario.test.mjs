@@ -237,7 +237,7 @@ async function entorno(t, { ocupada = false, reportes = true, cocina = true, mes
       id: req.header('x-test-user') || 'usuario-mesero-1',
       nombre: req.header('x-test-name') || 'Mesero uno',
       usuario: req.header('x-test-user') || 'mesero1',
-      permisos: ['pedidos.ver', 'pedidos.crear', 'pedidos.editar', 'pedidos.eliminar', 'pedidos.observaciones', 'mesas.editar', ...(reportes ? ['reportes.ver'] : []), ...(cocina ? ['cocina.ver'] : [])],
+      permisos: req.header('x-test-permisos') ? req.header('x-test-permisos').split(',') : ['pedidos.ver', 'pedidos.crear', 'pedidos.editar', 'pedidos.eliminar', 'pedidos.observaciones', 'mesas.editar', ...(reportes ? ['reportes.ver'] : []), ...(cocina ? ['cocina.ver'] : [])],
       roles: req.header('x-test-role') ? [req.header('x-test-role')] : [],
     };
     tenantStorage.run(db, next);
@@ -391,6 +391,18 @@ test('el traslado conserva mesa anterior y nueva y no edita productos de otro pe
   assert.equal(eventos[1].despues.mesaId, 2);
   assert.equal((await solicitar('PUT', '/1/items/999', { cantidad: 2 })).status, 404);
   assert.equal(eventos.length, 2);
+});
+
+test('la mesera que atiende la mesa la cambia con los permisos del rol MESERO, sin mesas.editar', async (t) => {
+  const { crear, solicitar, eventos } = await entorno(t);
+  const permisosMesero = 'mesas.ver,pedidos.ver,pedidos.crear,pedidos.editar,pedidos.eliminar,pedidos.prefactura,pedidos.observaciones';
+  const mesera = { 'x-test-user': 'usuario-mesero-1', 'x-test-role': 'MESERO', 'x-test-permisos': permisosMesero };
+  assert.equal((await crear({}, mesera)).status, 201);
+  const otra = { 'x-test-user': 'usuario-mesero-2', 'x-test-role': 'MESERO', 'x-test-permisos': permisosMesero };
+  assert.equal((await solicitar('POST', '/1/cambiar-mesa', { mesaId: 2 }, otra)).status, 403);
+  assert.equal((await solicitar('POST', '/1/cambiar-mesa', { mesaId: 2 }, mesera)).status, 200);
+  assert.equal(eventos.at(-1).accion, 'CAMBIAR_MESA');
+  assert.equal(eventos.at(-1).despues.mesaId, 2);
 });
 
 test('un error guardando historial revierte la edicion o cancelacion del pedido', async (t) => {

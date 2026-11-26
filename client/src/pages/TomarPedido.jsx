@@ -696,7 +696,7 @@ export default function TomarPedido() {
         </div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           {estadoEntrega?.entrega && <span className="badge green">Entregado</span>}
-          {pedido && puedeEditarMesa && (
+          {pedido && puedeEditarPedido && (
             <button className="btn" onClick={() => setMoviendo(true)}><Icon name="swap" size={16} /> Cambiar mesa</button>
           )}
           <button className="btn" onClick={() => navigate('/mesas')}><Icon name="back" size={16} /> Volver a mesas</button>
