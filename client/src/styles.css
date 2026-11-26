@@ -374,6 +374,10 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 .crud-table-scroll::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
 .crud-table-scroll:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .content .crud-table-scroll table { display: table; overflow: visible; }
+/* Tablas largas: scroll vertical dentro de la tarjeta con el encabezado siempre visible */
+.crud-table-scroll--vertical { max-height: calc(100vh - 220px); overflow-y: auto; overscroll-behavior: contain; padding-top: 0; }
+.crud-table-scroll--vertical::-webkit-scrollbar { width: 14px; }
+.crud-table-scroll--vertical thead th { position: sticky; top: 0; z-index: 1; background: var(--panel-2); }
 
 .inventario-tabla-scroll {
   max-height: 65vh;

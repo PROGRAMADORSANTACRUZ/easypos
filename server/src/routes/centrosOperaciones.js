@@ -14,21 +14,46 @@ router.get('/', wrap(async (_req, res) => {
   res.json(centros.map(serializar));
 }));
 
+// Codigo del C.O de Siesa: 1 a 3 digitos, guardado con ceros a la izquierda (ej. 7 -> 007)
+const normalizarCodigo = (valor) => {
+  const codigo = String(valor ?? '').trim();
+  return /^\d{1,3}$/.test(codigo) ? codigo.padStart(3, '0') : null;
+};
+
+function datosCentro(body = {}) {
+  const descripcion = String(body.descripcion ?? '').trim();
+  const estado = String(body.estado ?? '').trim();
+  const regional = String(body.regional ?? '').trim();
+  const nombre = String(body.nombre ?? '').trim();
+  const companiaCodigo = String(body.companiaCodigo ?? '').trim();
+  if (!descripcion) return { error: 'La descripción es obligatoria' };
+  if (!regional || !nombre || !companiaCodigo) return { error: 'Regional, nombre y compañía son obligatorios' };
+  if (!['Activo', 'Inactivo'].includes(estado)) return { error: 'El estado debe ser Activo o Inactivo' };
+  return { datos: { descripcion, estado, regional, nombre, companiaCodigo } };
+}
+
+router.post('/', wrap(async (req, res) => {
+  const codigo = normalizarCodigo(req.body.codigo);
+  if (!codigo) return res.status(400).json({ error: 'El código debe tener entre 1 y 3 dígitos' });
+  const { datos, error } = datosCentro(req.body);
+  if (error) return res.status(400).json({ error });
+  try {
+    const centro = await prisma.centroOperacion.create({ data: { codigo, ...datos }, include: { compania: true } });
+    await auditar({ req, accion: 'CREAR', entidad: 'centro_operacion', entidadId: codigo, detalle: datos.descripcion });
+    res.status(201).json(serializar(centro));
+  } catch (e) {
+    if (e.code === 'P2002') return res.status(409).json({ error: `Ya existe el centro de operaciones ${codigo}` });
+    if (e.code === 'P2003') return res.status(400).json({ error: 'La compañía seleccionada no existe' });
+    throw e;
+  }
+}));
+
 router.put('/:codigo', wrap(async (req, res) => {
   const codigo = String(req.params.codigo ?? '').trim();
-  const descripcion = String(req.body.descripcion ?? '').trim();
-  const estado = String(req.body.estado ?? '').trim();
-  const regional = String(req.body.regional ?? '').trim();
-  const nombre = String(req.body.nombre ?? '').trim();
-  const companiaCodigo = String(req.body.companiaCodigo ?? '').trim();
   if (!codigo) return res.status(400).json({ error: 'El código es obligatorio' });
-  if (!descripcion) return res.status(400).json({ error: 'La descripción es obligatoria' });
-  if (!regional || !nombre || !companiaCodigo) {
-    return res.status(400).json({ error: 'Regional, nombre y compañía son obligatorios' });
-  }
-  if (!['Activo', 'Inactivo'].includes(estado)) {
-    return res.status(400).json({ error: 'El estado debe ser Activo o Inactivo' });
-  }
+  const { datos, error: invalido } = datosCentro(req.body);
+  if (invalido) return res.status(400).json({ error: invalido });
+  const { descripcion, estado, regional, nombre, companiaCodigo } = datos;
   try {
     const centro = await prisma.centroOperacion.update({
       where: { codigo },

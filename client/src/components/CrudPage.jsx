@@ -15,7 +15,7 @@ export default function CrudPage({ cfg }) {
   const { user } = useAuth();
   const notify = useToast();
 
-  const puedeCrear = puede(user, `${cfg.modulo}.crear`);
+  const puedeCrear = puede(user, cfg.permisoCrear || `${cfg.modulo}.crear`);
   const puedeEditar = puede(user, `${cfg.modulo}.editar`);
   const puedeEliminar = puede(user, `${cfg.modulo}.eliminar`);
   const usaFormulario = puedeCrear || puedeEditar;
@@ -166,7 +166,7 @@ export default function CrudPage({ cfg }) {
         )}
       />
 
-      <div className="card crud-table-scroll" role="region" aria-label={`Tabla de ${cfg.titulo}`} tabIndex={0}>
+      <div className={`card crud-table-scroll${cfg.scrollVertical ? ' crud-table-scroll--vertical' : ''}`} role="region" aria-label={`Tabla de ${cfg.titulo}`} tabIndex={0}>
         {cargando ? (
           <TableSkeleton cols={cfg.columnas.length + 1} rows={6} />
         ) : rows.length === 0 ? (
@@ -253,7 +253,8 @@ export default function CrudPage({ cfg }) {
                       value={form[c.name] ?? ''}
                       onChange={(e) => set(c.name, e.target.value)}
                       maxLength={c.maxLength}
-                      readOnly={c.readOnly}
+                      placeholder={c.placeholder}
+                      readOnly={c.readOnly || (c.soloAlCrear && !!editId)}
                     />
                   )}
                 </div>

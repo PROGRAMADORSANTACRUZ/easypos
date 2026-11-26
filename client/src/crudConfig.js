@@ -329,15 +329,18 @@ export const CENTROS_OPERACIONES_CFG = {
   titulo: 'Centros de operaciones',
   singular: 'Centro de operaciones',
   modulo: 'centros_operaciones',
+  // No existe el permiso centros_operaciones.crear: crear queda con el de editar
+  permisoCrear: 'centros_operaciones.editar',
+  scrollVertical: true,
   endpoint: '/centros-operaciones',
   descripcion: 'Centros de operación y puntos de venta.',
   campos: [
-    { name: 'codigo', label: 'Código', type: 'text', maxLength: 10, readOnly: true },
-    { name: 'companiaCodigo', label: 'Compañía', type: 'ref', fuente: '/companias', labelKey: (c) => `${c.codigo} · ${c.razonSocial}` },
+    { name: 'codigo', label: 'Código', type: 'text', required: true, maxLength: 3, soloAlCrear: true, placeholder: 'Ej: 414' },
+    { name: 'companiaCodigo', label: 'Compañía', type: 'ref', fuente: '/companias', required: true, labelKey: (c) => `${c.codigo} · ${c.razonSocial}` },
     { name: 'descripcion', label: 'Descripción', type: 'text', required: true, maxLength: 250 },
-    { name: 'estado', label: 'Estado', type: 'select', options: ['Activo', 'Inactivo'] },
-    { name: 'regional', label: 'Regional', type: 'text', maxLength: 10 },
-    { name: 'nombre', label: 'Nombre', type: 'text', maxLength: 100 },
+    { name: 'estado', label: 'Estado', type: 'select', options: ['Activo', 'Inactivo'], default: 'Activo', required: true },
+    { name: 'regional', label: 'Regional', type: 'text', maxLength: 10, required: true, default: '01' },
+    { name: 'nombre', label: 'Nombre', type: 'text', maxLength: 100, required: true },
   ],
   columnas: [
     { label: 'Código', get: (r) => r.codigo },
