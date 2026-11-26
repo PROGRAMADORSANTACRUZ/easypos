@@ -27,16 +27,19 @@ async function imprimirConAndroid(html, marco) {
   }
 }
 
-// Qué enviar y a dónde: la tirilla del pedido se reparte por categoría; el resto va a la impresora del celular
+// Qué enviar y a dónde. La tirilla del pedido se reparte por categoría y cada producto sale solo en su
+// impresora; si el local aún no tiene impresoras, la tirilla va completa a la impresora del celular.
 async function planDeImpresion(html, repartir) {
   let impresoras = [];
   try { impresoras = (await obtenerImpresorasLocal()).impresoras || []; } catch { /* sin servidor: solo la del celular */ }
+  if (repartir && impresoras.length) return { ...(await repartir(impresoras)), repartido: true };
   const delCelular = impresoraDelCelular(impresoras);
-  if (repartir) {
-    const plan = await repartir(impresoras, delCelular);
-    if (plan?.trabajos?.length || plan?.sinImpresora?.length) return plan;
-  }
-  return { trabajos: delCelular ? [{ impresora: delCelular, html }] : [], sinImpresora: [] };
+  return { trabajos: delCelular ? [{ impresora: delCelular, html }] : [], sinImpresora: [], repartido: false };
+}
+
+async function enviar(trabajos) {
+  const resultados = await Promise.allSettled(trabajos.map(({ impresora, html }) => imprimirTirillaEnRed(html, impresora)));
+  return resultados.map((r, i) => ({ ...trabajos[i], error: r.status === 'rejected' ? r.reason : null })).filter((t) => t.error);
 }
 
 async function imprimir(html, marco, botonImprimir, repartir) {
@@ -44,30 +47,41 @@ async function imprimir(html, marco, botonImprimir, repartir) {
   const restaurar = () => { botonImprimir.textContent = textoOriginal; botonImprimir.disabled = false; };
   botonImprimir.disabled = true;
   botonImprimir.textContent = 'Imprimiendo…';
-  const { trabajos, sinImpresora } = await planDeImpresion(html, repartir);
+  const { trabajos, sinImpresora, repartido } = await planDeImpresion(html, repartir);
   if (!trabajos.length) {
     restaurar();
-    if (sinImpresora.length) window.alert(`Ningún producto tiene impresora asignada (${sinImpresora.join(', ')}). Configúralas en el engranaje.`);
+    if (repartido) {
+      window.alert(`Ningún producto tiene impresora asignada (${sinImpresora.join(', ')}). Asigna sus categorías en el engranaje.`);
+      return undefined;
+    }
     return imprimirConAndroid(html, marco);
   }
-  if (sinImpresora.length && !window.confirm(`Sin impresora asignada: ${sinImpresora.join(', ')}.\n\n¿Imprimir el resto?`)) {
+  if (sinImpresora.length && !window.confirm(`Estos productos no tienen impresora y no se imprimirán: ${sinImpresora.join(', ')}.\n\n¿Imprimir el resto en su impresora?`)) {
     restaurar();
     return undefined;
   }
-  const resultados = await Promise.allSettled(trabajos.map(({ impresora, html: tirilla }) => imprimirTirillaEnRed(tirilla, impresora)));
-  const fallidos = resultados.map((r, i) => ({ ...r, impresora: trabajos[i].impresora })).filter((r) => r.status === 'rejected');
-  if (!fallidos.length) {
-    botonImprimir.textContent = trabajos.length > 1 ? `Impreso en ${trabajos.length} ✓` : 'Impreso ✓';
-    setTimeout(restaurar, 1500);
-    return undefined;
+  let pendientes = trabajos;
+  for (;;) {
+    pendientes = await enviar(pendientes);
+    if (!pendientes.length) break;
+    // Una APK sin la impresión directa (versión vieja) no puede repartir: el resto de tirillas usa el diálogo de Android
+    if (pendientes.some((t) => sinImpresionDirecta(t.error))) {
+      restaurar();
+      if (repartido) {
+        window.alert('Actualiza la APK (versión 1.4.0 o superior) para imprimir cada producto en su impresora.');
+        return undefined;
+      }
+      return imprimirConAndroid(html, marco);
+    }
+    const detalle = pendientes.map((t) => `• ${t.impresora.nombre}: ${t.error?.message || 'sin respuesta'}`).join('\n');
+    // Solo se reintenta la impresora que falló, con sus productos: nunca la tirilla completa en otra impresora
+    if (!window.confirm(`No se pudo imprimir en:\n${detalle}\n\n¿Reintentar solo en esa impresora?`)) {
+      restaurar();
+      return undefined;
+    }
   }
-  restaurar();
-  // Una APK sin la impresión directa (versión vieja) usa el diálogo de Android sin preguntar
-  if (fallidos.some((f) => sinImpresionDirecta(f.reason))) return imprimirConAndroid(html, marco);
-  const detalle = fallidos.map((f) => `• ${f.impresora.nombre}: ${f.reason?.message || 'sin respuesta'}`).join('\n');
-  if (window.confirm(`No se pudo imprimir en:\n${detalle}\n\n¿Imprimir la tirilla completa con el diálogo de Android?`)) {
-    imprimirConAndroid(html, marco);
-  }
+  botonImprimir.textContent = trabajos.length > 1 ? `Impreso en ${trabajos.length} ✓` : 'Impreso ✓';
+  setTimeout(restaurar, 1500);
   return undefined;
 }
 function boton(texto, fondo, color) {

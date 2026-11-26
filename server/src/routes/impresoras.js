@@ -17,11 +17,13 @@ export function esIpPrivada(ip) {
   return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
 }
 
-// Normaliza y valida la lista completa que envia el engranaje de la APK.
-export function validarImpresoras(lista, idsCategorias) {
+// Normaliza y valida la lista completa que envia el engranaje de la APK. Cada categoria pertenece a una sola
+// impresora: asi un producto nunca sale en la estacion equivocada.
+export function validarImpresoras(lista, categorias) {
   if (!Array.isArray(lista)) throw fallo('Envía la lista de impresoras');
   if (lista.length > MAX_IMPRESORAS) throw fallo(`Máximo ${MAX_IMPRESORAS} impresoras`);
-  const categoriasValidas = new Set(idsCategorias);
+  const nombreCategoria = new Map(categorias.map((c) => (typeof c === 'string' ? [c, c] : [c.id, c.nombre])));
+  const duenaDeCategoria = new Map();
   return lista.map((impresora, indice) => {
     const nombre = String(impresora?.nombre || '').trim() || `Impresora ${indice + 1}`;
     if (nombre.length > 60) throw fallo(`${nombre.slice(0, 20)}…: el nombre es muy largo`);
@@ -32,7 +34,13 @@ export function validarImpresoras(lista, idsCategorias) {
     const papel = Number(impresora?.papel || 80);
     if (![58, 80].includes(papel)) throw fallo(`${nombre}: el papel debe ser de 58 u 80 mm`);
     const categoriaIds = [...new Set((impresora?.categoriaIds || []).map(String))];
-    if (categoriaIds.some((id) => !categoriasValidas.has(id))) throw fallo(`${nombre}: tiene una categoría que ya no existe`);
+    if (categoriaIds.some((id) => !nombreCategoria.has(id))) throw fallo(`${nombre}: tiene una categoría que ya no existe`);
+    for (const id of categoriaIds) {
+      if (duenaDeCategoria.has(id)) {
+        throw fallo(`La categoría ${nombreCategoria.get(id)} está en ${duenaDeCategoria.get(id)} y en ${nombre}: déjala solo en una`);
+      }
+      duenaDeCategoria.set(id, nombre);
+    }
     const id = UUID.test(String(impresora?.id || '')) ? String(impresora.id) : undefined;
     return { id, nombre, ip, puerto, papel, orden: indice, categoriaIds };
   });
@@ -56,10 +64,10 @@ router.put('/', wrap(async (req, res) => {
   if (!(req.usuario?.permisos || []).includes('empresa.editar')) {
     return res.status(403).json({ error: 'Solo un administrador puede cambiar las impresoras del local' });
   }
-  const categorias = await prisma.categoria.findMany({ select: { id: true } });
+  const categorias = await prisma.categoria.findMany({ select: { id: true, nombre: true } });
   let lista;
   try {
-    lista = validarImpresoras(req.body?.impresoras, categorias.map((c) => c.id));
+    lista = validarImpresoras(req.body?.impresoras, categorias);
   } catch (error) {
     return res.status(error.status || 400).json({ error: error.message });
   }

@@ -26,6 +26,10 @@ test('rechaza IP fuera del local, papel o puerto invalidos y categorias que no e
   assert.throws(() => validarImpresoras([{ ...valida, puerto: 0 }], []), /puerto/);
   assert.throws(() => validarImpresoras([{ ...valida, categoriaIds: [CAT_BAR] }], [CAT_COCINA]), /categoría que ya no existe/);
   assert.throws(() => validarImpresoras('no', []), /lista/);
+  assert.throws(
+    () => validarImpresoras([{ ...valida, nombre: 'Bar', ip: '192.168.0.95', categoriaIds: [CAT_BAR] }, { ...valida, categoriaIds: [CAT_BAR] }], [{ id: CAT_BAR, nombre: 'BEBIDAS' }]),
+    /BEBIDAS está en Bar y en Cocina/,
+  );
   assert.equal(esIpPrivada('172.16.4.1'), true);
   assert.equal(esIpPrivada('172.32.4.1'), false);
   assert.equal(esIpPrivada('192.168.1.256'), false);

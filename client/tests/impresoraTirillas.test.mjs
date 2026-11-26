@@ -57,15 +57,20 @@ test('reparte un pedido mixto: cada producto sale solo en la impresora de su cat
   assert.deepEqual(sinImpresora, []);
 });
 
-test('lo que no tiene categoria asignada va a la impresora del celular o se reporta', () => {
-  const pedido = [item('Postre', 'cat-postres'), item('Limonada', 'cat-bebidas')];
-  const conCelular = repartirPorImpresora(pedido, [cocina, bar], cocina);
-  assert.deepEqual(conCelular.grupos.map((g) => [g.impresora.nombre, g.items.length]), [['Cocina', 1], ['Bar', 1]]);
-  const sinCelular = repartirPorImpresora(pedido, [cocina, bar], null);
-  assert.deepEqual(sinCelular.sinImpresora.map((i) => i.producto.nombre), ['Postre']);
-  // Una categoria en dos impresoras sale en ambas
-  const doble = repartirPorImpresora([item('Limonada', 'cat-bebidas')], [cocina, { ...bar }, { ...bar, id: 'imp-caja', nombre: 'Caja' }]);
-  assert.deepEqual(doble.grupos.map((g) => g.impresora.nombre), ['Bar', 'Caja']);
+test('lo que no tiene categoria asignada no sale en ninguna impresora y se reporta', () => {
+  const { grupos, sinImpresora } = repartirPorImpresora([item('Postre', 'cat-postres'), item('Limonada', 'cat-bebidas')], [cocina, bar]);
+  assert.deepEqual(grupos.map((g) => [g.impresora.nombre, g.items.map((i) => i.producto.nombre)]), [['Bar', ['Limonada']]]);
+  assert.deepEqual(sinImpresora.map((i) => i.producto.nombre), ['Postre']);
+});
+
+test('en una orden mixta ningun producto de la .95 sale en la .93 ni al reves', () => {
+  const pedido = [item('Limonada', 'cat-bebidas'), item('Sancocho', 'cat-sancochos'), item('Gaseosa', 'cat-bebidas'), item('Chorizo', 'cat-entradas')];
+  const { grupos } = repartirPorImpresora(pedido, [cocina, bar]);
+  const por = Object.fromEntries(grupos.map((g) => [g.impresora.ip, g.items.map((i) => i.producto.nombre)]));
+  assert.deepEqual(por, { '192.168.0.93': ['Sancocho', 'Chorizo'], '192.168.0.95': ['Limonada', 'Gaseosa'] });
+  // Aunque una configuracion vieja repitiera una categoria, el producto sale en una sola impresora
+  const repetida = repartirPorImpresora([item('Limonada', 'cat-bebidas')], [bar, { ...cocina, categoriaIds: ['cat-bebidas'] }]);
+  assert.deepEqual(repetida.grupos.map((g) => g.impresora.nombre), ['Bar']);
 });
 
 test('el celular usa la impresora elegida, la configuracion anterior o el dialogo de Android', () => {

@@ -56,8 +56,8 @@ async function imprimirComandaAsync(pedido, { reimpresion = false, cambios = '' 
   const ventana = abrirVentanaVacia(); // debe abrirse ya (sincrono) para que el navegador no bloquee el popup
   const opciones = { reimpresion, cambios, formato: await formatoDe('formatoComanda') };
   const html = htmlComanda(pedido, pedido.items || [], opciones);
-  const repartir = async (impresoras, delCelular) => {
-    const { grupos, sinImpresora } = repartirPorImpresora(pedido.items || [], impresoras, delCelular);
+  const repartir = async (impresoras) => {
+    const { grupos, sinImpresora } = repartirPorImpresora(pedido.items || [], impresoras);
     return {
       trabajos: grupos.map(({ impresora, items }) => ({ impresora, html: htmlComanda(pedido, items, { ...opciones, estacion: impresora.nombre }) })),
       sinImpresora: sinImpresora.map((it) => it.producto?.nombre || it.nombre || 'Producto'),

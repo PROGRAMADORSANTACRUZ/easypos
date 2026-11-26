@@ -75,28 +75,27 @@ export function impresoraCelularElegida(almacen = globalThis.localStorage) {
   try { return almacen?.getItem(CLAVE_CELULAR) ?? ''; } catch { return ''; }
 }
 
-// Reparte los productos del pedido entre las impresoras segun su categoria. Lo que no tenga
-// impresora asignada sale en la del celular; si tampoco hay, se devuelve aparte para avisar.
-export function repartirPorImpresora(items = [], impresoras = [], predeterminada = null) {
+// Reparte los productos del pedido entre las impresoras segun su categoria: cada producto sale SOLO en la
+// impresora de su categoria. Lo que no tenga impresora asignada no se imprime en ninguna y se devuelve aparte.
+export function repartirPorImpresora(items = [], impresoras = []) {
   const porCategoria = new Map();
   for (const impresora of impresoras) {
     for (const categoriaId of impresora.categoriaIds || []) {
-      if (!porCategoria.has(categoriaId)) porCategoria.set(categoriaId, []);
-      porCategoria.get(categoriaId).push(impresora);
+      if (!porCategoria.has(categoriaId)) porCategoria.set(categoriaId, impresora);
     }
   }
   const grupos = new Map();
   const sinImpresora = [];
   for (const item of items) {
-    const categoriaId = item.producto?.categoriaId || item.producto?.categoria?.id;
-    const destinos = porCategoria.get(categoriaId) || (predeterminada ? [predeterminada] : []);
-    if (!destinos.length) sinImpresora.push(item);
-    for (const impresora of destinos) {
-      if (!grupos.has(impresora.id)) grupos.set(impresora.id, { impresora, items: [] });
-      grupos.get(impresora.id).items.push(item);
+    const impresora = porCategoria.get(item.producto?.categoriaId || item.producto?.categoria?.id);
+    if (!impresora) {
+      sinImpresora.push(item);
+      continue;
     }
+    if (!grupos.has(impresora.id)) grupos.set(impresora.id, { impresora, items: [] });
+    grupos.get(impresora.id).items.push(item);
   }
-  const orden = (grupo) => impresoras.indexOf(grupo.impresora) === -1 ? impresoras.length : impresoras.indexOf(grupo.impresora);
+  const orden = (grupo) => impresoras.indexOf(grupo.impresora);
   return { grupos: [...grupos.values()].sort((a, b) => orden(a) - orden(b)), sinImpresora };
 }
 

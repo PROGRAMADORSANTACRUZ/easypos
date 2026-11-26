@@ -99,21 +99,28 @@ export async function abrirConfigImpresoras() {
       const chips = el('div', { display: 'flex', flexWrap: 'wrap', gap: '6px' });
       const elegidas = new Set(impresora.categoriaIds || []);
       for (const categoria of categorias) {
+        // Cada categoría va en una sola impresora: si otra la tiene, aquí se ve atenuada y tocarla la mueve
+        const otra = lista.find((x) => x !== impresora && (x.categoriaIds || []).includes(categoria.id));
+        const activa = elegidas.has(categoria.id);
         const chip = el('button', {
           padding: '6px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '700', border: `1px solid ${COLOR.borde}`,
-        }, { type: 'button', textContent: categoria.nombre, disabled: !puedeEditar });
-        const pintarChip = () => {
-          const activa = elegidas.has(categoria.id);
-          chip.style.background = activa ? COLOR.rojo : 'transparent';
-          chip.style.color = activa ? '#fff' : COLOR.texto;
-          chip.setAttribute('aria-pressed', String(activa));
-        };
-        chip.addEventListener('click', () => {
-          if (elegidas.has(categoria.id)) elegidas.delete(categoria.id); else elegidas.add(categoria.id);
-          impresora.categoriaIds = [...elegidas];
-          pintarChip();
+          background: activa ? COLOR.rojo : 'transparent', color: activa ? '#fff' : COLOR.texto, opacity: otra ? '.45' : '1',
+        }, {
+          type: 'button',
+          textContent: otra ? `${categoria.nombre} · ${otra.nombre || 'otra'}` : categoria.nombre,
+          title: otra ? `Está en ${otra.nombre}. Tócala para moverla aquí.` : '',
+          disabled: !puedeEditar,
         });
-        pintarChip();
+        chip.setAttribute('aria-pressed', String(activa));
+        chip.addEventListener('click', () => {
+          if (activa) {
+            impresora.categoriaIds = (impresora.categoriaIds || []).filter((id) => id !== categoria.id);
+          } else {
+            for (const x of lista) x.categoriaIds = (x.categoriaIds || []).filter((id) => id !== categoria.id);
+            impresora.categoriaIds = [...(impresora.categoriaIds || []), categoria.id];
+          }
+          pintarLista();
+        });
         chips.append(chip);
       }
 
@@ -170,7 +177,7 @@ export async function abrirConfigImpresoras() {
   cancelar.addEventListener('click', cerrar);
 
   const ayuda = puedeEditar
-    ? 'Configúralas una vez y quedan para todos los celulares. Al imprimir un pedido, cada producto sale en la impresora de su categoría.'
+    ? 'Configúralas una vez y quedan para todos los celulares. Cada categoría va en una sola impresora: al imprimir un pedido, cada producto sale solo en la impresora de su categoría.'
     : 'Solo un administrador puede cambiar las impresoras. Aquí puedes probarlas y elegir la de este celular.';
   const pie = el('div', { display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' });
   pie.append(cancelar, guardar);
@@ -180,7 +187,7 @@ export async function abrirConfigImpresoras() {
     el('div', { fontSize: '13px', opacity: '.8' }, { textContent: ayuda }),
     contenedorLista,
     ...(puedeEditar ? [agregar] : []),
-    campo('Este celular imprime prefacturas, facturas y productos sin categoría asignada en:', selectorCelular),
+    campo('Este celular imprime prefacturas y facturas en:', selectorCelular),
     mensaje,
     pie,
   );
