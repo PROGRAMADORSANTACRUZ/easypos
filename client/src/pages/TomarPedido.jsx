@@ -11,6 +11,7 @@ import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir } from '.
 import { municipiosColombia } from '../municipiosColombia.js';
 import { esLlevar, notasSinLlevar, alternarLlevar } from '../llevar.js';
 import { CLAVE_LUPA, NIVELES_LUPA, cambiarNivelLupa, nivelLupaGuardado } from '../lupaMesa.js';
+import { repartirPorImpresora } from '../impresoraTirillas.js';
 
 // Escapa texto libre antes de insertarlo en el HTML del ticket (evita inyeccion via nombres/observaciones).
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
@@ -45,16 +46,30 @@ const CLIENTE_RESERVA_VACIO = {
   condicionPago: 'CONTADO', creditoDias: '', creditoCupo: '',
 };
 
-// Abre una ventana de impresión con la comanda en el formato configurado (Parámetros > Empresa)
+// Abre una ventana de impresión con la comanda en el formato configurado (Parámetros > Empresa).
+// En la APK, al tocar Imprimir se reparte por impresora según la categoría de cada producto.
 function imprimirComanda(pedido, opts = {}) {
   imprimirComandaAsync(pedido, opts);
 }
 async function imprimirComandaAsync(pedido, { reimpresion = false, cambios = '' } = {}) {
   if (!pedido) return;
   const ventana = abrirVentanaVacia(); // debe abrirse ya (sincrono) para que el navegador no bloquee el popup
+  const opciones = { reimpresion, cambios, formato: await formatoDe('formatoComanda') };
+  const html = htmlComanda(pedido, pedido.items || [], opciones);
+  const repartir = async (impresoras, delCelular) => {
+    const { grupos, sinImpresora } = repartirPorImpresora(pedido.items || [], impresoras, delCelular);
+    return {
+      trabajos: grupos.map(({ impresora, items }) => ({ impresora, html: htmlComanda(pedido, items, { ...opciones, estacion: impresora.nombre }) })),
+      sinImpresora: sinImpresora.map((it) => it.producto?.nombre || it.nombre || 'Producto'),
+    };
+  };
+  escribirEImprimir(ventana, html, { repartir });
+}
+
+function htmlComanda(pedido, items, { reimpresion = false, cambios = '', formato, estacion = '' }) {
   const titulo = reimpresion ? 'REIMPRESIÓN Y MODIFICACIÓN DE PEDIDO' : 'PEDIDO';
   const fecha = new Date().toLocaleString('es-CO');
-  const filas = (pedido.items || [])
+  const filas = items
     .map((it) => {
       const nombre = esc((it.producto?.nombre || it.nombre || '').toUpperCase());
       const cant = it.cantidad;
@@ -62,7 +77,7 @@ async function imprimirComandaAsync(pedido, { reimpresion = false, cambios = '' 
       return `<tr><td class="c">${cant}×</td><td class="n">${nombre}</td><td class="p">${importe}</td></tr>`;
     })
     .join('');
-  const subtotal = (pedido.items || []).reduce((s, it) => s + (it.precioUnit || 0) * it.cantidad, 0);
+  const subtotal = items.reduce((s, it) => s + (it.precioUnit || 0) * it.cantidad, 0);
   const bloqueObs = pedido.observaciones
     ? `<div class="obs"><div class="lbl">Observaciones</div><div class="cambios">${esc(pedido.observaciones)}</div></div>`
     : '';
@@ -70,9 +85,9 @@ async function imprimirComandaAsync(pedido, { reimpresion = false, cambios = '' 
     ? `<div class="sec"><div class="lbl">Cambios</div><div class="cambios">${esc(cambios)}</div></div>`
     : '';
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${titulo}</title>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${titulo}</title>
   <style>
-    ${estiloPagina(await formatoDe('formatoComanda'))}
+    ${estiloPagina(formato)}
     body { font-family: 'Segoe UI', Arial, sans-serif; color: #000; font-size: 20px; padding: 3mm 4mm; }
     .logo { display: block; width: 28mm; max-width: 55%; margin: 0 auto 4px; }
     .titulo { text-align: center; font-weight: 800; font-size: 20px; text-transform: uppercase; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 6px; line-height: 1.2; }
@@ -93,6 +108,7 @@ async function imprimirComandaAsync(pedido, { reimpresion = false, cambios = '' 
     .pie { text-align: center; margin-top: 8px; font-size: 20px; }
   </style></head><body>
     <div class="titulo">${titulo}</div>
+    ${estacion ? `<div class="marca">${esc(estacion.toUpperCase())}</div>` : ''}
     <div class="meta">
       <div><b>Mesa:</b> ${pedido.mesa?.numero ?? ''}</div>
       <div><b>Mesera:</b> ${pedido.mesera?.nombre ?? ''}</div>
@@ -105,8 +121,6 @@ async function imprimirComandaAsync(pedido, { reimpresion = false, cambios = '' 
     ${bloqueCambios}
     <div class="pie">¡Gracias!</div>
   </body></html>`;
-
-  escribirEImprimir(ventana, html);
 }
 
 // Imprime la pre-cuenta (prefactura) que se entrega al cliente con la propina sugerida del 10%

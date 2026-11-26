@@ -66,16 +66,17 @@ function crearVentanaApk() {
     close() {},
     print() {},
     addEventListener() {},
-    mostrar: () => mostrarVisorApk(html),
+    mostrar: (opciones) => mostrarVisorApk(html, opciones),
   };
 }
 
 // Escribe el HTML en una ventana ya abierta y la cierra al terminar o cancelar el diálogo de impresión.
-export function escribirEImprimir(win, html) {
+// opciones.repartir (solo APK): reparte la tirilla entre las impresoras del local, ver mostrarVisorApk.
+export function escribirEImprimir(win, html, opciones = {}) {
   if (!win) return;
   if (win.esVisorApk) {
     win.document.write(html);
-    win.mostrar();
+    win.mostrar(opciones);
     return;
   }
   win.document.write(html);

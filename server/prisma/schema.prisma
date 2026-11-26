@@ -268,6 +268,22 @@ model Categoria {
   productos     Producto[]
 }
 
+// Impresoras termicas de red del local (Impresora 1, 2, 3...). Se configuran una vez y las usan todos los
+// celulares: la tirilla del pedido se reparte segun la categoria de cada producto. La relacion vive aqui
+// (no en Categoria) para que una base sin esta tabla siga tomando pedidos.
+model Impresora {
+  id           String   @id @default(uuid()) @db.Uuid @map("Id")
+  nombre       String   @db.VarChar(60) @map("Nombre")
+  ip           String   @db.VarChar(15) @map("Ip")
+  puerto       Int      @default(9100) @map("Puerto")
+  papel        Int      @default(80) @map("Papel") // ancho del papel en mm: 58 u 80
+  orden        Int      @default(0) @map("Orden")
+  categoriaIds String[] @default([]) @db.Uuid @map("CategoriaIds")
+  createdAt    DateTime @default(now()) @map("FechaCreacion")
+
+  @@map("Impresoras")
+}
+
 
 // Bodegas / almacenes donde se guarda el inventario
 model Bodega {

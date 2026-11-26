@@ -50,6 +50,56 @@ export function anchoCssDeTirilla(html) {
 export const sinImpresionDirecta = (error) => error?.code === 'UNIMPLEMENTED'
   || /not implemented|no method|unimplemented/i.test(String(error?.message || ''));
 
+// --- Impresoras del local (compartidas por todos los celulares) ---
+const CLAVE_CELULAR = 'pos.impresoraCelular';
+export const SIN_IMPRESORA_DIRECTA = 'android';
+
+// Impresora donde este celular imprime prefacturas, facturas y lo que no tenga categoria asignada.
+// Si aun no se ha elegido, se respeta la configuracion anterior de una sola IP en el celular.
+export function impresoraDelCelular(impresoras = [], almacen = globalThis.localStorage) {
+  let elegida = null;
+  try { elegida = almacen?.getItem(CLAVE_CELULAR) ?? null; } catch { /* sin almacenamiento */ }
+  if (elegida === SIN_IMPRESORA_DIRECTA) return null;
+  const central = impresoras.find((impresora) => impresora.id === elegida);
+  if (central) return central;
+  const anterior = leerImpresora(almacen);
+  return anterior ? { id: 'celular', nombre: `Este celular (${anterior.ip})`, ...anterior } : null;
+}
+
+export function elegirImpresoraCelular(id, almacen = globalThis.localStorage) {
+  almacen.setItem(CLAVE_CELULAR, id);
+  if (id !== 'celular') quitarImpresora(almacen);
+}
+
+export function impresoraCelularElegida(almacen = globalThis.localStorage) {
+  try { return almacen?.getItem(CLAVE_CELULAR) ?? ''; } catch { return ''; }
+}
+
+// Reparte los productos del pedido entre las impresoras segun su categoria. Lo que no tenga
+// impresora asignada sale en la del celular; si tampoco hay, se devuelve aparte para avisar.
+export function repartirPorImpresora(items = [], impresoras = [], predeterminada = null) {
+  const porCategoria = new Map();
+  for (const impresora of impresoras) {
+    for (const categoriaId of impresora.categoriaIds || []) {
+      if (!porCategoria.has(categoriaId)) porCategoria.set(categoriaId, []);
+      porCategoria.get(categoriaId).push(impresora);
+    }
+  }
+  const grupos = new Map();
+  const sinImpresora = [];
+  for (const item of items) {
+    const categoriaId = item.producto?.categoriaId || item.producto?.categoria?.id;
+    const destinos = porCategoria.get(categoriaId) || (predeterminada ? [predeterminada] : []);
+    if (!destinos.length) sinImpresora.push(item);
+    for (const impresora of destinos) {
+      if (!grupos.has(impresora.id)) grupos.set(impresora.id, { impresora, items: [] });
+      grupos.get(impresora.id).items.push(item);
+    }
+  }
+  const orden = (grupo) => impresoras.indexOf(grupo.impresora) === -1 ? impresoras.length : impresoras.indexOf(grupo.impresora);
+  return { grupos: [...grupos.values()].sort((a, b) => orden(a) - orden(b)), sinImpresora };
+}
+
 export function imprimirTirillaEnRed(html, config) {
   return llamarNativo('Impresion', 'imprimirTirillaRed', {
     html,
