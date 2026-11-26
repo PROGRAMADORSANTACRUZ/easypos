@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { imprimeElServidor, prepararComandas, ticketsComanda } from '../src/impresionCocina.js';
+import { COLUMNAS, imprimeElServidor, prepararComandas, ticketsComanda } from '../src/impresionCocina.js';
+import { fechaHoraColombia } from '../src/fechaColombia.js';
 
 const cocina = { nombre: 'COCINA', impresoraIp: '192.168.0.95', impresoraPuerto: 9100 };
 const bar = { nombre: 'BAR', impresoraIp: '192.168.0.96' };
@@ -23,12 +24,33 @@ test('arma una comanda por impresora con solo sus productos y en base64', () => 
   assert.match(deCocina, /2x CHURRASCO/);
   assert.match(deCocina, /\(bien asado\)/);
   assert.match(deCocina, /1x MAZORCA/);
-  assert.match(deCocina, /Mesa: 4 {4}Mesera: Ana/);
+  assert.match(deCocina, /Mesa: 4 +Pedido #7/);
+  assert.match(deCocina, /Mesera: Ana/);
   assert.match(deCocina, /Obs: sin sal/);
   assert.doesNotMatch(deCocina, /LIMONADA/);
   assert.ok(deCocina.startsWith('\x1b@'));
   assert.ok(deCocina.endsWith('\x1dVA\x00'));
   assert.deepEqual(ticketsComanda(pedido, [items[2]]), []);
+});
+
+test('la comanda usa el ancho de 80 mm (48 columnas) y parte los nombres largos sin pasarse', () => {
+  const largo = { cantidad: 1, producto: { nombre: 'Chorizo artesanal de res restaurante con arepa y guacamole', categoria: cocina } };
+  const lineas = texto(ticketsComanda(pedido, [largo])[0]).replace(/\x1b@|\x1b[aEt].|\x1d!.|\x1dV../g, '').split('\n');
+  const separador = lineas.find((l) => /^-+$/.test(l));
+  assert.equal(separador.length, COLUMNAS);
+  assert.equal(COLUMNAS, 48);
+  assert.ok(lineas.every((l) => l.length <= COLUMNAS), lineas.filter((l) => l.length > COLUMNAS).join(' | '));
+  const nombre = lineas.filter((l) => /CHORIZO|GUACAMOLE|ARTESANAL|AREPA/.test(l));
+  assert.ok(nombre.length >= 2);
+  assert.ok(nombre.slice(1).every((l) => l.startsWith('   ')));
+  assert.match(lineas.find((l) => l.startsWith('Mesa:')), /^Mesa: 4 +Pedido #7$/);
+});
+
+test('la fecha de la comanda va en hora de Colombia aunque el servidor este en UTC', () => {
+  assert.equal(fechaHoraColombia(new Date('2026-11-26T19:36:06Z')), '26/11/2026 2:36 p. m.');
+  assert.equal(fechaHoraColombia(new Date('2026-11-27T04:05:00Z')), '26/11/2026 11:05 p. m.');
+  assert.equal(fechaHoraColombia(new Date('2026-11-26T05:00:00Z')), '26/11/2026 12:00 a. m.');
+  assert.equal(fechaHoraColombia(new Date('2026-11-26T17:00:00Z')), '26/11/2026 12:00 p. m.');
 });
 
 test('por defecto las comandas las imprime el dispositivo; con IMPRESION_COMANDAS_SERVIDOR=true las envia el servidor', async () => {
