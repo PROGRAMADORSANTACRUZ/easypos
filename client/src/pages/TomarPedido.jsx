@@ -10,6 +10,7 @@ import { LOGO_RECIBO } from '../logoRecibo.js';
 import { formatoDe, estiloPagina, abrirVentanaVacia, escribirEImprimir } from '../print.js';
 import { municipiosColombia } from '../municipiosColombia.js';
 import { esLlevar, notasSinLlevar, alternarLlevar } from '../llevar.js';
+import { CLAVE_LUPA, NIVELES_LUPA, cambiarNivelLupa, nivelLupaGuardado } from '../lupaMesa.js';
 
 // Escapa texto libre antes de insertarlo en el HTML del ticket (evita inyeccion via nombres/observaciones).
 const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
@@ -216,6 +217,14 @@ export default function TomarPedido() {
   const [procesando, setProcesando] = useState(false);
   const [mesasLibres, setMesasLibres] = useState([]); // mesas disponibles para mover
   const [moviendo, setMoviendo] = useState(false);    // muestra el selector de mesa
+  const [lupa, setLupa] = useState(() => {
+    try { return nivelLupaGuardado(localStorage.getItem(CLAVE_LUPA)); } catch { return 1; }
+  });
+  const ajustarLupa = (paso) => setLupa((actual) => {
+    const nivel = cambiarNivelLupa(actual, paso);
+    try { localStorage.setItem(CLAVE_LUPA, String(nivel)); } catch { /* sin almacenamiento: solo dura la sesion */ }
+    return nivel;
+  });
   const [busquedaProd, setBusquedaProd] = useState(''); // filtro por nombre en el menú
   const [filtroCat, setFiltroCat] = useState('ENTRADAS'); // categoría inicial del menú
   const [observaciones, setObservaciones] = useState(''); // nota general del pedido (ej. "sin cebolla")
@@ -696,6 +705,15 @@ export default function TomarPedido() {
         </div>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           {estadoEntrega?.entrega && <span className="badge green">Entregado</span>}
+          <div className="lupa-mesa" role="group" aria-label="Tamaño del menú y la cuenta">
+            <button type="button" className="btn" title="Achicar" aria-label="Achicar letra" disabled={lupa === NIVELES_LUPA[0]} onClick={() => ajustarLupa(-1)}>
+              <Icon name="lupaMenos" size={18} />
+            </button>
+            <span className="lupa-mesa__nivel" aria-live="polite">{Math.round(lupa * 100)}%</span>
+            <button type="button" className="btn" title="Agrandar" aria-label="Agrandar letra" disabled={lupa === NIVELES_LUPA.at(-1)} onClick={() => ajustarLupa(1)}>
+              <Icon name="lupaMas" size={18} />
+            </button>
+          </div>
           {pedido && puedeEditarPedido && (
             <button className="btn" onClick={() => setMoviendo(true)}><Icon name="swap" size={16} /> Cambiar mesa</button>
           )}
@@ -712,7 +730,8 @@ export default function TomarPedido() {
         </div>
       )}
 
-      <div className="grid grid-2">
+      {/* La lupa escala solo el menu y la cuenta; con menos espacio el menu pasa solo a menos columnas */}
+      <div className="grid grid-2" style={lupa !== 1 ? { zoom: lupa } : undefined}>
         {/* Menu */}
         <div className="card menu-panel">
           <h3 style={{ marginTop: 0 }}>Menú</h3>

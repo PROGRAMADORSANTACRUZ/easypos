@@ -2005,3 +2005,7 @@ input.sin-flechas { -moz-appearance: textfield; appearance: textfield; }
   border: 1px dashed var(--border-strong); border-radius: 8px;
 }
 .bascula-config__lectura code { word-break: break-all; }
+/* Lupa de la pantalla de la mesa */
+.lupa-mesa { display: inline-flex; align-items: center; gap: 4px; }
+.lupa-mesa .btn { padding: 8px 10px; }
+.lupa-mesa__nivel { min-width: 44px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
