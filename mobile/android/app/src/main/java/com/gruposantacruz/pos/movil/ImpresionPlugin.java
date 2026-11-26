@@ -1,12 +1,18 @@
 package com.gruposantacruz.pos.movil;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
 import android.util.Base64;
+import android.view.ViewGroup;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -23,6 +29,8 @@ public class ImpresionPlugin extends Plugin {
     private static final String BASE = "https://pos.grupo-santacruz.com/";
     private static final int TIEMPO_ESPERA_MS = 5000;
     private static final int MAX_BYTES = 256 * 1024;
+    // Unos 2,5 m de papel a 203 ppp: tope para no agotar la memoria con un documento enorme
+    private static final int MAX_ALTO_PUNTOS = 20000;
     private WebView vistaImpresion;
 
     @PluginMethod
@@ -92,7 +100,11 @@ public class ImpresionPlugin extends Plugin {
             call.reject("Comanda vacía o demasiado grande");
             return;
         }
-        // La red no se puede usar en el hilo de la interfaz.
+        enviar(call, ip, puerto, contenido);
+    }
+
+    // La red no se puede usar en el hilo de la interfaz.
+    private void enviar(PluginCall call, String ip, int puerto, byte[] contenido) {
         new Thread(() -> {
             try (Socket socket = new Socket()) {
                 socket.connect(new InetSocketAddress(ip, puerto), TIEMPO_ESPERA_MS);
@@ -105,5 +117,87 @@ public class ImpresionPlugin extends Plugin {
                 call.reject("No se pudo conectar con la impresora " + ip + ":" + puerto);
             }
         }).start();
+    }
+
+    // Imprime una tirilla HTML directo en una impresora térmica de red (ESC/POS por TCP), sin RawBT:
+    // la dibuja fuera de pantalla al ancho del papel, la convierte en imagen y la envía.
+    @PluginMethod
+    public void imprimirTirillaRed(PluginCall call) {
+        final String html = call.getString("html");
+        final String ip = call.getString("ip", "");
+        final int puerto = call.getInt("puerto", 9100);
+        final int anchoPuntos = call.getInt("anchoPuntos", 384);
+        final int anchoCss = call.getInt("anchoCss", 219);
+        if (html == null || html.isEmpty()) {
+            call.reject("Sin contenido");
+            return;
+        }
+        if (!esIpPrivada(ip)) {
+            call.reject("La impresora debe tener una IP de la red local");
+            return;
+        }
+        if (puerto < 1 || puerto > 65535 || anchoPuntos < 128 || anchoPuntos > 832 || anchoCss < 100 || anchoCss > 1000) {
+            call.reject("Configuración de impresora inválida");
+            return;
+        }
+        getActivity().runOnUiThread(() -> {
+            // Se monta fuera de la vista (no visible para el usuario) para que Android la dibuje completa
+            final ViewGroup raiz = getActivity().findViewById(android.R.id.content);
+            final WebView vista = new WebView(getContext());
+            WebSettings ajustes = vista.getSettings();
+            ajustes.setUseWideViewPort(true);
+            ajustes.setLoadWithOverviewMode(true);
+            vista.setBackgroundColor(Color.WHITE);
+            vista.setVerticalScrollBarEnabled(false);
+            vista.setTranslationX(-anchoPuntos * 4f);
+            raiz.addView(vista, new FrameLayout.LayoutParams(anchoPuntos, anchoPuntos));
+            final boolean[] cargada = {false};
+            vista.setWebViewClient(new WebViewClient() {
+                @Override
+                public void onPageFinished(WebView v, String url) {
+                    if (cargada[0]) return;
+                    cargada[0] = true;
+                    // Margen para que el logo y las fuentes terminen de pintarse
+                    vista.postDelayed(() -> ajustarAlto(call, raiz, vista, ip, puerto, anchoPuntos), 400);
+                }
+            });
+            vista.loadDataWithBaseURL(BASE, TirillaEscPos.conViewport(html, anchoCss), "text/html", "UTF-8", null);
+        });
+    }
+
+    @SuppressWarnings("deprecation")
+    private void ajustarAlto(PluginCall call, ViewGroup raiz, WebView vista, String ip, int puerto, int anchoPuntos) {
+        int alto = (int) Math.ceil(vista.getContentHeight() * vista.getScale());
+        if (alto <= 0) {
+            descartar(raiz, vista);
+            call.reject("No se pudo preparar la tirilla");
+            return;
+        }
+        final int altoFinal = Math.min(alto, MAX_ALTO_PUNTOS);
+        vista.setLayoutParams(new FrameLayout.LayoutParams(anchoPuntos, altoFinal));
+        vista.postDelayed(() -> {
+            byte[] datos;
+            try {
+                Bitmap mapa = Bitmap.createBitmap(anchoPuntos, altoFinal, Bitmap.Config.ARGB_8888);
+                Canvas lienzo = new Canvas(mapa);
+                lienzo.drawColor(Color.WHITE);
+                vista.draw(lienzo);
+                int[] pixeles = new int[anchoPuntos * altoFinal];
+                mapa.getPixels(pixeles, 0, anchoPuntos, 0, 0, anchoPuntos, altoFinal);
+                mapa.recycle();
+                datos = TirillaEscPos.desdePixeles(pixeles, anchoPuntos, altoFinal);
+            } catch (Exception | OutOfMemoryError e) {
+                call.reject("No se pudo preparar la tirilla");
+                return;
+            } finally {
+                descartar(raiz, vista);
+            }
+            enviar(call, ip, puerto, datos);
+        }, 300);
+    }
+
+    private static void descartar(ViewGroup raiz, WebView vista) {
+        raiz.removeView(vista);
+        vista.destroy();
     }
 }
