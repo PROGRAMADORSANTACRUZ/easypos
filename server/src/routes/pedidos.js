@@ -493,6 +493,8 @@ router.post('/online', exigirPermiso('domicilios.crear'), wrap(async (req, res) 
       },
       include: pedidoInclude,
     });
+    // El domicilio entra a Cocina igual que un pedido de mesa (comanda y bitacora, sin mesa)
+    await sincronizarCocina(tx, nuevo.id);
     return nuevo;
     }, { timeout: 15000 });
   } catch (e) {

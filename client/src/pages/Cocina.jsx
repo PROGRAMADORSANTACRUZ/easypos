@@ -243,7 +243,7 @@ export default function Cocina() {
                     <header className="cocina-comanda__cabecera">
                       <div>
                         <strong>{p.tipo === 'DOMICILIO' ? `Domicilio #${p.consecutivoDia ?? p.id}` : `Mesa ${p.mesa?.numero ?? '-'}`}</strong>
-                        <span>{p.mesera?.nombre || 'Sin mesero'} · {new Date(p.createdAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>{p.tipo === 'DOMICILIO' ? (p.cliente || 'Cliente') : (p.mesera?.nombre || 'Sin mesero')} · {new Date(p.createdAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       <span className="cocina-comanda__tiempo" title={nivel.etiqueta}>{minutos} min</span>
                     </header>
