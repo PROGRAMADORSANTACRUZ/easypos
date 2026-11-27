@@ -71,7 +71,7 @@ const DATOS_MEDIO = {
   TRA: { banco: '01', cuenta: '', seguridad: '', autorizacion: '', vencimiento: '', referencia: '001' },
 };
 
-function registro461(fecha, doc, cia, orden) {
+function registro461(fecha, doc, cia, orden, { claseDocumento, observacion }) {
   const cliente = documentoCliente(doc);
   const F = SIESA_FIJOS;
   // Sucursal del cliente en Siesa; el consumidor final y los clientes sin sucursales usan la 001.
@@ -79,11 +79,11 @@ function registro461(fecha, doc, cia, orden) {
   return [
     consecutivo(orden), '0461', '00', '02', cia, '1', '1', '0',
     texto(doc.centroOperacionCodigo, 3), texto(doc.tipoDocumentoCodigo, 3), numero(doc.numeroFactura, 8), fecha,
-    texto(cliente, 15), numero(F.claseDocumento, 3), '0', '0', texto(sucursal, 3), texto(F.tipoCliente, 4),
+    texto(cliente, 15), numero(claseDocumento, 3), '0', '0', texto(sucursal, 3), texto(F.tipoCliente, 4),
     texto(doc.centroOperacionCodigo, 3), texto('', 15), texto(cliente, 15), texto(sucursal, 3), texto(F.vendedor, 15),
     texto('', 10), texto('', 12), texto('', 10), texto(F.condicionPago, 3), texto(F.moneda, 3), texto(F.moneda, 3),
     numero(1, 13, 4), texto(F.moneda, 3), numero(1, 13, 4),
-    texto(`POS ${doc.prefijo || ''}${doc.numeroFactura}`, 2000), texto(F.puntoEnvio, 3), '1',
+    texto(observacion, 2000), texto(F.puntoEnvio, 3), '1',
     texto(doc.nombreCliente, 50), texto(doc.direccionCliente || F.direccionDefecto, 40), texto('', 40), texto('', 40),
     texto(F.pais, 3), texto(F.departamento, 2), texto(F.ciudad, 3), texto('', 40), texto('', 20), texto('', 20),
     texto('', 10), texto('', 50), texto('', 10), texto('', 15), texto('', 3), texto('', 15), texto('', 50), texto('', 15),
@@ -116,13 +116,13 @@ function itemSiesa(detalle) {
   return /^\d{1,7}$/.test(id) ? id.padStart(7, '0') : '0000000';
 }
 
-function registro470(orden, doc, cia, detalle, linea) {
+function registro470(orden, doc, cia, detalle, linea, { concepto }) {
   const F = SIESA_FIJOS;
   const unidad = unidadSiesa(detalle);
   return [
     consecutivo(orden), '0470', '01', '10', cia, texto(doc.centroOperacionCodigo, 3), texto(doc.tipoDocumentoCodigo, 3),
     numero(doc.numeroFactura, 8), numero(linea, 10), texto('', 55), texto(F.bodega, 5), texto('', 10), texto('', 15),
-    texto(F.concepto, 3), texto(F.motivo, 2), '0', texto(doc.centroOperacionCodigo, 3), texto('', 2), texto('', 15),
+    texto(concepto, 3), texto(F.motivo, 2), '0', texto(doc.centroOperacionCodigo, 3), texto('', 2), texto('', 15),
     texto('', 15), texto(F.listaPrecio, 3), texto('', 4), texto(unidad, 4), numero(detalle.cantidad, 20, 4),
     numero(0, 20, 4), numero(detalle.total, 20, 4), '2', '0', '0', texto('', 255), texto('', 2000), texto('', 40),
     texto(unidad, 4), itemSiesa(detalle), texto(detalle.productoCodigo || detalle.producto?.codigo, 50), texto('', 20),
@@ -130,22 +130,50 @@ function registro470(orden, doc, cia, detalle, linea) {
   ].join('');
 }
 
-// Devuelve las lineas del plano de UNA factura ya cargada (con detalle y producto).
-export function construirPlanoVenta(doc) {
+// Devuelve las lineas del plano de UNA factura ya cargada (con detalle y producto). Una devolucion usa el mismo
+// plano con su clase (525) y concepto (502), ver construirPlanoDevolucion.
+export function construirPlanoVenta(doc, {
+  claseDocumento = SIESA_FIJOS.claseDocumento,
+  concepto = SIESA_FIJOS.concepto,
+  observacion = `POS ${doc.prefijo || ''}${doc.numeroFactura}`,
+  documento = 'La factura',
+} = {}) {
   const cia = numero(Number(doc.companiaCodigo), 3);
   const detalles = doc.detalle || [];
   const medios = mediosDePago(doc);
-  if (!detalles.length) throw new Error('La factura no tiene lineas de detalle para enviar a Siesa');
-  if (!medios.length) throw new Error('La factura no tiene medios de pago para enviar a Siesa');
+  if (!detalles.length) throw new Error(`${documento} no tiene lineas de detalle para enviar a Siesa`);
+  if (!medios.length) throw new Error(`${documento} no tiene medios de pago para enviar a Siesa`);
   const fecha = diaColombia(new Date(doc.createdAt)).replaceAll('-', '');
 
   const lineas = [`${consecutivo(1)}00000001${cia}`];
   let orden = 2;
-  lineas.push(registro461(fecha, doc, cia, orden++));
+  lineas.push(registro461(fecha, doc, cia, orden++, { claseDocumento, observacion }));
   for (const medio of medios) lineas.push(registro358(orden++, doc, cia, medio));
-  detalles.forEach((detalle, indice) => lineas.push(registro470(orden++, doc, cia, detalle, indice + 1)));
+  detalles.forEach((detalle, indice) => lineas.push(registro470(orden++, doc, cia, detalle, indice + 1, { concepto })));
   lineas.push(`${consecutivo(orden)}99990001${cia}`);
   return lineas;
+}
+
+// Devolucion (documento 1NE): mismo plano que la venta con clase 525 y concepto 502. El medio de pago 358 es el
+// medio con que se devolvio el dinero.
+export const SIESA_DEVOLUCION = Object.freeze({ claseDocumento: 525, concepto: '502' });
+
+export function construirPlanoDevolucion(devolucion, productos = new Map()) {
+  const doc = {
+    ...devolucion,
+    numeroFactura: devolucion.numero,
+    metodoPago1: devolucion.formaPago,
+    valor1: devolucion.total,
+    detalle: (devolucion.detalle || []).map((linea) => ({
+      ...linea,
+      producto: productos.get(linea.productoId) || { codigo: linea.productoCodigo },
+    })),
+  };
+  return construirPlanoVenta(doc, {
+    ...SIESA_DEVOLUCION,
+    observacion: `POS DEVOLUCION ${devolucion.prefijo || ''}${devolucion.numero} DE ${devolucion.facturaPrefijo || ''}${devolucion.facturaNumero}`,
+    documento: 'La devolucion',
+  });
 }
 
 export async function registrar(clave, estado, { request, response, mensaje } = {}) {
@@ -249,4 +277,29 @@ export async function prepararVenta(modelo, id) {
 // Venta. modelo: 'factura' | 'facturaVenta'.
 export function intentarEnvioVentaSiesa(modelo, id, opciones) {
   return intentarEnvioSiesa(`VENTA:${id}`, () => prepararVenta(modelo, id), opciones);
+}
+
+// Prepara el plano de una devolucion (1NE). El cliente ya existe en Siesa: se creo con la factura original.
+export async function prepararDevolucion(id) {
+  const devolucion = await prisma.devolucion.findUnique({ where: { id }, include: { detalle: true } });
+  if (!devolucion) return { noEncontrado: true };
+  const ids = devolucion.detalle.map((linea) => linea.productoId).filter(Boolean);
+  const productos = new Map((ids.length ? await prisma.producto.findMany({ where: { id: { in: ids } } }) : [])
+    .map((producto) => [producto.id, producto]));
+  if (devolucion.clienteId) {
+    const cliente = await prisma.cliente.findUnique({ where: { id: devolucion.clienteId }, include: { sucursales: true } });
+    if (cliente) devolucion.sucursalSiesa = codigoSucursalSiesa(cliente.sucursales, { nombre: devolucion.sucursalCliente });
+  }
+  return {
+    lineas: construirPlanoDevolucion(devolucion, productos),
+    verificar: {
+      compania: Number(devolucion.companiaCodigo), centro: devolucion.centroOperacionCodigo,
+      tipo: devolucion.tipoDocumentoCodigo, numero: Number(devolucion.numero),
+    },
+    facturaId: devolucion.facturaId,
+  };
+}
+
+export function intentarEnvioDevolucionSiesa(id, opciones) {
+  return intentarEnvioSiesa(`DEVOLUCION:${id}`, () => prepararDevolucion(id), opciones);
 }

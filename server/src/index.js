@@ -13,6 +13,7 @@ import mesasRouter from './routes/mesas.js';
 import meserasRouter from './routes/meseras.js';
 import cocinerosRouter from './routes/cocineros.js';
 import impresorasRouter from './routes/impresoras.js';
+import devolucionesRouter from './routes/devoluciones.js';
 import preparacionCocinaRouter from './routes/preparacionCocina.js';
 import productosRouter from './routes/productos.js';
 import inventarioRouter from './routes/inventario.js';
@@ -109,6 +110,7 @@ app.use('/api/reservas', requireAuth, permisoPorMetodo('mesas'), reservasRouter)
 app.use('/api/meseras', requireAuth, meserasRouter);
 app.use('/api/cocineros', requireAuth, cocinerosRouter);
 app.use('/api/impresoras', requireAuth, impresorasRouter);
+app.use('/api/devoluciones', requireAuth, permisoPorMetodo('devoluciones'), devolucionesRouter);
 app.use('/api/preparacion-cocina', requireAuth, preparacionCocinaRouter);
 app.use('/api/productos', requireAuth, (req, res, next) => {
   const soloMenuPedidos = puedeLeerCatalogoParaPedidos(req.method, req.path, req.usuario?.permisos || []);

@@ -151,6 +151,7 @@ async function sembrarRolesYPermisos() {
     factura_venta: ['ver', 'crear'],
     cortesias: ['ver', 'crear'],
     notas_credito: ['ver', 'crear', 'editar', 'eliminar'],
+    devoluciones: ['ver', 'crear'],
     notas_debito: ['ver', 'crear', 'editar', 'eliminar'],
     retenciones: ['ver', 'crear', 'editar', 'eliminar'],
     compras: ['ver', 'crear', 'editar', 'eliminar'],
@@ -210,7 +211,7 @@ async function sembrarRolesYPermisos() {
     CAJERO: {
       descripcion: 'Ventas, caja y consultas',
       permisos: todosLosCodigos.filter((c) =>
-        /^(pedidos|domicilios|repartidor|mesas|cocina|factura_venta|cuentas|clientes)\./.test(c) ||
+        /^(pedidos|domicilios|repartidor|mesas|cocina|factura_venta|cuentas|clientes|devoluciones)\./.test(c) ||
         ['productos.ver', 'inventario.ver', 'bodegas.ver', 'movimientos.ver', 'movimientos.crear', 'caja.ver', 'caja.abrir', 'caja.cerrar', 'reportes.ver', 'notas_credito.ver', 'notas_credito.crear', 'notas_debito.ver', 'notas_debito.crear', 'retenciones.ver', 'retenciones.crear', 'compras.ver', 'compras.crear', 'proveedores.ver'].includes(c)
       ),
     },

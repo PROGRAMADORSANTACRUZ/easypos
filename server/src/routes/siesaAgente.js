@@ -11,7 +11,7 @@ const router = Router();
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 const ESTADOS = new Set(['OK', 'ERROR', 'REINTENTAR', 'OMITIDO']);
-const CLAVE = /^(VENTA|CLIENTE|RECIBO):[0-9A-Za-z-]{1,40}$/;
+const CLAVE = /^(VENTA|CLIENTE|RECIBO|DEVOLUCION):[0-9A-Za-z-]{1,40}$/;
 
 function igual(a, b) {
   const x = Buffer.from(String(a));

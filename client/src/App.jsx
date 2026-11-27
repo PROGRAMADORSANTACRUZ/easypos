@@ -14,6 +14,7 @@ import Movimientos from './pages/Movimientos.jsx';
 import Caja from './pages/Caja.jsx';
 import Resoluciones from './pages/Resoluciones.jsx';
 import NotasCredito from './pages/NotasCredito.jsx';
+import Devoluciones from './pages/Devoluciones.jsx';
 import NotasDebito from './pages/NotasDebito.jsx';
 import Retenciones from './pages/Retenciones.jsx';
 import Compras from './pages/Compras.jsx';
@@ -150,6 +151,7 @@ export const NAV_GRUPOS = [
       { permiso: 'cocina.ver', ruta: '/cocina', label: 'Cocina', icon: 'cocina' },
       { permiso: 'facturas.ver', ruta: '/facturas', label: 'Facturas', icon: 'facturas' },
       { permiso: 'factura_venta.ver', ruta: '/cotizaciones', label: 'Factura de venta', icon: 'facturas' },
+      { permiso: 'devoluciones.ver', ruta: '/devoluciones', label: 'Devoluciones', icon: 'notas_credito' },
       { permiso: 'cortesias.ver', ruta: '/cortesias', label: 'Cortesías', icon: 'cortesias' },
       { permiso: 'domicilios.ver', ruta: '/pedidos', label: 'Domicilios', icon: 'pedidos' },
       { permiso: 'repartidor.ver', ruta: '/repartidor', label: 'Repartidor / Entregas', icon: 'remisiones' },
@@ -585,6 +587,7 @@ export default function App() {
               {puede(user, 'caja.ver') && <Route path="/caja" element={<Caja />} />}
               {puede(user, 'resoluciones.ver') && <Route path="/resoluciones" element={<Resoluciones />} />}
               {puede(user, 'notas_credito.ver') && <Route path="/notas-credito" element={<NotasCredito />} />}
+              {puede(user, 'devoluciones.ver') && <Route path="/devoluciones" element={<Devoluciones />} />}
               {puede(user, 'notas_debito.ver') && <Route path="/notas-debito" element={<NotasDebito />} />}
               {puede(user, 'retenciones.ver') && <Route path="/retenciones" element={<Retenciones />} />}
               {puede(user, 'compras.ver') && <Route path="/compras" element={<Compras />} />}

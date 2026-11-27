@@ -4,7 +4,7 @@
 import { prisma, tenantStorage } from './prisma.js';
 import { platformPrisma } from './platformPrisma.js';
 import { getTenantPrisma } from './tenantManager.js';
-import { configSiesa, intentarEnvioVentaSiesa, prepararVenta, registrar } from './siesaVentas.js';
+import { configSiesa, intentarEnvioDevolucionSiesa, intentarEnvioVentaSiesa, prepararDevolucion, prepararVenta, registrar } from './siesaVentas.js';
 import { intentarEnvioClienteSiesa, prepararCliente } from './siesaClientes.js';
 import { intentarEnvioReciboSiesa, prepararRecibo } from './siesaRecibos.js';
 
@@ -45,12 +45,28 @@ const logsDe = (prefijo, ids) => (ids.length
   })
   : []);
 
+// Sin la migracion de devoluciones la tabla no existe: el envio de ventas, clientes y recibos sigue igual.
+async function devolucionesDesde(desde) {
+  let modelo;
+  try { modelo = prisma.devolucion; } catch { return []; } // base sin el modelo (pruebas o cliente viejo)
+  if (!modelo) return [];
+  try {
+    return await modelo.findMany({
+      where: { createdAt: { gte: desde } }, select: { id: true }, orderBy: { createdAt: 'asc' },
+    });
+  } catch (error) {
+    if (error?.code === 'P2021') return [];
+    throw error;
+  }
+}
+
 // Documentos pendientes de la base activa ya con su plano armado, para que los envie el agente de Siesa
 // (el PC con la VPN de AWS). Orden: clientes, recibos y ventas; una venta depende de su cliente si este aun no esta en Siesa.
 export async function listarPendientesSiesa({ desde, cfg, limite = LIMITE_POR_CORRIDA, preparar = {} } = {}) {
   const prepararVentaFn = preparar.venta || prepararVenta;
   const prepararClienteFn = preparar.cliente || prepararCliente;
   const prepararReciboFn = preparar.recibo || prepararRecibo;
+  const prepararDevolucionFn = preparar.devolucion || prepararDevolucion;
   const items = [];
 
   // Arma un item; si no hay nada que enviar lo deja registrado como OMITIDO o ERROR y devuelve null.
@@ -130,6 +146,19 @@ export async function listarPendientesSiesa({ desde, cfg, limite = LIMITE_POR_CO
     if (cliente && !cliente.listo) continue;
     items.push({ ...venta, depende: cliente?.item ? cliente.item.clave : null });
   }
+
+  // Devoluciones (1NE) despues de las ventas: si su factura va en este mismo lote, esperan a que Siesa la acepte.
+  const devoluciones = await devolucionesDesde(desde);
+  const pendientesDevolucion = seleccionarPendientes(
+    devoluciones, await logsDe('DEVOLUCION', devoluciones.map(({ id }) => id)), limite, 'DEVOLUCION',
+  );
+  const enLote = new Set(items.map(({ clave }) => clave));
+  for (const { id } of pendientesDevolucion) {
+    const item = await armar('DEVOLUCION', id, () => prepararDevolucionFn(id));
+    if (!item) continue;
+    const venta = `VENTA:${item.facturaId}`;
+    items.push({ ...item, depende: enLote.has(venta) ? venta : null });
+  }
   return items.slice(0, limite);
 }
 
@@ -140,6 +169,7 @@ export async function enviarPendientesSiesa({
   intentar = intentarEnvioVentaSiesa,
   intentarCliente = intentarEnvioClienteSiesa,
   intentarRecibo = intentarEnvioReciboSiesa,
+  intentarDevolucion = intentarEnvioDevolucionSiesa,
 } = {}) {
   const resumen = { OK: 0, ERROR: 0, REINTENTAR: 0, OMITIDO: 0 };
   const contar = ({ estado }) => { if (estado in resumen) resumen[estado] += 1; };
@@ -182,6 +212,13 @@ export async function enviarPendientesSiesa({
       if (factura.clienteId && factura.numeroDocumentoCliente && !await clienteListo(factura.clienteId)) continue;
       contar(await intentar(modelo, factura.id));
     }
+  }
+
+  // Devoluciones (1NE) despues de las ventas, para que su factura ya este en Siesa.
+  const devoluciones = await devolucionesDesde(desde);
+  const logsDevoluciones = await logsDe('DEVOLUCION', devoluciones.map(({ id }) => id));
+  for (const { id } of seleccionarPendientes(devoluciones, logsDevoluciones, limite, 'DEVOLUCION')) {
+    contar(await intentarDevolucion(id));
   }
   return resumen;
 }

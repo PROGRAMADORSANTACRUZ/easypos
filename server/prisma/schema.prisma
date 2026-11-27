@@ -1459,3 +1459,54 @@ model UsuarioMesa {
   @@index([mesaId])
   @@map("UsuariosMesas")
 }
+
+// Devolucion (total o parcial) de una factura de venta. Se envia a Siesa como documento 1NE (clase 525,
+// concepto 502) y reintegra el inventario. Guarda copia de los datos de la factura: no depende de ella.
+model Devolucion {
+  id                     String              @id @default(uuid()) @db.Uuid @map("Id")
+  companiaCodigo         String              @db.VarChar(3) @map("CompaniaCodigo")
+  centroOperacionCodigo  String              @db.VarChar(10) @map("CentroOperacionCodigo")
+  tipoDocumentoCodigo    String              @db.VarChar(20) @map("TipoDocumentoCodigo")
+  prefijo                String              @db.VarChar(20) @map("Prefijo")
+  numero                 Int                 @map("Numero")
+  origen                 String              @db.VarChar(15) @map("Origen") // factura | facturaVenta
+  facturaId              String              @db.Uuid @map("FacturaId")
+  facturaTipoDocumento   String              @db.VarChar(20) @map("FacturaTipoDocumento")
+  facturaPrefijo         String              @db.VarChar(20) @map("FacturaPrefijo")
+  facturaNumero          Int                 @map("FacturaNumero")
+  clienteId              String?             @db.Uuid @map("ClienteId")
+  numeroDocumentoCliente String?             @db.VarChar(30) @map("NumeroDocumentoCliente")
+  nombreCliente          String?             @db.VarChar(200) @map("NombreCliente")
+  direccionCliente       String?             @db.VarChar(200) @map("DireccionCliente")
+  sucursalCliente        String?             @db.VarChar(200) @map("SucursalCliente")
+  formaPago              String              @db.VarChar(10) @map("FormaPago")
+  total                  Float               @map("Total")
+  motivo                 String              @db.VarChar(500) @map("Motivo")
+  aperturaId             String?             @db.Uuid @map("AperturaId")
+  usuarioId              String?             @db.Uuid @map("UsuarioId")
+  usuarioNombre          String?             @db.VarChar(100) @map("UsuarioNombre")
+  createdAt              DateTime            @default(now()) @map("FechaCreacion")
+  detalle                DevolucionDetalle[]
+
+  @@unique([companiaCodigo, centroOperacionCodigo, tipoDocumentoCodigo, numero])
+  @@index([facturaId])
+  @@map("Devoluciones")
+}
+
+model DevolucionDetalle {
+  id               String     @id @default(uuid()) @db.Uuid @map("Id")
+  devolucionId     String     @db.Uuid @map("DevolucionId")
+  devolucion       Devolucion @relation(fields: [devolucionId], references: [id], onDelete: Cascade)
+  facturaDetalleId String     @db.Uuid @map("FacturaDetalleId")
+  productoId       String?    @db.Uuid @map("ProductoId")
+  productoCodigo   String?    @db.VarChar(50) @map("ProductoCodigo")
+  productoNombre   String?    @db.VarChar(250) @map("ProductoNombre")
+  unidad           String?    @db.VarChar(10) @map("Unidad")
+  cantidad         Float      @map("Cantidad")
+  precioUnitario   Float      @map("PrecioUnitario")
+  total            Float      @map("Total")
+
+  @@index([devolucionId])
+  @@index([facturaDetalleId])
+  @@map("DevolucionesDetalle")
+}
