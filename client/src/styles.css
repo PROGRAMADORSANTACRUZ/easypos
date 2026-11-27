@@ -421,14 +421,13 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
   overflow-wrap: anywhere;
 }
 .mesa > * { max-width: 100%; }
-.mesa .mesa-mesera {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-  line-height: 1.25;
-}
+/* Una sola linea por dato ("2X MICHE…"): las tarjetas quedan compactas y parejas */
+.mesa .mesa-mesera,
 .mesa .plato-listo {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-  line-height: 1.2; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.3;
 }
+.mesa .plato-listo { margin-top: 1px; }
 .mesa:hover { transform: translateY(-2px); }
 .mesa.LIBRE { border-color: var(--green); }
 .mesa.RESERVADA { border-color: var(--orange, #f59e0b); }
