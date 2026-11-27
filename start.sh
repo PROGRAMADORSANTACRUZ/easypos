@@ -12,6 +12,13 @@ if [ "${RUN_DB_INIT:-false}" = "true" ] || [ "${RUN_SEED:-false}" = "true" ]; th
   echo "[start] Inicializacion y seed automaticos deshabilitados; ejecutarlos manualmente en instalaciones nuevas." >&2
 fi
 
+# Migraciones pendientes de la base principal (tablas y permisos nuevos de cada despliegue).
+# El script nunca detiene el arranque; MIGRAR_AL_ARRANCAR=false lo desactiva.
+if [ "${MIGRAR_AL_ARRANCAR:-true}" != "false" ]; then
+  echo "[start] Revisando migraciones pendientes"
+  (cd /app/server && node scripts/migrar-al-arrancar.mjs) || echo "[start] No se pudo revisar las migraciones; el backend arranca igual" >&2
+fi
+
 echo "[start] Iniciando backend en :${BACKEND_PORT}"
 (cd /app/server && node src/index.js) &
 
