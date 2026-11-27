@@ -279,6 +279,8 @@ model Impresora {
   papel        Int      @default(80) @map("Papel") // ancho del papel en mm: 58 u 80
   orden        Int      @default(0) @map("Orden")
   categoriaIds String[] @default([]) @db.Uuid @map("CategoriaIds")
+  // Impresora predeterminada de prefacturas y facturas para todos los celulares (solo una)
+  tirillas     Boolean  @default(false) @map("Tirillas")
   createdAt    DateTime @default(now()) @map("FechaCreacion")
 
   @@map("Impresoras")

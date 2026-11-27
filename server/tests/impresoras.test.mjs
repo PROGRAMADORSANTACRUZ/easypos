@@ -14,9 +14,12 @@ test('normaliza la lista de impresoras del local con nombre, puerto, papel y ord
     { ip: '192.168.0.93', puerto: '9101', papel: 58, categoriaIds: [CAT_COCINA] },
   ], [CAT_BAR, CAT_COCINA]);
   assert.deepEqual(lista, [
-    { id: undefined, nombre: 'Bar', ip: '192.168.0.95', puerto: 9100, papel: 80, orden: 0, categoriaIds: [CAT_BAR] },
-    { id: undefined, nombre: 'Impresora 2', ip: '192.168.0.93', puerto: 9101, papel: 58, orden: 1, categoriaIds: [CAT_COCINA] },
+    { id: undefined, nombre: 'Bar', ip: '192.168.0.95', puerto: 9100, papel: 80, orden: 0, categoriaIds: [CAT_BAR], tirillas: false },
+    { id: undefined, nombre: 'Impresora 2', ip: '192.168.0.93', puerto: 9101, papel: 58, orden: 1, categoriaIds: [CAT_COCINA], tirillas: false },
   ]);
+  const conTirillas = validarImpresoras([{ ip: '192.168.0.93', tirillas: true }, { ip: '192.168.0.95', tirillas: 'si' }], []);
+  assert.deepEqual(conTirillas.map((i) => i.tirillas), [true, false]);
+  assert.throws(() => validarImpresoras([{ ip: '192.168.0.93', tirillas: true }, { ip: '192.168.0.95', tirillas: true }], []), /Solo una impresora/);
 });
 
 test('rechaza IP fuera del local, papel o puerto invalidos y categorias que no existen', () => {

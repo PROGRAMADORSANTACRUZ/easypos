@@ -24,6 +24,9 @@ export function validarImpresoras(lista, categorias) {
   if (lista.length > MAX_IMPRESORAS) throw fallo(`Máximo ${MAX_IMPRESORAS} impresoras`);
   const nombreCategoria = new Map(categorias.map((c) => (typeof c === 'string' ? [c, c] : [c.id, c.nombre])));
   const duenaDeCategoria = new Map();
+  if (lista.filter((impresora) => impresora?.tirillas === true).length > 1) {
+    throw fallo('Solo una impresora puede ser la de prefacturas y facturas');
+  }
   return lista.map((impresora, indice) => {
     const nombre = String(impresora?.nombre || '').trim() || `Impresora ${indice + 1}`;
     if (nombre.length > 60) throw fallo(`${nombre.slice(0, 20)}…: el nombre es muy largo`);
@@ -42,12 +45,12 @@ export function validarImpresoras(lista, categorias) {
       duenaDeCategoria.set(id, nombre);
     }
     const id = UUID.test(String(impresora?.id || '')) ? String(impresora.id) : undefined;
-    return { id, nombre, ip, puerto, papel, orden: indice, categoriaIds };
+    return { id, nombre, ip, puerto, papel, orden: indice, categoriaIds, tirillas: impresora?.tirillas === true };
   });
 }
 
-// Sin la migracion aplicada la tabla no existe: los celulares siguen funcionando sin impresoras.
-const tablaFaltante = (error) => error?.code === 'P2021';
+// Sin la migracion aplicada falta la tabla (P2021) o una columna nueva (P2022): los celulares siguen funcionando.
+const tablaFaltante = (error) => ['P2021', 'P2022'].includes(error?.code);
 
 router.get('/', wrap(async (req, res) => {
   const categorias = await prisma.categoria.findMany({ orderBy: { codigo: 'asc' }, select: { id: true, nombre: true } });

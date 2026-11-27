@@ -69,7 +69,8 @@ export async function abrirConfigImpresoras() {
 
   const pintarSelector = () => {
     selectorCelular.replaceChildren();
-    selectorCelular.append(new Option('— Elige una impresora —', ''));
+    const delLocal = lista.find((impresora) => impresora.tirillas);
+    selectorCelular.append(new Option(delLocal ? `La del local: ${delLocal.nombre || delLocal.ip}` : '— Elige una impresora —', ''));
     lista.forEach((impresora, indice) => selectorCelular.append(new Option(impresora.nombre || `Impresora ${indice + 1}`, impresora.clave)));
     if (anterior) selectorCelular.append(new Option(`Configuración anterior (${anterior.ip})`, 'celular'));
     selectorCelular.append(new Option('Diálogo de Android (RawBT)', SIN_IMPRESORA_DIRECTA));
@@ -125,6 +126,16 @@ export async function abrirConfigImpresoras() {
       }
 
       const acciones = el('div', { display: 'flex', gap: '8px', justifyContent: 'flex-end' });
+      const tirillas = el('label', { display: 'flex', gap: '8px', alignItems: 'center', fontSize: '13px', fontWeight: '600' });
+      const marcaTirillas = el('input', { width: '20px', height: '20px' }, { type: 'checkbox', checked: Boolean(impresora.tirillas), disabled: !puedeEditar });
+      marcaTirillas.addEventListener('change', () => {
+        // Solo una impresora es la de prefacturas y facturas
+        for (const x of lista) x.tirillas = false;
+        impresora.tirillas = marcaTirillas.checked;
+        pintarLista();
+        pintarSelector();
+      });
+      tirillas.append(marcaTirillas, 'Imprime prefacturas y facturas (todos los celulares)');
       const probar = boton('Probar', COLOR.texto, COLOR.fondo);
       probar.addEventListener('click', async () => {
         try {
@@ -142,7 +153,7 @@ export async function abrirConfigImpresoras() {
         quitar.addEventListener('click', () => { lista.splice(indice, 1); pintarLista(); pintarSelector(); });
         acciones.append(quitar);
       }
-      tarjeta.append(titulo, campo('Nombre', nombre), fila, campo('Categorías que imprime', chips), acciones);
+      tarjeta.append(titulo, campo('Nombre', nombre), fila, tirillas, campo('Categorías que imprime', chips), acciones);
       contenedorLista.append(tarjeta);
     });
   };
@@ -166,7 +177,7 @@ export async function abrirConfigImpresoras() {
         // Las impresoras nuevas reciben su id al guardar: el servidor las devuelve en el mismo orden
         if (indiceElegido >= 0) claveElegida = impresoras[indiceElegido]?.id || '';
       }
-      if (claveElegida) elegirImpresoraCelular(claveElegida);
+      elegirImpresoraCelular(claveElegida);
       cerrar();
     } catch (error) {
       avisar(error.message, true);

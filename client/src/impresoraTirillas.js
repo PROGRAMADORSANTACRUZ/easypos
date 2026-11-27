@@ -54,19 +54,26 @@ export const sinImpresionDirecta = (error) => error?.code === 'UNIMPLEMENTED'
 const CLAVE_CELULAR = 'pos.impresoraCelular';
 export const SIN_IMPRESORA_DIRECTA = 'android';
 
-// Impresora donde este celular imprime prefacturas, facturas y lo que no tenga categoria asignada.
-// Si aun no se ha elegido, se respeta la configuracion anterior de una sola IP en el celular.
+// Impresora donde este celular imprime prefacturas y facturas: la elegida en el celular; si no eligio, la
+// marcada en el local como de prefacturas; si tampoco hay, la configuracion anterior de una sola IP.
 export function impresoraDelCelular(impresoras = [], almacen = globalThis.localStorage) {
   let elegida = null;
   try { elegida = almacen?.getItem(CLAVE_CELULAR) ?? null; } catch { /* sin almacenamiento */ }
   if (elegida === SIN_IMPRESORA_DIRECTA) return null;
   const central = impresoras.find((impresora) => impresora.id === elegida);
   if (central) return central;
+  const delLocal = impresoras.find((impresora) => impresora.tirillas);
+  if (delLocal) return delLocal;
   const anterior = leerImpresora(almacen);
   return anterior ? { id: 'celular', nombre: `Este celular (${anterior.ip})`, ...anterior } : null;
 }
 
 export function elegirImpresoraCelular(id, almacen = globalThis.localStorage) {
+  if (!id) {
+    // Sin eleccion propia: el celular usa la impresora de prefacturas del local
+    almacen.removeItem(CLAVE_CELULAR);
+    return;
+  }
   almacen.setItem(CLAVE_CELULAR, id);
   if (id !== 'celular') quitarImpresora(almacen);
 }

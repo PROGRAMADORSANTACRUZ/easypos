@@ -73,14 +73,19 @@ test('en una orden mixta ningun producto de la .95 sale en la .93 ni al reves', 
   assert.deepEqual(repetida.grupos.map((g) => g.impresora.nombre), ['Bar']);
 });
 
-test('el celular usa la impresora elegida, la configuracion anterior o el dialogo de Android', () => {
+test('el celular usa la impresora elegida, la del local, la configuracion anterior o el dialogo de Android', () => {
   const local = almacen();
   assert.equal(impresoraDelCelular([cocina, bar], local), null);
   guardarImpresora({ ip: '192.168.0.50', papel: 58 }, local);
   assert.equal(impresoraDelCelular([cocina, bar], local).ip, '192.168.0.50');
+  // La marcada en el local como de prefacturas manda sobre la configuracion anterior del celular
+  const conPrefacturas = [{ ...cocina, tirillas: true }, bar];
+  assert.equal(impresoraDelCelular(conPrefacturas, local).ip, '192.168.0.93');
   elegirImpresoraCelular('imp-bar', local);
-  assert.equal(impresoraDelCelular([cocina, bar], local).nombre, 'Bar');
+  assert.equal(impresoraDelCelular(conPrefacturas, local).nombre, 'Bar');
   assert.equal(leerImpresora(local), null);
+  elegirImpresoraCelular('', local);
+  assert.equal(impresoraDelCelular(conPrefacturas, local).nombre, 'Cocina');
   elegirImpresoraCelular(SIN_IMPRESORA_DIRECTA, local);
-  assert.equal(impresoraDelCelular([cocina, bar], local), null);
+  assert.equal(impresoraDelCelular(conPrefacturas, local), null);
 });
