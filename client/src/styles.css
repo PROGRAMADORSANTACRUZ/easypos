@@ -794,6 +794,10 @@ tbody tr:last-child td { border-bottom: none; }
   border-color: var(--primary);
 }
 .ci-info { min-width: 0; }
+/* Nota de cada producto del domicilio: ocupa toda la fila bajo el producto */
+.carrito-item .ci-nota { grid-column: 1 / -1; width: 100%; font-size: 13px; padding: 6px 10px; }
+.carrito-observaciones { margin: 12px 0 0; }
+.carrito-observaciones textarea { width: 100%; }
 .ci-nombre {
   font-weight: 700;
   text-transform: uppercase;

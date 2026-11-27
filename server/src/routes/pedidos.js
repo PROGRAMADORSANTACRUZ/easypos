@@ -410,7 +410,8 @@ router.post('/', exigirPermiso('pedidos.crear'), wrap(async (req, res) => {
 //   metodoPago
 // }
 router.post('/online', exigirPermiso('domicilios.crear'), wrap(async (req, res) => {
-  const { cliente = {}, items = [], metodoPago, latDestino, lngDestino } = req.body;
+  const { cliente = {}, items = [], metodoPago, latDestino, lngDestino, observaciones } = req.body;
+  const puedeGuardarObservaciones = req.usuario?.permisos?.includes('domicilios.observaciones');
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Agrega al menos un producto' });
@@ -480,6 +481,7 @@ router.post('/online', exigirPermiso('domicilios.crear'), wrap(async (req, res) 
         cliente: nombreCompleto,
         clienteId: clienteRow.id,
         estadoEntrega: 'RECIBIDO',
+        observaciones: puedeGuardarObservaciones ? limpiar(observaciones)?.slice(0, 1000) ?? null : null,
         latDestino: aNumero(latDestino),
         lngDestino: aNumero(lngDestino),
         seguimientoToken: randomUUID(),
@@ -488,6 +490,7 @@ router.post('/online', exigirPermiso('domicilios.crear'), wrap(async (req, res) 
             productoId: item.productoId,
             cantidad: item.cantidad,
             precioUnit: precioDe(item.productoId),
+            notas: limpiar(item.notas)?.slice(0, 200) ?? null,
           })),
         },
       },

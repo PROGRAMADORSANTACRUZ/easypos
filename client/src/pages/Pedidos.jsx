@@ -98,10 +98,12 @@ export default function Pedidos() {
   const notify = useToast();
   const { user } = useAuth() || {};
   const puedeCrear = user?.__dev === true || (user?.permisos || []).includes('domicilios.crear');
+  const puedeObservaciones = user?.__dev === true || (user?.permisos || []).includes('domicilios.observaciones');
 
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [carrito, setCarrito] = useState([]);
+  const [observaciones, setObservaciones] = useState(''); // nota general del pedido para cocina y el repartidor
   const [cliente, setCliente] = useState(CLIENTE_VACIO);
   const [metodoPago, setMetodoPago] = useState('');
   const [cargando, setCargando] = useState(true);
@@ -146,6 +148,7 @@ export default function Pedidos() {
         unidad: c.producto.unidad?.abreviatura || 'U',
         factorConversion: factorUnidad(c.producto),
         disponibles: c.producto.disponibles,
+        notas: c.notas || '',
       })),
     [carrito]
   );
@@ -200,6 +203,7 @@ export default function Pedidos() {
   };
 
   const quitarItem = (item) => setCarrito((prev) => prev.filter((c) => c.producto.id !== item.id));
+  const establecerNota = (item, notas) => setCarrito((prev) => prev.map((c) => (c.producto.id === item.id ? { ...c, notas } : c)));
 
   const setCampo = (campo) => (e) => setCliente((c) => ({
     ...c,
@@ -275,7 +279,8 @@ export default function Pedidos() {
           direccion: cliente.direccion,
           barrio: cliente.barrio,
         },
-        items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad })),
+        items: carrito.map((c) => ({ productoId: c.producto.id, cantidad: c.cantidad, notas: (c.notas || '').trim() || null })),
+        observaciones: puedeObservaciones ? observaciones.trim() || null : null,
         metodoPago,
         latDestino: ubicacion?.lat ?? null,
         lngDestino: ubicacion?.lng ?? null,
@@ -284,6 +289,7 @@ export default function Pedidos() {
       setPedidoCreado(ref);
       setUltimo(ref);
       setCarrito([]);
+      setObservaciones('');
       setCliente(CLIENTE_VACIO);
       setMetodoPago('');
       setUbicacion(null);
@@ -391,8 +397,29 @@ export default function Pedidos() {
                   <button className="ci-quitar" title="Quitar del pedido" onClick={() => quitarItem(it)}>
                     <Icon name="delete" size={17} />
                   </button>
+                  <input
+                    className="ci-nota"
+                    value={it.notas}
+                    maxLength={200}
+                    placeholder="Nota para cocina (ej. sin cebolla, término medio)"
+                    aria-label={`Nota de ${it.nombre}`}
+                    onChange={(e) => establecerNota(it, e.target.value)}
+                  />
                 </div>
               ))}
+            </div>
+          )}
+
+          {items.length > 0 && puedeObservaciones && (
+            <div className="field carrito-observaciones">
+              <label>Observaciones del pedido</label>
+              <textarea
+                rows={2}
+                maxLength={1000}
+                value={observaciones}
+                placeholder="Ej: sin ají, tocar el timbre, empacar aparte…"
+                onChange={(e) => setObservaciones(e.target.value)}
+              />
             </div>
           )}
 
