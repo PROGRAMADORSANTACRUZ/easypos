@@ -14,6 +14,7 @@ import meserasRouter from './routes/meseras.js';
 import cocinerosRouter from './routes/cocineros.js';
 import impresorasRouter from './routes/impresoras.js';
 import devolucionesRouter from './routes/devoluciones.js';
+import { asegurarEsquema, estadoEsquema } from './esquemaRequerido.js';
 import preparacionCocinaRouter from './routes/preparacionCocina.js';
 import productosRouter from './routes/productos.js';
 import inventarioRouter from './routes/inventario.js';
@@ -98,7 +99,10 @@ app.use(mayusculas);
 app.use(resolverTenant);
 app.use(restringirModuloRestaurante);
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, servicio: 'POS API', estructuraFacturas: '20261104', metodosPago: 4, valoresPagoSeparados: true, tipoDocumentoYPrefijoSeparados: true }));
+app.get('/api/health', (_req, res) => res.json({
+  ok: true, servicio: 'POS API', estructuraFacturas: '20261104', metodosPago: 4, valoresPagoSeparados: true, tipoDocumentoYPrefijoSeparados: true,
+  devoluciones: estadoEsquema.listo, erroresEsquema: estadoEsquema.errores.length,
+}));
 
 // Rutas protegidas: requieren sesion (JWT) y, cuando el modulo tiene permisos
 // definidos en el catalogo (ver server/src/tenantSeed.js), el permiso correspondiente.
@@ -198,5 +202,6 @@ app.listen(PORT, () => {
   console.log(`POS API escuchando en http://localhost:${PORT}`);
   // Precalienta la conexion a la DB para que la primera consulta no pague el costo de conexion.
   prisma.$connect().catch((e) => console.error('No se pudo precalentar la DB:', e.message));
+  asegurarEsquema(prisma).catch((e) => console.error('[esquema]', e.message));
   iniciarProgramadorSiesa();
 });
