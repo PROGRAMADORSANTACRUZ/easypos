@@ -317,7 +317,7 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 .fila-activa { background: var(--primary-soft); }
 
 .grid { display: grid; gap: 16px; }
-.grid-mesas { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); justify-content: stretch; gap: 12px; }
+.grid-mesas { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); justify-content: stretch; gap: 12px; }
 .grid-2 { grid-template-columns: 1.4fr 1fr; align-items: start; }
 
 /* Utilidades de layout responsivas */
@@ -410,16 +410,28 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
   transition: transform .1s, border-color .15s;
   width: 100%;
   min-width: 0;
-  height: 110px;
+  /* Crece con su contenido (mesera y platos listos) en vez de desbordarse sobre las mesas vecinas */
+  min-height: 110px;
   padding: var(--sp-2);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.mesa > * { max-width: 100%; }
+.mesa .mesa-mesera {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  line-height: 1.25;
+}
+.mesa .plato-listo {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  line-height: 1.2; margin-top: 2px;
 }
 .mesa:hover { transform: translateY(-2px); }
 .mesa.LIBRE { border-color: var(--green); }
-.mesa.RESERVADA { border-color: var(--orange, #f59e0b); height: auto; min-height: 110px; }
+.mesa.RESERVADA { border-color: var(--orange, #f59e0b); }
 /* Chip de icono en la tarjeta de mesa (color según estado) */
 .mesa-badge {
   display: inline-flex;
@@ -447,7 +459,7 @@ h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-h4); font-weight: 600; color: 
 }
 .mesa.OCUPADA { border-color: var(--red); }
 .mesa.LISTO { border-color: #eab308; background: rgba(234,179,8,.12); }
-.mesa.LISTO .estado { color: #eab308; }
+.mesa.LISTO .estado, .mesa.OCUPADA.LISTO .estado { color: #eab308; }
 .mesa .plato-listo { color: #eab308; font-weight: 600; text-transform: uppercase; }
 .mesa .num { font-size: 34px; font-weight: 800; }
 .mesa .estado { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }

@@ -54,6 +54,14 @@ export const sinImpresionDirecta = (error) => error?.code === 'UNIMPLEMENTED'
 const CLAVE_CELULAR = 'pos.impresoraCelular';
 export const SIN_IMPRESORA_DIRECTA = 'android';
 
+// La prefactura sale siempre en esta impresora desde cualquier tablet, sin importar la que haya elegido cada una.
+// Si en el engranaje se marca otra como "Imprime prefacturas y facturas", se usa esa.
+export const IMPRESORA_PREFACTURAS = Object.freeze({ id: 'prefacturas', nombre: 'Prefacturas (192.168.0.93)', ip: '192.168.0.93', puerto: 9100, papel: 80 });
+
+export function impresoraPrefacturas(impresoras = []) {
+  return impresoras.find((impresora) => impresora.tirillas) || IMPRESORA_PREFACTURAS;
+}
+
 // Impresora donde este celular imprime prefacturas y facturas: la elegida en el celular; si no eligio, la
 // marcada en el local como de prefacturas; si tampoco hay, la configuracion anterior de una sola IP.
 export function impresoraDelCelular(impresoras = [], almacen = globalThis.localStorage) {

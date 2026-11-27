@@ -195,7 +195,8 @@ async function imprimirPrefacturaAsync(pedido) {
     <div class="pie">¡Gracias por su visita!</div>
   </body></html>`;
 
-  escribirEImprimir(ventana, html);
+  // La prefactura sale siempre en la impresora de prefacturas del local, desde cualquier tablet
+  escribirEImprimir(ventana, html, { prefactura: true });
 }
 
 export default function TomarPedido() {

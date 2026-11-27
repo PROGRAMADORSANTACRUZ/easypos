@@ -327,7 +327,8 @@ async function imprimirPrefactura(pedido) {
     </div>
   </body></html>`;
 
-  escribirEImprimir(ventana, html);
+  // La prefactura sale siempre en la impresora de prefacturas del local, desde cualquier tablet
+  escribirEImprimir(ventana, html, { prefactura: true });
 }
 
 // (solo el efectivo genera vuelto). En pago mixto se digita el valor de la otra

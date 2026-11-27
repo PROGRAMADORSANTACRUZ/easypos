@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  anchoCssDeTirilla, elegirImpresoraCelular, guardarImpresora, impresoraDelCelular, leerImpresora,
+  anchoCssDeTirilla, elegirImpresoraCelular, guardarImpresora, impresoraDelCelular, impresoraPrefacturas, leerImpresora,
   repartirPorImpresora, SIN_IMPRESORA_DIRECTA, sinImpresionDirecta, validarImpresora,
 } from '../src/impresoraTirillas.js';
 
@@ -71,6 +71,13 @@ test('en una orden mixta ningun producto de la .95 sale en la .93 ni al reves', 
   // Aunque una configuracion vieja repitiera una categoria, el producto sale en una sola impresora
   const repetida = repartirPorImpresora([item('Limonada', 'cat-bebidas')], [bar, { ...cocina, categoriaIds: ['cat-bebidas'] }]);
   assert.deepEqual(repetida.grupos.map((g) => g.impresora.nombre), ['Bar']);
+});
+
+test('la prefactura va a la 192.168.0.93 desde cualquier tablet, salvo que el local marque otra', () => {
+  assert.equal(impresoraPrefacturas([]).ip, '192.168.0.93');
+  assert.equal(impresoraPrefacturas([]).papel, 80);
+  assert.equal(impresoraPrefacturas([cocina, bar]).ip, '192.168.0.93');
+  assert.equal(impresoraPrefacturas([cocina, { ...bar, tirillas: true }]).ip, '192.168.0.95');
 });
 
 test('el celular usa la impresora elegida, la del local, la configuracion anterior o el dialogo de Android', () => {

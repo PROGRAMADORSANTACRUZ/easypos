@@ -242,11 +242,20 @@ export default function Mesas() {
                   </div>
                 ) : null}
                 {pedido && (
-                  <div style={{ marginTop: 8 }}>
-                    <div className="mini">Mesera: {pedido.mesera?.nombre}</div>
-                    {listo && platosListos(mesa).map((plato) => (
-                      <div key={plato} className="mini plato-listo">{plato}</div>
-                    ))}
+                  <div style={{ marginTop: 8, width: '100%' }}>
+                    <div className="mini mesa-mesera" title={pedido.mesera?.nombre}>Mesera: {pedido.mesera?.nombre}</div>
+                    {listo && (() => {
+                      // Solo 3 platos para que la tarjeta no crezca de mas; el resto se resume
+                      const platos = platosListos(mesa);
+                      return (
+                        <>
+                          {platos.slice(0, 3).map((plato) => (
+                            <div key={plato} className="mini plato-listo" title={plato}>{plato}</div>
+                          ))}
+                          {platos.length > 3 && <div className="mini plato-listo">+{platos.length - 3} más</div>}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

@@ -1,5 +1,5 @@
 import { llamarNativo } from './movil.js';
-import { impresoraDelCelular, imprimirTirillaEnRed, sinImpresionDirecta } from './impresoraTirillas.js';
+import { impresoraDelCelular, impresoraPrefacturas, imprimirTirillaEnRed, sinImpresionDirecta } from './impresoraTirillas.js';
 import { obtenerImpresorasLocal } from './impresorasLocal.js';
 import { abrirConfigImpresoras } from './configImpresoras.js';
 
@@ -27,11 +27,12 @@ async function imprimirConAndroid(html, marco) {
   }
 }
 
-// Qué enviar y a dónde. La tirilla del pedido se reparte por categoría y cada producto sale solo en su
-// impresora; si el local aún no tiene impresoras, la tirilla va completa a la impresora del celular.
-async function planDeImpresion(html, repartir) {
+// Qué enviar y a dónde. La prefactura va siempre a la impresora de prefacturas del local. La tirilla del pedido
+// se reparte por categoría y cada producto sale solo en su impresora; lo demás va a la impresora del celular.
+async function planDeImpresion(html, { repartir, prefactura } = {}) {
   let impresoras = [];
-  try { impresoras = (await obtenerImpresorasLocal()).impresoras || []; } catch { /* sin servidor: solo la del celular */ }
+  try { impresoras = (await obtenerImpresorasLocal()).impresoras || []; } catch { /* sin servidor: impresora fija o la del celular */ }
+  if (prefactura) return { trabajos: [{ impresora: impresoraPrefacturas(impresoras), html }], sinImpresora: [], repartido: false };
   if (repartir && impresoras.length) return { ...(await repartir(impresoras)), repartido: true };
   const delCelular = impresoraDelCelular(impresoras);
   return { trabajos: delCelular ? [{ impresora: delCelular, html }] : [], sinImpresora: [], repartido: false };
@@ -42,12 +43,12 @@ async function enviar(trabajos) {
   return resultados.map((r, i) => ({ ...trabajos[i], error: r.status === 'rejected' ? r.reason : null })).filter((t) => t.error);
 }
 
-async function imprimir(html, marco, botonImprimir, repartir) {
+async function imprimir(html, marco, botonImprimir, opciones) {
   const textoOriginal = botonImprimir.textContent;
   const restaurar = () => { botonImprimir.textContent = textoOriginal; botonImprimir.disabled = false; };
   botonImprimir.disabled = true;
   botonImprimir.textContent = 'Imprimiendo…';
-  const { trabajos, sinImpresora, repartido } = await planDeImpresion(html, repartir);
+  const { trabajos, sinImpresora, repartido } = await planDeImpresion(html, opciones);
   if (!trabajos.length) {
     restaurar();
     if (repartido) {
@@ -95,8 +96,8 @@ function boton(texto, fondo, color) {
   return el;
 }
 
-// opciones.repartir(impresoras, delCelular) -> { trabajos: [{ impresora, html }], sinImpresora: [nombres] }
-// permite que una tirilla (ej. el pedido) salga repartida en varias impresoras.
+// opciones.repartir(impresoras) -> { trabajos: [{ impresora, html }], sinImpresora: [nombres] } reparte la tirilla
+// entre varias impresoras; opciones.prefactura la envia siempre a la impresora de prefacturas del local.
 export function mostrarVisorApk(html, opciones = {}) {
   const raiz = document.createElement('div');
   raiz.setAttribute('role', 'dialog');
@@ -120,7 +121,7 @@ export function mostrarVisorApk(html, opciones = {}) {
 
   const visor = { raiz };
   const botonImprimir = boton('Imprimir', '#E1362B', '#fff');
-  botonImprimir.addEventListener('click', () => imprimir(html, marco, botonImprimir, opciones.repartir));
+  botonImprimir.addEventListener('click', () => imprimir(html, marco, botonImprimir, opciones));
   const botonImpresora = boton('⚙', '#2A2521', '#EDDFCA');
   botonImpresora.title = 'Impresoras del local';
   botonImpresora.setAttribute('aria-label', 'Impresoras del local');
